@@ -8,7 +8,7 @@ Running log of task completion against [tasks/README.md](tasks/README.md). Newes
 |----|-------------------------------|----------|-------|
 | 01 | Project scaffold & tooling    | ✅ done  | tsup · commander · vitest · Biome |
 | 02 | Schema, types & validation    | ✅ done  | AJV 2020 · YAML load/dump round-trip |
-| 03 | Config loading & `artha init` | ⬜ todo  | unblocked (needs 01, 02) |
+| 03 | Config loading & `artha init` | ✅ done  | `loadConfig` defaults + idempotent init |
 | 04 | SymbolResolver (tree-sitter)  | ✅ done  | `web-tree-sitter` pinned 0.20.8 |
 | 05 | `artha build` — index         | ⬜ todo  | needs 02, 03, 04 |
 | 06 | `artha mine` — git → drafts   | ⬜ todo  | needs 02, 03; carries Open Q1–Q3 |
@@ -22,6 +22,14 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 ## Log
 
 ### 2026-06-20
+
+- **T03 — Config loading & `artha init`** done. `loadConfig(repoRoot)` returns a
+  typed `ArthaConfig` layered over defaults (pure + sync; missing file → defaults,
+  malformed → ArthaError, mistyped fields → per-field fallback). `artha init`
+  idempotently scaffolds `.artha/{decisions,invariants,conventions}/` (+`.gitkeep`)
+  and a commented `config.yaml`, never clobbering an existing config or entries.
+  12 tests. Default miner model kept at `claude-opus-4-8` (no silent downgrade; Q1
+  semantics still owned by T06).
 
 - **T04 — SymbolResolver** done. Built-in tree-sitter JS/TS resolver behind the
   `SymbolResolver` interface; resolves `path#Symbol` and `path#Class.method`,
