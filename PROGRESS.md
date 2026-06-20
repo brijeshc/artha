@@ -10,7 +10,7 @@ Running log of task completion against [tasks/README.md](tasks/README.md). Newes
 | 02 | Schema, types & validation    | ✅ done  | AJV 2020 · YAML load/dump round-trip |
 | 03 | Config loading & `artha init` | ✅ done  | `loadConfig` defaults + idempotent init |
 | 04 | SymbolResolver (tree-sitter)  | ✅ done  | `web-tree-sitter` pinned 0.20.8 |
-| 05 | `artha build` — index         | ⬜ todo  | needs 02, 03, 04 |
+| 05 | `artha build` — index         | ✅ done  | node:sqlite + FTS5, zero deps; staleness flip |
 | 06 | `artha mine` — git → drafts   | ⬜ todo  | needs 02, 03; carries Open Q1–Q3 |
 | 07 | `artha review` — Ink TUI      | ⬜ todo  | needs 02 |
 | 08 | MCP server (stdio)            | ⬜ todo  | needs 05 |
@@ -22,6 +22,17 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 ## Log
 
 ### 2026-06-20
+
+- **T05 — `artha build`** done. Compiles `.artha/` YAML → SQLite + FTS5 index
+  (schema §8). Pipeline: load/validate (T02) → resolve pins (T04, unresolvable =
+  build failure naming the ref) → recompute hashes, fill blanks, flip drifted
+  certified entries to `stale` on disk → expand scope globs → warn on dangling
+  refs → emit. Fully offline. 7 tests + verified end-to-end.
+  - **Zero new dependencies:** uses Node 26's built-in `node:sqlite` (FTS5
+    compiled in) and `fs.globSync`. `node:sqlite` is loaded via `createRequire`
+    so vitest/Vite (whose builtin list predates it) doesn't choke.
+  - `buildIndex(repoRoot, config)` → `Promise<BuildReport>` (async, since the
+    resolver is). `.artha/index.db` is the read contract for T08/T09.
 
 - **T03 — Config loading & `artha init`** done. `loadConfig(repoRoot)` returns a
   typed `ArthaConfig` layered over defaults (pure + sync; missing file → defaults,
