@@ -1,0 +1,16 @@
+id: invariant.money_minor_units
+kind: invariant
+status: certified
+name: Money is integer minor units
+rule: >
+  All monetary amounts are integers in the currency's minor unit (paise/cents).
+  Never floats. Across API boundaries money is { amount: int, currency: string }.
+scope: [ "src/billing/**", "src/payments/**" ]
+why: decision.no_float_money
+severity: high
+detect:
+  method: structural
+  query: |
+    (binary_expression operator: ["*" "/"] right: (number) @amt (#match? @amt "\\."))
+certified_by: brijesh
+certified_at: 2026-06-20

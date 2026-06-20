@@ -1,0 +1,5 @@
+# A reserved (v0.2) kind dropped into the tree: must be skipped, never errored.
+id: concept.invoice
+kind: concept
+status: proposed
+title: Invoice lifecycle

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "symbolRef": { "type": "string", "pattern": "^[^#]+#[^#]+$" },
+    "glob": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "pattern": "^(decision|invariant|convention)\\.[a-z0-9_]+$" },
+    "pin": {
+      "type": "object",
+      "required": ["symbol"],
+      "additionalProperties": false,
+      "properties": {
+        "symbol": { "$ref": "#/$defs/symbolRef" },
+        "content_hash": { "type": "string" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pr": { "type": "string" },
+        "commit": { "type": "string" },
+        "source": { "type": "string" }
+      }
+    },
+    "detect": {
+      "type": "object",
+      "required": ["method"],
+      "properties": {
+        "method": { "enum": ["structural", "type", "llm"] },
+        "query": { "type": "string" },
+        "ts_predicate": { "type": "string" },
+        "prompt_hint": { "type": "string" },
+        "confidence_min": { "type": "number", "minimum": 0, "maximum": 1 },
+        "advisory": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "method": { "const": "structural" } } },
+          "then": { "required": ["query"] }
+        },
+        {
+          "if": { "properties": { "method": { "const": "type" } } },
+          "then": { "required": ["ts_predicate"] }
+        },
+        {
+          "if": { "properties": { "method": { "const": "llm" } } },
+          "then": { "required": ["prompt_hint", "advisory"] }
+        }
+      ]
+    },
+    "base": {
+      "type": "object",
+      "required": ["id", "kind", "status"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["decision", "invariant", "convention"] },
+        "status": { "enum": ["proposed", "certified", "stale"] },
+        "certified_by": { "type": "string" },
+        "certified_at": { "type": "string", "format": "date" },
+        "pins": { "type": "array", "items": { "$ref": "#/$defs/pin" } },
+        "mined_from": { "$ref": "#/$defs/provenance" },
+        "related": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "certified" } } },
+          "then": { "required": ["certified_by", "certified_at"] }
+        }
+      ]
+    }
+  },
+
+  "decision": {
+    "allOf": [
+      { "$ref": "#/$defs/base" },
+      {
+        "properties": {
+          "kind": { "const": "decision" },
+          "title": { "type": "string" },
+          "context": { "type": "string" },
+          "decision": { "type": "string" },
+          "consequences": { "type": "string" },
+          "supersedes": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }
+        },
+        "required": ["title", "context", "decision"]
+      }
+    ]
+  },
+
+  "invariant": {
+    "allOf": [
+      { "$ref": "#/$defs/base" },
+      {
+        "properties": {
+          "kind": { "const": "invariant" },
+          "name": { "type": "string" },
+          "rule": { "type": "string" },
+          "scope": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/glob" } },
+          "why": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+          "severity": { "enum": ["high", "medium", "low"] },
+          "detect": { "$ref": "#/$defs/detect" }
+        },
+        "required": ["name", "rule", "scope"]
+      }
+    ]
+  },
+
+  "convention": {
+    "allOf": [
+      { "$ref": "#/$defs/base" },
+      {
+        "properties": {
+          "kind": { "const": "convention" },
+          "name": { "type": "string" },
+          "rule": { "type": "string" },
+          "scope": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/glob" } },
+          "example_good": { "oneOf": [{ "$ref": "#/$defs/symbolRef" }, { "type": "null" }] },
+          "example_bad": { "oneOf": [{ "$ref": "#/$defs/symbolRef" }, { "type": "null" }] }
+        },
+        "required": ["name", "rule", "scope"]
+      }
+    ]
+  }
+}

@@ -37,17 +37,23 @@ so a CodeGraph-backed impl can drop in later without touching callers.
   - Truncated SHA-256 (e.g. first 6 hex, matching the spec's examples like `3b9e02`) of the symbol's source span **after whitespace normalization**.
   - **Decide and document the normalization rule (Open Q4 — see below).** Implement the chosen rule and make it a single, swappable function so it can be tuned later (schema §4 says "tune later").
 
-## Open question 4 — content-hash normalization aggressiveness (DO NOT silently resolve)
+## Open question 4 — content-hash normalization aggressiveness (RESOLVED 2026-06-20)
 
 Schema §4 leaves this to v0.1 to pin down. The point: reformatting must **not** trigger
-staleness, but a real edit must. Take this proposal to the developer before locking it:
+staleness, but a real edit must.
 
-- **Recommended v0.1 rule:** strip leading/trailing whitespace per line, collapse runs of
-  intra-line whitespace to a single space, drop blank lines, normalize line endings (CRLF→LF).
-  Do **not** strip comments or normalize tokens (a comment change is a meaningful edit).
-- Note the trade-off: comment-only edits will flip staleness under this rule. Confirm that's acceptable for v0.1, or decide to also strip comments.
+**Decision (developer, 2026-06-20): the recommended v0.1 rule — normalize whitespace, keep
+comments.** Applied to a symbol's source span before hashing:
+- CRLF/CR → LF
+- trim leading/trailing whitespace per line
+- collapse runs of intra-line spaces/tabs to a single space
+- drop blank lines
+- **do not** strip comments or normalize tokens
 
-Surface this as a decision; record the chosen rule in this file and a code comment.
+Accepted trade-off: a **comment-only edit DOES flip staleness** (a comment change is treated
+as a meaningful edit worth re-certifying). Implemented as the single swappable function
+`normalizeForHash` in [src/resolver/hash.ts](../src/resolver/hash.ts) so it can be retuned
+later without touching callers.
 
 ## Out of scope
 

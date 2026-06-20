@@ -1,0 +1,13 @@
+id: decision.no_float_money
+kind: decision
+status: certified
+title: Represent money as integer minor units, not floats
+context: Invoices showed rounding drift of a few paise after tax + proration.
+decision: Store and compute money as integer minor units; format only at the edge.
+consequences: All billing math uses integer ops; a Money helper enforces it.
+pins:
+  - symbol: src/billing/Money.ts#Money
+    content_hash: 3b9e02
+mined_from: { pr: "#412", commit: a1b2c3d }
+certified_by: brijesh
+certified_at: 2026-06-20

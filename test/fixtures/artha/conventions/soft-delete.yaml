@@ -1,0 +1,11 @@
+id: convention.soft_delete
+kind: convention
+status: certified
+name: Soft delete via deletedAt
+rule: >
+  Records are never hard-deleted. Set deletedAt; default queries filter deletedAt IS NULL.
+  A hard delete must be explicitly justified in the PR.
+scope: [ "src/**/repositories/**" ]
+example_good: src/users/UserRepository.ts#softDelete
+certified_by: brijesh
+certified_at: 2026-06-20
