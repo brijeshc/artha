@@ -1,0 +1,6 @@
+# Normalize all text files to LF in the repo (matches Biome's formatter and
+# keeps diffs clean across Windows/macOS/Linux). Shebang'd bin output stays LF.
+* text=auto eol=lf
+
+# Lockfiles are generated — collapse them in diffs/reviews.
+package-lock.json linguist-generated=true

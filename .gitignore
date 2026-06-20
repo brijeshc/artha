@@ -1,0 +1,21 @@
+# dependencies & build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# compiled index / local test fixtures (in user repos .artha/ IS committed,
+# but in this tool repo it only ever appears as a scratch fixture)
+/.artha/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# secrets & local env
+.env
+.env.*
+
+# editor / OS noise
+.DS_Store
+*.log
