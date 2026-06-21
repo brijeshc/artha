@@ -31,11 +31,11 @@ enough that certification feels like one keypress.
 
 > Verify SDK specifics (model ids, `messages.parse()` / `output_config.format`, Batches) against the **claude-api** skill before implementing — do not code Anthropic calls from memory.
 
-## Open questions — DO NOT silently resolve (surface to developer)
+## Open questions — DECIDED (developer call, 2026-06-21)
 
-- **Q1 — miner model default vs. cost.** Spec defaults to `claude-opus-4-8` (don't downgrade for cost without the user's call). Decide: keep Opus + rely on pre-filter/Batches, or default the miner to `claude-haiku-4-5` / `claude-sonnet-4-6`. Make it config-driven either way; record the chosen default.
-- **Q2 — idempotency ledger location.** Track mined SHAs in each entry's `mined_from` only, OR also keep a separate `.artha/.mined` ledger so a *rejected* (deleted) draft's commit isn't re-drafted forever. Trade-off: ledger-only risks a rejected draft silently returning each mine. Decide and document.
-- **Q3 — PR vs. commit mining.** Repo has a GitHub remote. Decide whether to pull PR descriptions/discussion via `gh` (highest-value but adds a GitHub dependency) or work from commit messages + diffs only in v0.1. If commit-only, leave a seam for PR enrichment.
+- **Q1 — miner model default vs. cost.** **DECIDED: keep `claude-opus-4-8` as the default** (per spec — no cost downgrade without the user's call). Config-driven via `config.miner.model`; cost is bounded by the heuristic pre-filter + optional Batches. Cheaper tiers (`claude-sonnet-4-6` / `claude-haiku-4-5`) remain opt-in by editing `config.yaml`.
+- **Q2 — idempotency ledger location.** **DECIDED: maintain a separate `.artha/.mined` ledger** of mined SHAs (in addition to `mined_from` on each draft). A rejected/deleted draft's commit stays in the ledger and is **not** re-drafted on later runs. The ledger is the authoritative skip-set; `mined_from` remains per-entry provenance.
+- **Q3 — PR vs. commit mining.** **DECIDED: commit messages + diffs only in v0.1** — no `gh`/GitHub dependency, fully local. Leave a clean seam for PR enrichment: `mined_from.source` and a pluggable commit-input layer so a PR enricher can be added later without reshaping the miner.
 
 ## Out of scope
 

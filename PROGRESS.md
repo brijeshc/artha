@@ -11,7 +11,7 @@ Running log of task completion against [tasks/README.md](tasks/README.md). Newes
 | 03 | Config loading & `artha init` | ✅ done  | `loadConfig` defaults + idempotent init |
 | 04 | SymbolResolver (tree-sitter)  | ✅ done  | `web-tree-sitter` pinned 0.20.8 |
 | 05 | `artha build` — index         | ✅ done  | node:sqlite + FTS5, zero deps; staleness flip |
-| 06 | `artha mine` — git → drafts   | ⬜ todo  | needs 02, 03; carries Open Q1–Q3 |
+| 06 | `artha mine` — git → drafts   | ✅ done  | prefilter + Anthropic structured output + `.mined` ledger |
 | 07 | `artha review` — Ink TUI      | ⬜ todo  | needs 02 |
 | 08 | MCP server (stdio)            | ⬜ todo  | needs 05 |
 | 09 | `artha export --agents-md`    | ⬜ todo  | needs 05 |
@@ -20,6 +20,37 @@ Running log of task completion against [tasks/README.md](tasks/README.md). Newes
 Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 
 ## Log
+
+### 2026-06-21
+
+- **T06 — `artha mine`** done. Git history → `proposed` decision drafts via the
+  Anthropic API. Pipeline: `listCommits` → metadata pre-filter (drop merges /
+  already-mined / noise subjects, rank by rationale/revert/issue-ref signals) →
+  per candidate, load the diff and apply diff-level skips (lockfile-only,
+  formatting-only, trivial) — **zero LLM spend for skips** → send survivors to
+  the miner up to a spend cap (`--max`, default 20) → validate each draft through
+  T02 → write ADR-numbered `proposed` YAML with `mined_from`. 18 tests (prefilter,
+  ledger, end-to-end with a stubbed miner) + verified on real history via
+  `mine --dry-run`.
+  - **Engine** (`src/mine/anthropic.ts`): `@anthropic-ai/sdk` with **structured
+    output** (`output_config.format` JSON schema) so drafts conform by
+    construction. A focused content-only schema is used (the full §5.1 schema's
+    `if/then` conditionals aren't valid for structured outputs); the complete
+    entry is assembled and re-validated through T02 before writing. Reads
+    `ANTHROPIC_API_KEY`; missing key → `ArthaError` with a hint. SDK is
+    dynamically imported so `build`/`review`/MCP/`export` stay fully offline.
+    Miner is behind a `Miner` interface (injectable stub for tests).
+  - **Open Q1 — DECIDED: keep `claude-opus-4-8` default** (no silent downgrade;
+    cost bounded by prefilter + spend cap). Cheaper tiers remain config opt-ins.
+  - **Open Q2 — DECIDED: separate `.artha/.mined` ledger** (`src/mine/ledger.ts`),
+    authoritative skip-set unioned with existing drafts' `mined_from`. A
+    rejected/deleted draft's commit stays skipped — never re-drafted or
+    re-charged. Every mined SHA (drafted *and* no-decision) is recorded.
+  - **Open Q3 — DECIDED: commit messages + diffs only** (no `gh`/GitHub dep).
+    Seam left for PR enrichment: `mined_from.source = git-history` + the
+    `src/mine/git.ts` layer is the single place a PR enricher would slot in.
+  - Batches API (optional per the task) deferred — single-pass + prefilter +
+    spend cap is the chosen cost path for v0.1.
 
 ### 2026-06-20
 
@@ -60,8 +91,8 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 
 ## Open questions still pending (do not silently resolve)
 
-- **Q1** miner model default vs. cost → owned by T06
-- **Q2** idempotency ledger location → owned by T06
-- **Q3** PR vs. commit mining → owned by T06
 - **Q5** success-test baseline definition → owned by T10
+- ~~**Q1** miner model default~~ → resolved 2026-06-21: keep `claude-opus-4-8` (see T06 log)
+- ~~**Q2** idempotency ledger~~ → resolved 2026-06-21: separate `.artha/.mined` (see T06 log)
+- ~~**Q3** PR vs. commit mining~~ → resolved 2026-06-21: commit-only, PR seam left (see T06 log)
 - ~~**Q4** content-hash normalization~~ → resolved 2026-06-20 (see T04 log)

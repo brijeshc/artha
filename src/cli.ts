@@ -28,6 +28,9 @@ export function buildProgram(): Command {
   program
     .command('mine')
     .description('draft decision entries from git history (Anthropic API)')
+    .option('--dry-run', 'preview candidate commits without calling the API or writing drafts')
+    .option('--limit <n>', 'how many commits of history to scan (default: all)')
+    .option('--max <n>', 'max commits to send to the miner this run (default: 20; 0 = unlimited)')
     .action(mineCommand);
 
   program
