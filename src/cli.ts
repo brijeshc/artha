@@ -47,7 +47,8 @@ export function buildProgram(): Command {
     .command('export')
     .description('emit a compact AGENTS.md of certified entries')
     .option('--agents-md', 'write an AGENTS.md slice (the only format in v0.1)')
-    .action((options: { agentsMd?: boolean }) => exportCommand(options));
+    .option('--out <path>', 'output path (default: AGENTS.md at the repo root)')
+    .action((options: { agentsMd?: boolean; out?: string }) => exportCommand(options));
 
   program.command('mcp').description('start the stdio MCP server').action(mcpCommand);
 

@@ -14,7 +14,7 @@ Running log of task completion against [tasks/README.md](tasks/README.md). Newes
 | 06 | `artha mine` — git → drafts   | ✅ done  | prefilter + Anthropic structured output + `.mined` ledger |
 | 07 | `artha review` — Ink TUI      | ✅ done  | Ink + React; one-keypress certify/edit/reject; offline |
 | 08 | MCP server (stdio)            | ✅ done  | `context_for_task` + `why`; ranked, budgeted, certified-only default; offline |
-| 09 | `artha export --agents-md`    | ⬜ todo  | needs 05 |
+| 09 | `artha export --agents-md`    | ✅ done  | certified-only `AGENTS.md` via T08 `query.ts`; deterministic; `--out` |
 | 10 | v0.1 success test             | ⬜ todo  | needs 05, 06, 07, 08; carries Open Q5 |
 
 Critical path: 01 → 02 → 04 → 05 → 08 → 10.
@@ -22,6 +22,27 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 ## Log
 
 ### 2026-06-21
+
+- **T09 — `artha export --agents-md`** done. Emits a compact, generated `AGENTS.md`
+  of **certified** entries so flat-file-only tools (no MCP) still get the team's
+  certified meaning — the adoption hook. Fully offline.
+  - **Source = the built index via T08 `query.ts`** (not a fresh YAML read), so the
+    export mirrors the same validated, staleness-resolved state the MCP server
+    serves. Proposed/stale are excluded by definition.
+  - **Output** (`src/export/agentsMd.ts`): grouped by kind (Decisions / Invariants /
+    Conventions); per entry the heading, the one-line decision/rule, `pins`,
+    `scope` (capped at 8 expanded files + "(+N more)" to stay terse), and `why` /
+    `supersedes` cross-links. `renderAgentsMd(index)` is pure; `exportAgentsMd(repoRoot,
+    {out})` does the I/O (creates parent dirs).
+  - **Generated-file discipline:** a "DO NOT EDIT" banner and a **static** header
+    (no timestamp) so re-exports of unchanged input are **byte-identical** → minimal
+    git diffs. Entries sorted by id; pins/scope sorted + de-duped.
+  - **Empty/cold state** → a valid `AGENTS.md` with a "nothing certified yet" note,
+    never an error; the command hints `artha build` when no index is present.
+  - `artha export` defaults to `--agents-md` (the only v0.1 format); `--out <path>`
+    overrides the default repo-root `AGENTS.md`.
+  - 7 tests (grouping, certified-only exclusion, deterministic re-export, custom out,
+    empty state) + a live full-pipeline smoke (`init → build → export`).
 
 - **T08 — MCP server (stdio)** done. A read-only, fully-offline `@modelcontextprotocol/sdk`
   server (launched by `artha mcp` and the standalone `dist/mcp.js`) that serves
