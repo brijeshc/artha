@@ -13,7 +13,7 @@ Running log of task completion against [tasks/README.md](tasks/README.md). Newes
 | 05 | `artha build` — index         | ✅ done  | node:sqlite + FTS5, zero deps; staleness flip |
 | 06 | `artha mine` — git → drafts   | ✅ done  | prefilter + Anthropic structured output + `.mined` ledger |
 | 07 | `artha review` — Ink TUI      | ✅ done  | Ink + React; one-keypress certify/edit/reject; offline |
-| 08 | MCP server (stdio)            | 🚧 wip   | needs 05 |
+| 08 | MCP server (stdio)            | ✅ done  | `context_for_task` + `why`; ranked, budgeted, certified-only default; offline |
 | 09 | `artha export --agents-md`    | ⬜ todo  | needs 05 |
 | 10 | v0.1 success test             | ⬜ todo  | needs 05, 06, 07, 08; carries Open Q5 |
 
@@ -22,6 +22,38 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 ## Log
 
 ### 2026-06-21
+
+- **T08 — MCP server (stdio)** done. A read-only, fully-offline `@modelcontextprotocol/sdk`
+  server (launched by `artha mcp` and the standalone `dist/mcp.js`) that serves
+  certified product-meaning to agents over stdio via two tools: **`context_for_task`**
+  and **`why`**. Server name `artha`.
+  - **Read layer** (`src/mcp/query.ts`): opens `.artha/index.db`, eagerly loads
+    facts/pins/scope (team-scale → rank in memory) with lazy FTS5. **Cold-start safe**:
+    a missing / empty / unreadable index yields an *empty* index, never an error
+    (SPEC). Shared API reused by T09. `toFtsQuery` sanitizes free text into a safe
+    quoted-OR FTS query.
+  - **Ranking** (`src/mcp/rank.ts`): relevance = normalized **FTS-lexical + structural
+    overlap** (a fact's pins/scope vs. the task's `symbols`/`files`), times a **status
+    weight** (certified 1.0 > proposed 0.6). Additive, not multiplicative — so a
+    task-text-only call ranks on pure lexical × status with structural simply not
+    applied (SPEC edge case), and a symbols/files-only call ranks structurally.
+    **`stale` is always excluded** (pinned code drifted → untrusted). Token budget
+    (~1.5k default, `ARTHA_TOKEN_BUDGET` / option override) keeps the highest-ranked
+    items, truncating from the bottom, always ≥1.
+  - **Tools** (`src/mcp/server.ts`): `context_for_task(task, symbols?, files?,
+    include_proposed?)` — **certified-only by default**; `include_proposed: true`
+    adds drafts *clearly labeled* `[proposed — unreviewed draft]`. `why(symbol)` —
+    decisions/rules whose pins reference `path#Symbol`, following invariant `why`
+    cross-links, every status tagged. The index is opened **per call** so a fresh
+    `artha build` is picked up without a restart; diagnostics go to stderr so stdout
+    stays clean for JSON-RPC.
+  - **SDK shape verified against the installed package** (not from memory):
+    `registerTool(name, { description, inputSchema }, cb)` with a **raw Zod shape**
+    as `inputSchema`, `StdioServerTransport`, `server.connect()`.
+  - 24 tests incl. a real in-memory **client↔server round-trip**; also smoke-tested
+    live over actual stdio (`tools/list` + a cold-start `context_for_task` call).
+  - Deps: `@modelcontextprotocol/sdk` ^1.29.0 + `zod` ^4.4.3 (both externalized by
+    tsup; `dist/mcp.js` stays ~11 KB).
 
 - **T07 — `artha review`** done. Ink (React-for-the-terminal) TUI that walks the
   `proposed` queue and shows each draft beside its source commit/diff + proposed
