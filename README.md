@@ -130,19 +130,20 @@ writes valid YAML. After reviewing, run `artha build` to re-index.
 
 ## Connecting an agent (MCP)
 
-`artha mcp` is a stdio MCP server that reads `.artha/index.db` from its working
-directory. Point your MCP client at it. For Claude Code, from your project root:
+`artha mcp` is a stdio MCP server. By default it reads `.artha/index.db` from its
+working directory; if your MCP client doesn't launch it from the repo root, point
+it at the repo with the `ARTHA_REPO_ROOT` env var. Use OS-native absolute paths.
 
-```bash
-claude mcp add artha -- node /absolute/path/to/artha/dist/mcp.js
-```
-
-or add it to `.mcp.json`:
+For Claude Code, add it to `.mcp.json` at your project root:
 
 ```json
 {
   "mcpServers": {
-    "artha": { "command": "node", "args": ["/absolute/path/to/artha/dist/mcp.js"] }
+    "artha": {
+      "command": "node",
+      "args": ["C:/Code/your-repo/node_modules/artha/dist/mcp.js"],
+      "env": { "ARTHA_REPO_ROOT": "C:/Code/your-repo" }
+    }
   }
 }
 ```

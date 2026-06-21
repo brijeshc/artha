@@ -1,0 +1,13 @@
+id: decision.static_spa_no_backend
+kind: decision
+status: certified
+title: Content is static TypeScript, not a backend or CMS
+context: >-
+  The site is a personal engineering knowledge base that must stay cheap to host
+  and fully version-controlled.
+decision: >-
+  Author all content as TypeScript data files compiled into the bundle; no CMS
+  and no content API. Only the newsletter subscribe/unsubscribe Cloudflare Pages
+  Functions talk to a backend (D1).
+certified_by: Brijesh
+certified_at: 2026-06-21

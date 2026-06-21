@@ -1,0 +1,16 @@
+{
+  "discovery": 13,
+  "bashDiscovery": 21,
+  "discoveryTotal": 34,
+  "arthaCalls": 0,
+  "edits": 6,
+  "totalToolCalls": 42,
+  "byName": {
+    "Bash": 23,
+    "Read": 12,
+    "Write": 2,
+    "Edit": 4,
+    "Grep": 1
+  },
+  "resultPreview": "Everything is wired consistently and verified. The other `rate-limiting-*` matches in `indexData.ts` (lines 1689, 2039, 5916) are pre-existing *section anchors* inside unrelated topics (resilience, OWASP, SRE) — not topic conflicts. My topic `id: \"rate-limiting\"` is unique, and there's exactly one route.\n\n## Done — \"Rate Limiting & Throttling\" added as topic **4.17** in Part 4 (Backend Engineering)\n\nI followed the exact patterns I found in the codebase (modeled on `restApiDesign.ts` / `RestApiDesignPage.tsx`).\n\n**Files created**\n- `src/data/rateLimiting.ts` — the data module: `rateLimitingIntro` (`PageIntro`), `rateLimitingSections` (`SystemArchSection[]`), `rateLimitingQuiz` (`QuizQuestion[]`). Six sections following the content standard from `REVIEW-GUIDE.md`:\n  1. **Overview** — problem"
+}

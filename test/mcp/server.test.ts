@@ -142,6 +142,32 @@ describe('MCP protocol round-trip (in-memory transport)', () => {
       await server.close();
     }
   });
+
+  it('resolves the index from ARTHA_REPO_ROOT when no repoRoot is passed', async () => {
+    writeFixtureIndex(dbPath);
+    const saved = process.env.ARTHA_REPO_ROOT;
+    process.env.ARTHA_REPO_ROOT = dir;
+    try {
+      const server = createArthaServer(); // no repoRoot option → must fall back to the env var
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await server.connect(serverTransport);
+      const client = new Client({ name: 'test', version: '0.0.0' });
+      await client.connect(clientTransport);
+      try {
+        const res = await client.callTool({
+          name: 'context_for_task',
+          arguments: { task: 'money cents' },
+        });
+        expect(textOf(res)).toContain('decision.money');
+      } finally {
+        await client.close();
+        await server.close();
+      }
+    } finally {
+      if (saved === undefined) Reflect.deleteProperty(process.env, 'ARTHA_REPO_ROOT');
+      else process.env.ARTHA_REPO_ROOT = saved;
+    }
+  });
 });
 
 function textOf(result: unknown): string {

@@ -1,0 +1,11 @@
+id: convention.python_code_examples
+kind: convention
+status: certified
+name: Code examples are Python by default
+rule: >-
+  codeExample / codeExamples use Python unless the concept demands another
+  language (SQL, .proto, JSX). Comment every non-obvious line.
+scope:
+  - src/data/**
+certified_by: Brijesh
+certified_at: 2026-06-21

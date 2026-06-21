@@ -1,0 +1,12 @@
+id: convention.realworld_indian_company
+kind: convention
+status: certified
+name: realWorld examples must include an Indian company
+rule: >-
+  Every section's realWorld[] lists 3-5 real companies/products, and at least one
+  must be an Indian company (Zerodha, Razorpay, Swiggy, NPCI, Flipkart, PhonePe,
+  etc.). This is a hard content standard, not optional.
+scope:
+  - src/data/**
+certified_by: Brijesh
+certified_at: 2026-06-21

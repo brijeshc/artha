@@ -1,0 +1,12 @@
+id: convention.thin_page_components
+kind: convention
+status: certified
+name: Page components are thin renderers
+rule: >-
+  A page component under src/pages/ only renders data from its src/data module
+  via the shared layout/components. Put no content or business logic in the page;
+  copy an existing page (e.g. TestingStrategyPage.tsx) and swap the data imports.
+scope:
+  - src/pages/**
+certified_by: Brijesh
+certified_at: 2026-06-21

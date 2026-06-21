@@ -1,0 +1,14 @@
+id: convention.register_topic_route_and_nav
+kind: convention
+status: certified
+name: New topics are wired into the router and sidebar
+rule: >-
+  Adding a topic requires two registrations: a <Route> in src/App.tsx and an
+  entry ({ id, label, path }) in the mainTopics array in
+  src/components/Sidebar.tsx. A topic with a page but no route and sidebar entry
+  is unreachable.
+scope:
+  - src/App.tsx
+  - src/components/Sidebar.tsx
+certified_by: Brijesh
+certified_at: 2026-06-21

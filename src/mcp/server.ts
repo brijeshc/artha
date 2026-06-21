@@ -90,8 +90,17 @@ export function whyBundle(index: ArthaIndex, symbol: string): string {
     .join('\n\n');
 }
 
+// Advertised to the client at initialize so an agent knows to consult Artha
+// *before* rediscovering the team's conventions by reading/grepping many files.
+const ARTHA_INSTRUCTIONS =
+  "Artha serves this team's certified product context — the decisions, conventions, and " +
+  'invariants behind this codebase. Before writing or changing code, call `context_for_task` ' +
+  'with a short description of what you are about to do (plus any symbols or files you will ' +
+  'touch) to load the relevant certified context, and `why` to learn why a specific symbol ' +
+  "exists. Prefer these over rediscovering the team's conventions by reading or grepping files.";
+
 export interface ServerOptions {
-  /** Repo root holding `.artha/index.db`. Default `process.cwd()`. */
+  /** Repo root holding `.artha/index.db`. Default: `$ARTHA_REPO_ROOT` then `process.cwd()`. */
   repoRoot?: string;
   /** Token budget for `context_for_task`. Default from env or the spec default. */
   tokenBudget?: number;
@@ -104,11 +113,16 @@ export interface ServerOptions {
  * restart.
  */
 export function createArthaServer(options: ServerOptions = {}): McpServer {
-  const repoRoot = options.repoRoot ?? process.cwd();
+  // An MCP client may not launch the server from the repo root, so allow an
+  // explicit override (env) before falling back to the working directory.
+  const repoRoot = options.repoRoot ?? process.env.ARTHA_REPO_ROOT ?? process.cwd();
   const dbPath = join(repoRoot, '.artha', 'index.db');
   const budget = options.tokenBudget ?? tokenBudgetFromEnv();
 
-  const server = new McpServer({ name: 'artha', version: __ARTHA_VERSION__ });
+  const server = new McpServer(
+    { name: 'artha', version: __ARTHA_VERSION__ },
+    { instructions: ARTHA_INSTRUCTIONS },
+  );
 
   server.registerTool(
     'context_for_task',

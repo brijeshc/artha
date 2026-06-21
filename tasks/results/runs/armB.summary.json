@@ -1,0 +1,19 @@
+{
+  "discovery": 15,
+  "bashDiscovery": 0,
+  "discoveryTotal": 15,
+  "arthaCalls": 1,
+  "edits": 5,
+  "totalToolCalls": 25,
+  "byName": {
+    "ToolSearch": 1,
+    "Glob": 6,
+    "mcp__artha__context_for_task": 1,
+    "Read": 9,
+    "Write": 2,
+    "Edit": 3,
+    "PowerShell": 2,
+    "Bash": 1
+  },
+  "resultPreview": "All checks pass: template literals are balanced, all three required exports are present, and the structure matches `SystemArchSection` / `QuizQuestion`. A full `tsc` build needs `node_modules` (not installed here), but the new files mirror the existing `apiDesign` topic exactly.\n\n## Summary\n\nAdded a new topic page **\"3.21 Rate Limiting\"** to Part 3 (System Architecture & Design), following the codebase's conventions verified against the certified Artha context and the existing `apiDesign` topic.\n\n**Files created:**\n- `src/data/rateLimiting.ts` — the data module, exporting the three required named values (`rateLimitingIntro`, `rateLimitingSections: SystemArchSection[]`, `rateLimitingQuiz: QuizQuestion[]`). Six sections, each with `content`, `keyPoints`, `misconceptions`, and a `Think It Ove"
+}

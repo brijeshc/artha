@@ -15,13 +15,37 @@ Running log of task completion against [tasks/README.md](tasks/README.md). Newes
 | 07 | `artha review` — Ink TUI      | ✅ done  | Ink + React; one-keypress certify/edit/reject; offline |
 | 08 | MCP server (stdio)            | ✅ done  | `context_for_task` + `why`; ranked, budgeted, certified-only default; offline |
 | 09 | `artha export --agents-md`    | ✅ done  | certified-only `AGENTS.md` via T08 `query.ts`; deterministic; `--out` |
-| 10 | v0.1 success test             | ⬜ todo  | needs 05, 06, 07, 08; carries Open Q5 |
+| 10 | v0.1 success test             | ✅ done  | A/B on real proof repo: **−56% discovery tool-calls** with Artha (≥30% bar) |
 
 Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 
 ## Log
 
 ### 2026-06-21
+
+- **T10 — v0.1 success test** done. **Verdict: PASS.** Full write-up in
+  [tasks/results/v0.1-success-test.md](results/v0.1-success-test.md).
+  - **Q5 locked with developer** ([10-success-test.md](10-success-test.md)) after a
+    premise correction: the proof repo is a content-site SPA, not a billing
+    service, so the baseline targets its real conventions ("add a topic page"
+    workflow + content standard) rather than money/soft-delete.
+  - **A/B on the real proof repo** (`claude -p`, headless, identical prompt; fresh
+    copies with `CLAUDE.md`/`CONTENT-GUIDE.md` removed; certified index served only
+    via MCP from a sidecar dir): Arm B (Artha) used **34 → 15 discovery tool-calls
+    (−56%)** and 42 → 25 total (−40%) vs Arm A, via a single `context_for_task`
+    call — clearing the **≥30%** bar. Both arms applied the conventions (correct
+    data-module exports, Indian-company example, thin page, route + sidebar wiring).
+  - **Loop proven on real data:** `init → mine → build → mcp` all run on the
+    299-commit repo. `mine` (claude-cli engine) correctly classifies real commits;
+    a content repo yields sparse decisions (3/299 carry rationale signals), so the
+    certified value here is hand-authored conventions.
+  - **Product fixes this test drove:** MCP server `instructions` (Artha tells the
+    agent to call `context_for_task` first), `ARTHA_REPO_ROOT` (index resolution
+    when the client doesn't launch from the repo root), and the OS-native-path /
+    sidecar-index requirements (now in the README + harness).
+  - Reproducible harness committed: [scripts/success-test.sh](../scripts/success-test.sh)
+    + [scripts/count-tools.mjs](../scripts/count-tools.mjs); certified fixture in
+    [tasks/results/proof-repo-fixture/](results/proof-repo-fixture/).
 
 - **T09 — `artha export --agents-md`** done. Emits a compact, generated `AGENTS.md`
   of **certified** entries so flat-file-only tools (no MCP) still get the team's

@@ -43,6 +43,32 @@ Decide with the developer before running:
 
 Record the locked baseline in this file before measuring.
 
+## Locked baseline (decided with developer, 2026-06-21)
+
+**Premise correction:** the proof repo is a content-site SPA (React/Vite +
+Cloudflare Workers), *not* a billing service. The "money/soft-delete" keywords
+are article **text**, not domain code. The baseline is grounded in the repo's
+actual, documented conventions (its own `CLAUDE.md` / `CONTENT-GUIDE.md`).
+
+- **Fixed task:** *"Add a new engineering-notes topic page for `<TOPIC>`."* The
+  repo's headline workflow. A correct result follows the documented conventions:
+  a data module exporting `<topic>Intro` / `<topic>Sections: SystemArchSection[]`
+  / `<topic>Quiz`; a **thin** page component; a route added to `src/App.tsx`; a
+  sidebar entry in `src/components/Sidebar.tsx`; and the content standard
+  (≥1 Indian-company example in `realWorld[]`, Python code examples).
+- **A/B:** same task, same agent (`claude -p`, headless), same prompt, in two
+  fresh copies of the proof repo **with `CLAUDE.md` + `CONTENT-GUIDE.md` removed**
+  (so conventions must be *discovered*, not free-loaded from a context file).
+  Arm A: no MCP. Arm B: the Artha MCP server serving a certified index built from
+  this repo.
+- **Metric:** discovery tool-calls = `Read` + `Grep` + `Glob` (and shell
+  grep/cat) the agent issues to discover conventions, parsed from
+  `claude -p --output-format json`. Calls to the Artha MCP tool are counted
+  separately (they are the point, not discovery noise).
+- **Pass:** Arm B issues **≥30% fewer** discovery tool-calls than Arm A **and**
+  applies the conventions (correct exports, ≥1 Indian-company example, route +
+  sidebar wiring) without them pasted into the prompt.
+
 ## Out of scope
 
 - Any new product feature — this task only exercises and measures what 01–09 built.

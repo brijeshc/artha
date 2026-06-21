@@ -1,0 +1,12 @@
+id: convention.topic_data_module
+kind: convention
+status: certified
+name: Topic data modules export intro, sections, and quiz
+rule: >-
+  Each content topic lives in one file under src/data/. It exports three named
+  values: `<topic>Intro` ({ title, subtitle, description }), `<topic>Sections`
+  typed `SystemArchSection[]`, and `<topic>Quiz` typed `QuizQuestion[]`.
+scope:
+  - src/data/**
+certified_by: Brijesh
+certified_at: 2026-06-21

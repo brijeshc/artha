@@ -1,0 +1,12 @@
+id: convention.styling_css_variables
+kind: convention
+status: certified
+name: Style only via CSS custom properties
+rule: >-
+  All colour, spacing, and typography come from CSS custom properties in
+  src/styles/variables.css. Never hardcode values; support the light, dark, and
+  sepia themes applied via the data-theme attribute on <html>.
+scope:
+  - src/**
+certified_by: Brijesh
+certified_at: 2026-06-21
