@@ -4,11 +4,21 @@ import { parse as parseYaml } from 'yaml';
 import type { Severity } from '../schema/types';
 import { ArthaError } from '../util/error';
 
+/**
+ * Which backend `artha mine` drafts decisions with:
+ * - `api`: the Anthropic SDK directly (needs ANTHROPIC_API_KEY / token / `ant
+ *   auth login`; leanest, guaranteed structured output).
+ * - `claude-cli`: shells out to the Claude Code CLI, reusing its existing login
+ *   (subscription or key) — no separate API key needed.
+ */
+export type MinerEngine = 'api' | 'claude-cli';
+
 export interface MinerConfig {
+  /** Backend used to draft decisions. Default `api`. */
+  engine: MinerEngine;
   /**
    * Model the miner drafts decisions with. Default is the SPEC's Open Q1 value
-   * (`claude-opus-4-8`) — we do not silently downgrade for cost. T06 owns the
-   * mining semantics; this only defines the shape + default.
+   * (`claude-opus-4-8`) — we do not silently downgrade for cost.
    */
   model: string;
 }
@@ -26,10 +36,12 @@ export interface ArthaConfig {
 const DEFAULTS = {
   sourceRoots: ['src'],
   defaultSeverity: 'medium',
+  minerEngine: 'api',
   minerModel: 'claude-opus-4-8',
 } as const;
 
 const SEVERITIES = new Set<Severity>(['high', 'medium', 'low']);
+const MINER_ENGINES = new Set<MinerEngine>(['api', 'claude-cli']);
 
 /**
  * Load `.artha/config.yaml` from `repoRoot`, layered over sensible defaults.
@@ -74,6 +86,9 @@ export function loadConfig(repoRoot: string): ArthaConfig {
     if (typeof miner.model === 'string' && miner.model.length > 0) {
       config.miner.model = miner.model;
     }
+    if (typeof miner.engine === 'string' && MINER_ENGINES.has(miner.engine as MinerEngine)) {
+      config.miner.engine = miner.engine as MinerEngine;
+    }
   }
 
   return config;
@@ -84,7 +99,7 @@ export function defaultConfig(): ArthaConfig {
   return {
     sourceRoots: [...DEFAULTS.sourceRoots],
     defaultSeverity: DEFAULTS.defaultSeverity,
-    miner: { model: DEFAULTS.minerModel },
+    miner: { engine: DEFAULTS.minerEngine, model: DEFAULTS.minerModel },
   };
 }
 

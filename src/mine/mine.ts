@@ -5,9 +5,10 @@ import { loadEntries, writeEntry } from '../schema/load';
 import type { Decision } from '../schema/types';
 import { validateEntry } from '../schema/validate';
 import { logger } from '../util/logger';
-import { type Miner, createAnthropicMiner, requireApiKey } from './anthropic';
+import { createMiner } from './engine';
 import { type CommitMeta, listCommits, loadCommitDiff } from './git';
 import { readLedger, recordMined } from './ledger';
+import type { Miner } from './miner';
 import { type Candidate, classifyDiff, selectCandidates } from './prefilter';
 
 export interface MineOptions {
@@ -61,10 +62,6 @@ export async function mine(
     alreadyMined: 0,
   };
 
-  // Fail fast on a missing key before any git work (skipped for --dry-run and
-  // when a miner is injected, neither of which calls the API).
-  if (!options.dryRun && !options.miner) requireApiKey();
-
   // Existing state: ids/ADR numbers to avoid collisions, and the union of the
   // ledger + existing drafts' provenance as the authoritative skip-set (Q2).
   const decisions = loadEntries(arthaDir).entries.filter(
@@ -89,7 +86,9 @@ export async function mine(
     return report;
   }
 
-  const miner = options.miner ?? (await createAnthropicMiner(config.miner.model));
+  // Build the miner (engine readiness check happens here) right before use, so
+  // `mine` fails fast with an actionable message before any model call.
+  const miner = options.miner ?? (await createMiner(config.miner));
   const budget = options.maxCommits ?? DEFAULT_MAX_COMMITS;
   let nextAdr = nextAdrNumber(arthaDir);
 

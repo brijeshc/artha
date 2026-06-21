@@ -32,14 +32,25 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
   T02 → write ADR-numbered `proposed` YAML with `mined_from`. 18 tests (prefilter,
   ledger, end-to-end with a stubbed miner) + verified on real history via
   `mine --dry-run`.
-  - **Engine** (`src/mine/anthropic.ts`): `@anthropic-ai/sdk` with **structured
-    output** (`output_config.format` JSON schema) so drafts conform by
-    construction. A focused content-only schema is used (the full §5.1 schema's
-    `if/then` conditionals aren't valid for structured outputs); the complete
-    entry is assembled and re-validated through T02 before writing. Reads
-    `ANTHROPIC_API_KEY`; missing key → `ArthaError` with a hint. SDK is
-    dynamically imported so `build`/`review`/MCP/`export` stay fully offline.
-    Miner is behind a `Miner` interface (injectable stub for tests).
+  - **Pluggable engines** behind a shared `Miner` interface + shared prompt/parse
+    (`src/mine/miner.ts`); selected by `config.miner.engine` via `engine.ts`:
+    - `api` (`src/mine/anthropic.ts`, default): `@anthropic-ai/sdk` with
+      **structured output** (`output_config.format` JSON schema) so drafts conform
+      by construction. Focused content-only schema (the full §5.1 schema's
+      `if/then` conditionals aren't valid for structured outputs); the complete
+      entry is assembled + re-validated through T02 before writing. SDK is
+      dynamically imported so `build`/`review`/MCP/`export` stay fully offline.
+    - `claude-cli` (`src/mine/claudeCli.ts`): shells out to `claude -p
+      --output-format json`, **reusing the user's existing Claude Code login**
+      (subscription or key) — no separate `ANTHROPIC_API_KEY`. Verified live on
+      both engines. Trade-off: each CLI call carries Claude Code's system-prompt
+      overhead (~17k cached tokens), so `api` stays leaner for raw-key users.
+      Windows-safe spawn (`.cmd` shim via shell; static argv; system prompt +
+      commit on stdin). Injectable `CliRunner` for tests.
+  - **Auth (broadened):** the `api` engine accepts `ANTHROPIC_API_KEY`,
+    `ANTHROPIC_AUTH_TOKEN`, **or** an `ant auth login` OAuth profile on disk
+    (subscription, no raw key); missing → `ArthaError` with a hint pointing at all
+    three plus `engine: claude-cli`. (Fixes an earlier over-strict env-only check.)
   - **Open Q1 — DECIDED: keep `claude-opus-4-8` default** (no silent downgrade;
     cost bounded by prefilter + spend cap). Cheaper tiers remain config opt-ins.
   - **Open Q2 — DECIDED: separate `.artha/.mined` ledger** (`src/mine/ledger.ts`),

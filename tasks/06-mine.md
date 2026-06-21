@@ -37,6 +37,10 @@ enough that certification feels like one keypress.
 - **Q2 — idempotency ledger location.** **DECIDED: maintain a separate `.artha/.mined` ledger** of mined SHAs (in addition to `mined_from` on each draft). A rejected/deleted draft's commit stays in the ledger and is **not** re-drafted on later runs. The ledger is the authoritative skip-set; `mined_from` remains per-entry provenance.
 - **Q3 — PR vs. commit mining.** **DECIDED: commit messages + diffs only in v0.1** — no `gh`/GitHub dependency, fully local. Leave a clean seam for PR enrichment: `mined_from.source` and a pluggable commit-input layer so a PR enricher can be added later without reshaping the miner.
 
+## Post-spec addition — pluggable miner engine (2026-06-21)
+
+The spec scopes the engine to the Anthropic SDK; that remains the **default** (`config.miner.engine: api`). Added alongside it, at the developer's request, a second engine `claude-cli` that shells out to the Claude Code CLI (`claude -p`) so users can mine using their existing Claude Code login (subscription or key) **without a separate `ANTHROPIC_API_KEY`**. Both share one `Miner` interface + prompt/parse layer. The `api` engine's credential check was also broadened to accept `ANTHROPIC_AUTH_TOKEN` and an `ant auth login` OAuth profile, not just the raw key.
+
 ## Out of scope
 
 - Other miners (tests-as-spec, issue-tracker, Notion/Jira) — only git-history → decisions ships.

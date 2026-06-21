@@ -18,6 +18,11 @@ default_severity: medium
 
 # Miner (\`artha mine\`) settings.
 miner:
+  # Backend used to draft decisions:
+  #   api        — Anthropic SDK directly (needs ANTHROPIC_API_KEY / token / \`ant auth login\`).
+  #   claude-cli — shell out to the Claude Code CLI, reusing its existing login (no API key).
+  # engine: api
+
   # Model used to draft decisions.
   # Cheaper opt-ins: claude-sonnet-4-6, claude-haiku-4-5.
   model: claude-opus-4-8

@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defaultConfig } from '../../src/config/config';
-import type { Miner, MinerInput, MinerResult } from '../../src/mine/anthropic';
 import { mine } from '../../src/mine/mine';
+import type { Miner, MinerInput, MinerResult } from '../../src/mine/miner';
 import { loadEntries } from '../../src/schema/load';
 import { isArthaError } from '../../src/util/error';
 
@@ -48,9 +48,12 @@ class StubMiner implements Miner {
 }
 
 let repo: string;
-let savedKey: string | undefined;
+const AUTH_VARS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_CONFIG_DIR'] as const;
+const savedAuth: Record<string, string | undefined> = {};
 
 beforeEach(() => {
+  for (const v of AUTH_VARS) savedAuth[v] = process.env[v];
+
   repo = mkdtempSync(join(tmpdir(), 'artha-mine-'));
   git(repo, ['init']);
   // Oldest → newest. listCommits returns newest first.
@@ -73,15 +76,22 @@ beforeEach(() => {
     '{\n  "lockfileVersion": 3,\n  "name": "x"\n}\n',
     'Update deps',
   );
-
-  savedKey = process.env.ANTHROPIC_API_KEY;
 });
 
 afterEach(() => {
   rmSync(repo, { recursive: true, force: true });
-  if (savedKey === undefined) Reflect.deleteProperty(process.env, 'ANTHROPIC_API_KEY');
-  else process.env.ANTHROPIC_API_KEY = savedKey;
+  for (const v of AUTH_VARS) {
+    if (savedAuth[v] === undefined) Reflect.deleteProperty(process.env, v);
+    else process.env[v] = savedAuth[v];
+  }
 });
+
+/** Remove every ambient Anthropic credential so the `api` engine has none to find. */
+function clearAnthropicAuth(): void {
+  Reflect.deleteProperty(process.env, 'ANTHROPIC_API_KEY');
+  Reflect.deleteProperty(process.env, 'ANTHROPIC_AUTH_TOKEN');
+  process.env.ANTHROPIC_CONFIG_DIR = join(repo, 'empty-config'); // no credentials/ dir → no profile
+}
 
 describe('mine', () => {
   it('drafts a well-formed proposed decision with mined_from provenance', async () => {
@@ -140,15 +150,15 @@ describe('mine', () => {
     expect(miner.calls.length).toBe(1);
   });
 
-  it('dry-run previews without an API key and writes nothing', async () => {
-    Reflect.deleteProperty(process.env, 'ANTHROPIC_API_KEY');
+  it('dry-run previews without any credentials and writes nothing', async () => {
+    clearAnthropicAuth();
     const report = await mine(repo, defaultConfig(), { dryRun: true });
     expect(report.candidates).toBe(4);
     expect(existsSync(join(repo, '.artha', 'decisions'))).toBe(false);
   });
 
-  it('fails with an actionable error when ANTHROPIC_API_KEY is unset', async () => {
-    Reflect.deleteProperty(process.env, 'ANTHROPIC_API_KEY');
+  it('fails with an actionable error when the api engine has no credentials', async () => {
+    clearAnthropicAuth();
     await expect(mine(repo, defaultConfig(), {})).rejects.toSatisfy(
       (e: unknown) => isArthaError(e) && /ANTHROPIC_API_KEY/.test((e as Error).message),
     );

@@ -53,8 +53,16 @@ describe('loadConfig', () => {
       sourceRoots: ['app', 'lib'],
       defaultSeverity: 'low',
       codegraphDb: '.codegraph/graph.db',
-      miner: { model: 'claude-haiku-4-5' },
+      miner: { engine: 'api', model: 'claude-haiku-4-5' },
     });
+  });
+
+  it('reads the miner engine, ignoring an unknown value', () => {
+    writeConfig('miner:\n  engine: claude-cli\n');
+    expect(loadConfig(tmp).miner.engine).toBe('claude-cli');
+
+    writeConfig('miner:\n  engine: bogus\n');
+    expect(loadConfig(tmp).miner.engine).toBe('api');
   });
 
   it('ignores mistyped fields, falling back to defaults', () => {
