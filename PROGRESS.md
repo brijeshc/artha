@@ -12,8 +12,8 @@ Running log of task completion against [tasks/README.md](tasks/README.md). Newes
 | 04 | SymbolResolver (tree-sitter)  | ✅ done  | `web-tree-sitter` pinned 0.20.8 |
 | 05 | `artha build` — index         | ✅ done  | node:sqlite + FTS5, zero deps; staleness flip |
 | 06 | `artha mine` — git → drafts   | ✅ done  | prefilter + Anthropic structured output + `.mined` ledger |
-| 07 | `artha review` — Ink TUI      | ⬜ todo  | needs 02 |
-| 08 | MCP server (stdio)            | ⬜ todo  | needs 05 |
+| 07 | `artha review` — Ink TUI      | ✅ done  | Ink + React; one-keypress certify/edit/reject; offline |
+| 08 | MCP server (stdio)            | 🚧 wip   | needs 05 |
 | 09 | `artha export --agents-md`    | ⬜ todo  | needs 05 |
 | 10 | v0.1 success test             | ⬜ todo  | needs 05, 06, 07, 08; carries Open Q5 |
 
@@ -22,6 +22,29 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 ## Log
 
 ### 2026-06-21
+
+- **T07 — `artha review`** done. Ink (React-for-the-terminal) TUI that walks the
+  `proposed` queue and shows each draft beside its source commit/diff + proposed
+  pins, with one-keypress **certify / edit / reject** — the only path to
+  `certified` (nothing auto-certifies). Fully offline.
+  - **Layered for testability:** a pure action layer (`src/review/actions.ts`) is
+    kept apart from the Ink presentation (`src/review/app.tsx`). Certify validates
+    the exact shape that hits disk *before* writing (refuses to write an invalid
+    entry); reject is a hard delete (schema §6, after a `y/n` confirm); edit opens
+    `$VISUAL`/`$EDITOR`, then re-validates — a schema-breaking edit is reported,
+    never silently accepted.
+  - **Source pane** (`src/review/source.ts`): resolves the `mined_from.commit`
+    message + diff via `git show`, **graceful** on a missing ref (rebased/shallow
+    clone → "not found"), independent of T06's git layer.
+  - **Certifier identity:** `git config user.name` → `$USER`/`$USERNAME` →
+    `unknown`; `certified_at` = today (`YYYY-MM-DD`). Review only mutates
+    `.artha/**`; the developer runs `artha build` after to re-index.
+  - **Toolchain:** added `ink` + `react` as runtime deps (externalized by tsup, so
+    `cli.js` stays ~63 KB) and `@types/react` + `ink-testing-library` (dev);
+    automatic JSX wired into `tsconfig.json` and `vitest.config.ts` (`.tsx` tests).
+  - 18 tests: action layer, real-git source resolver, and render tests that drive
+    keypresses through `ink-testing-library` (certify writes a valid certified
+    file; reject deletes after confirm; arrow-key nav; never certifies at rest).
 
 - **T06 — `artha mine`** done. Git history → `proposed` decision drafts via the
   Anthropic API. Pipeline: `listCommits` → metadata pre-filter (drop merges /

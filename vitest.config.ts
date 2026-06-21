@@ -12,8 +12,13 @@ export default defineConfig({
   define: {
     __ARTHA_VERSION__: JSON.stringify(pkg.version),
   },
+  // Ink's TUI is `.tsx`; use the automatic JSX runtime so no `import React` is
+  // needed (mirrors tsconfig `jsx: react-jsx`).
+  esbuild: {
+    jsx: 'automatic',
+  },
   test: {
-    include: ['test/**/*.test.ts'],
+    include: ['test/**/*.test.{ts,tsx}'],
     environment: 'node',
   },
 });

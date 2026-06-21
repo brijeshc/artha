@@ -1,9 +1,10 @@
-import { logger } from '../util/logger';
+import { runReview } from '../review/app';
 
 /**
- * `artha review` — Ink TUI to certify/edit/reject proposed drafts beside their
- * source commit/diff. Implemented in T07.
+ * `artha review` — Ink TUI to certify / edit / reject proposed drafts beside
+ * their source commit/diff. The only path to `certified` (SPEC: never
+ * auto-certify); runs fully offline.
  */
 export async function reviewCommand(): Promise<void> {
-  logger.warn('`artha review` is not implemented yet (see task 07).');
+  await runReview({ repoRoot: process.cwd() });
 }
