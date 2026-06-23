@@ -10,6 +10,12 @@ TUI, compiles them into a queryable index, and serves them to agents over MCP
 
 > **Status:** v0.1, end-to-end functional. The full loop
 > (`init → mine → review → build → mcp`/`export`) works; see [PROGRESS.md](PROGRESS.md).
+>
+> **Next — v0.2 (in design):** a re-centering around *deep human input*. The headline
+> becomes a local web dashboard (`artha serve`) that **asks** developers for product meaning
+> on the code that most needs it, **captures** it, and **shows** it back as a readable
+> product↔code map — so the meaning you figured out once survives the month you forget it.
+> See [SPEC-v0.2.md](SPEC-v0.2.md) and [tasks-v0.2/](tasks-v0.2/).
 
 ## How it works
 

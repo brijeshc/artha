@@ -3,7 +3,18 @@
 > **Working codename:** *Artha* (Sanskrit: *meaning / purpose / intent*) — placeholder, swap freely.
 > **Type:** Open-source project (community-first)
 > **One line:** A git-native semantic layer that gives AI coding agents *and humans* the *product intent* behind code — domain models, state machines, invariants, conventions, and the *why* behind decisions — built on top of an existing structural code graph (e.g. CodeGraph), served just-in-time over MCP to agents and as an elegant product↔code map to people.
-> **Status:** Pre-v0.1 design. This document defines the problem, the prior art, the design, and the MVP.
+> **Status:** **v0.1 shipped** (the agent-facing loop — mine → certify → build → MCP/export — proven at −56% agent discovery tool-calls; see [PROGRESS.md](../PROGRESS.md)). **v0.2 in design:** the human-facing dashboard, and a re-centering of the product around *deep human input* (see the box below and [SPEC-v0.2.md](../SPEC-v0.2.md)).
+
+> ### The v0.2 re-centering — human input is the point
+> v0.1 optimized the *agent* side (fewer tokens, mined drafts). The sharper, harder problem
+> for v0.2 is the **human** one: a developer understands *how* code works (what calls what)
+> but not what it *means* in the product. They figure that out once — from a senior, a
+> painful debug — solve the issue, and **forget it a month later**, re-deriving it from
+> scratch. Artha v0.2 exists to break that cycle: **ask** people for product meaning on the
+> code that most needs it, **capture** it at the moment they understand it, and **show** it
+> back as a map a non-author can read. Mining becomes the assist; human input and visibility
+> become the spine. This is the §10 human-facing layer, promoted from "second surface" to
+> the headline.
 
 ---
 
@@ -345,9 +356,16 @@ Deliberately narrow. Target: a JS/TS repo that already has CodeGraph, prove the 
 
 ## 12. Roadmap
 
-- **v0.1 — Prove the loop.** As above (decisions/invariants/conventions, git miner, CLI certify, MCP, JS/TS).
-- **v0.2 — Concepts + the dashboard.** Add domain-concept and flow kinds; ship the **Product ↔ Code map** with the three lenses and in-browser linking/certification (Section 10); tests-as-spec miner for invariants; embedding-assisted ranking.
-- **v0.3 — Contradiction detection + trust.** The **loophole view** (code-vs-invariant diffs, uncovered flow branches, conflicting facts); sanctioned-exception handling; issue-tracker/PR-discussion mining; confidence scores on drafts; certification analytics.
+- **v0.1 — Prove the loop.** ✅ *Shipped.* Decisions/invariants/conventions, git miner, CLI certify, MCP, JS/TS — proven at −56% agent discovery tool-calls (PROGRESS.md).
+- **v0.2 — Human input + the dashboard** (the re-centering; full build-spec in [SPEC-v0.2.md](../SPEC-v0.2.md)). The center of gravity shifts from *"mine → certify"* to *"humans supply and read product meaning, mining as the assist."* Ships:
+  - **`concept` + `flow` kinds** — the product-side anchors of the map (capabilities with state machines; cross-cutting sequences). Flow *coverage* detection stays v0.3.
+  - **`artha serve` — the local web dashboard.** The **Product ↔ Code map** rendered at **area/module altitude** (legible on a real repo; symbols appear only inside concept detail), concept/flow detail views, and status/provenance everywhere.
+  - **The "ask the human" loop.** A **dark-zone queue** ranked by churn (high-churn, no-meaning code first); the git miner pre-fills a **confidence-scored** draft; opening it to edit launches an **LLM-guided `/ask-me`-style interview** that refines it into the developer's words; the human certifies. Plus equal-weight **manual free-capture** for meaning you *just* learned.
+  - **In-dashboard curation** ("visualization *is* curation"): drag concept↔symbol to pin; certify in-browser, written back as git diffs.
+  - **Embedding-assisted ranking**, and a **read-only contradiction preview** (the §6.1 deterministic conflicting-facts checks only — full checker is v0.3).
+  - *Cut from the original v0.2 plan:* the tests-as-spec miner (the re-centering favors human input over a second auto-miner).
+  - **Proof:** a **non-author** opens the dashboard, picks a capability, and correctly describes its implementation + states **without reading code**.
+- **v0.3 — Contradiction detection + trust.** The full **loophole view** (code-vs-invariant structural/type/LLM detectors, uncovered flow branches, the rest of the conflicting-facts checks); `exception` kind + sanctioned-exception handling; issue-tracker/PR-discussion mining; certification analytics.
 - **v0.4 — Ecosystem.** VS Code webview / editor surfacing of stale entries; continuous contradiction watcher; multi-language (Python next); plug-in miners.
 - **v1.0 — Stable schema + integrations.** Documented public schema, stable MCP + dashboard contracts, reference integrations with the major agents, and a documented path for other tools to read the Artha index.
 
