@@ -9,9 +9,9 @@ Running log of task completion against [tasks/README.md](tasks/README.md) (v0.1)
 |----|-------------------------------|----------|-------|
 | 11 | Schema — `concept` + `flow`   | ✅ done  | additive kinds; validate · round-trip · index-compile; `design/schema-v0.2.md` |
 | 12 | `artha build` — concept/flow  | ✅ done  | flow entry/step pins resolved+hashed; states/transitions/steps tables; FTS |
-| 13 | Churn + coverage ranking      | ⬜ next  | dark-zone queue |
-| 14 | Embedding-assisted ranking    | ⬜       | |
-| 15 | `artha serve` — server + API  | ⬜       | |
+| 13 | Churn + coverage ranking      | ✅ done  | OQ4 locked (90d window · graded coverage); `darkZones()` queue, swappable `scoreModule()` |
+| 14 | Embedding-assisted ranking    | ⬜       | parallel off T12 |
+| 15 | `artha serve` — server + API  | ⬜ next  | critical path; owns OQ5 (area) + OQ7 (stack) |
 | 16 | Product↔Code map UI           | ⬜       | |
 | 17 | Write-back (link/certify/edit)| ⬜       | |
 | 18 | "Ask the human" loop          | ⬜       | |
@@ -40,6 +40,32 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 ## Log
 
 ### 2026-06-24
+
+- **T13 — Churn + coverage → dark-zone ranking** done. Per code module, *"how much it
+  churns"* × *"how much certified meaning is attached"* → the **dark-zone health score** that
+  ranks the ask-the-human queue (high-churn, no-meaning first). New `src/analytics/` layer;
+  the queue source `darkZones(repoRoot, index, config)` for T15 to serve / T18 to consume.
+  - **OQ4 LOCKED with developer** (2026-06-24): churn = **commits in the last 90 days**
+    (recent = current risk; swappable via `windowDays`); "covered" = **graded & saturating**,
+    `coverage = certified/(certified+1)` (0 facts → 0, 1 → ½, n → n/(n+1)); score =
+    `coverage × freshness × inverse(churn)`, isolated in **`scoreModule()`** so the whole
+    formula swaps without touching the ranking.
+  - **`module.ts`**: `moduleOf(file, sourceRoots)` → top-level folder under a source root
+    (`src/billing/Money.ts → src/billing`), the map's area altitude. This is T13's working
+    definition; the final "what is an area" is **OQ5, owned by T15** — kept isolated.
+  - **`churn.ts`**: `moduleChurn` over `git log --since=<90d> --name-only -- <roots>`, counting
+    **distinct commits per module** (multiple files in one commit count once; merges/non-source
+    naturally excluded). Resilient: a non-git dir / failed history → **empty map, logged not
+    thrown** (degrades to "no churn signal," consistent with cold-start).
+  - **`coverage.ts`**: `moduleCoverage` tallies distinct certified vs stale facts per module
+    (pins' symbol-file + scope files; proposed drafts don't count). `darkZones` unions
+    churn∪coverage modules, scores each, sorts **ascending by score, then descending by churn**
+    so among equally-dark (score-0) modules the busiest leads — the SPEC's "churns a lot,
+    explained by nobody" intent. Fully deterministic.
+  - **Verified**: typecheck + Biome clean; **156 tests pass** (+16 — `moduleOf` boundaries,
+    churn window/dedup/non-git, `scoreModule` boundaries + monotonicity, and the 4 `darkZones`
+    acceptance criteria over real temp git repos with dated commits). Offline (git + index).
+    All 6 acceptance criteria met.
 
 - **T12 — `artha build`: index concepts & flows** done. Concept/flow entries are now
   pin-resolved, content-hashed, staleness-tracked, and written to the SQLite index as
