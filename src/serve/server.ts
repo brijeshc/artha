@@ -3,8 +3,8 @@ import { type IncomingMessage, type Server, type ServerResponse, createServer } 
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ArthaConfig } from '../config/config';
+import { type Embedder, embedQueryForIndex, getEmbedder } from '../embed/embedder';
 import { openArthaIndex } from '../mcp/query';
-import { logger } from '../util/logger';
 import { conceptDetail, darkZonesFeed, flowDetail, mapFeed, search } from './api';
 
 export interface ServeOptions {
@@ -37,13 +37,14 @@ export function serve(options: ServeOptions): Promise<ServeHandle> {
   const port = options.port ?? DEFAULT_PORT;
   const webDir = options.webDir ?? defaultWebDir();
   const dbPath = join(options.repoRoot, '.artha', 'index.db');
+  // Built once; the model loads lazily only when a query hits an index that has
+  // matching vectors (a no-embedding index never touches the model).
+  const embedder = getEmbedder(options.config);
 
   const server = createServer((req, res) => {
-    try {
-      handle(req, res, { ...options, webDir, dbPath });
-    } catch (error) {
+    handle(req, res, { ...options, webDir, dbPath, embedder }).catch((error: unknown) => {
       sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
-    }
+    });
   });
 
   return new Promise((resolve, reject) => {
@@ -63,22 +64,23 @@ export function serve(options: ServeOptions): Promise<ServeHandle> {
 interface Ctx extends ServeOptions {
   webDir: string;
   dbPath: string;
+  embedder: Embedder | null;
 }
 
-function handle(req: IncomingMessage, res: ServerResponse, ctx: Ctx): void {
+async function handle(req: IncomingMessage, res: ServerResponse, ctx: Ctx): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (req.method !== 'GET') {
     sendJson(res, 405, { error: 'method not allowed' });
     return;
   }
   if (url.pathname.startsWith('/api/')) {
-    handleApi(url, res, ctx);
+    await handleApi(url, res, ctx);
     return;
   }
   handleStatic(url, res, ctx);
 }
 
-function handleApi(url: URL, res: ServerResponse, ctx: Ctx): void {
+async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void> {
   // Open the index per request → a fresh `artha build` is picked up live.
   const index = openArthaIndex(ctx.dbPath);
   try {
@@ -93,7 +95,10 @@ function handleApi(url: URL, res: ServerResponse, ctx: Ctx): void {
       return;
     }
     if (path === '/api/search') {
-      sendJson(res, 200, search(index, url.searchParams.get('q') ?? ''));
+      const q = url.searchParams.get('q') ?? '';
+      // Embed the query offline for semantic search (best-effort, model-matched).
+      const queryEmbedding = await embedQueryForIndex(ctx.embedder, index.embeddingModel, q);
+      sendJson(res, 200, search(index, q, queryEmbedding));
       return;
     }
     const concept = matchId(path, '/api/concept/');

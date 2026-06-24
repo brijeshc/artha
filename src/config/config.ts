@@ -38,6 +38,15 @@ export interface ArthaConfig {
    * `{ Billing: ['src/billing', 'src/payments'] }`.
    */
   areas?: Record<string, string[]>;
+  /** Embedding-assisted ranking (v0.2, OQ3 = local on-device model). */
+  embeddings: EmbeddingsConfig;
+}
+
+export interface EmbeddingsConfig {
+  /** Compute + use embeddings. Default true; set false to skip the model/dep. */
+  enabled: boolean;
+  /** transformers.js model id stored beside vectors (a change re-embeds). */
+  model: string;
 }
 
 const DEFAULTS = {
@@ -45,6 +54,8 @@ const DEFAULTS = {
   defaultSeverity: 'medium',
   minerEngine: 'api',
   minerModel: 'claude-opus-4-8',
+  embeddingsEnabled: true,
+  embeddingsModel: 'Xenova/all-MiniLM-L6-v2',
 } as const;
 
 const SEVERITIES = new Set<Severity>(['high', 'medium', 'low']);
@@ -101,6 +112,12 @@ export function loadConfig(repoRoot: string): ArthaConfig {
   const areas = parseAreas(obj.areas);
   if (areas) config.areas = areas;
 
+  if (typeof obj.embeddings === 'object' && obj.embeddings !== null) {
+    const emb = obj.embeddings as Record<string, unknown>;
+    if (typeof emb.enabled === 'boolean') config.embeddings.enabled = emb.enabled;
+    if (typeof emb.model === 'string' && emb.model.length > 0) config.embeddings.model = emb.model;
+  }
+
   return config;
 }
 
@@ -121,6 +138,7 @@ export function defaultConfig(): ArthaConfig {
     sourceRoots: [...DEFAULTS.sourceRoots],
     defaultSeverity: DEFAULTS.defaultSeverity,
     miner: { engine: DEFAULTS.minerEngine, model: DEFAULTS.minerModel },
+    embeddings: { enabled: DEFAULTS.embeddingsEnabled, model: DEFAULTS.embeddingsModel },
   };
 }
 

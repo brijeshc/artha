@@ -3,6 +3,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import type { FactRow } from '../build/db';
+import { loadConfig } from '../config/config';
+import { type Embedder, embedQueryForIndex, getEmbedder } from '../embed/embedder';
 import { logger } from '../util/logger';
 import { type ArthaIndex, openArthaIndex } from './query';
 import {
@@ -118,6 +120,9 @@ export function createArthaServer(options: ServerOptions = {}): McpServer {
   const repoRoot = options.repoRoot ?? process.env.ARTHA_REPO_ROOT ?? process.cwd();
   const dbPath = join(repoRoot, '.artha', 'index.db');
   const budget = options.tokenBudget ?? tokenBudgetFromEnv();
+  // Built once; the model loads lazily on the first query that actually has
+  // matching index vectors (so a no-embedding index never touches the model).
+  const embedder: Embedder | null = getEmbedder(loadConfig(repoRoot));
 
   const server = new McpServer(
     { name: 'artha', version: __ARTHA_VERSION__ },
@@ -151,6 +156,8 @@ export function createArthaServer(options: ServerOptions = {}): McpServer {
     async (args) => {
       const index = openArthaIndex(dbPath);
       try {
+        // Embed the task offline for semantic ranking (best-effort, model-matched).
+        const queryEmbedding = await embedQueryForIndex(embedder, index.embeddingModel, args.task);
         const text = contextBundle(
           index,
           {
@@ -158,6 +165,7 @@ export function createArthaServer(options: ServerOptions = {}): McpServer {
             symbols: args.symbols,
             files: args.files,
             includeProposed: args.include_proposed ?? false,
+            queryEmbedding,
           },
           budget,
         );

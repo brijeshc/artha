@@ -53,6 +53,7 @@ function indexWith(headings: string[]): IndexData {
     states: [],
     transitions: [],
     flowSteps: [],
+    embeddings: [],
   };
 }
 

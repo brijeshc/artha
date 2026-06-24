@@ -4,6 +4,7 @@ import { type RankedModule, darkZones, moduleCoverage } from '../analytics/cover
 import { moduleOf } from '../analytics/module';
 import type { ArthaConfig } from '../config/config';
 import type { ArthaIndex } from '../mcp/query';
+import { rankFacts } from '../mcp/rank';
 
 /**
  * The read API the dashboard renders (T16/17/19 build against these shapes).
@@ -243,48 +244,29 @@ export interface SearchHit {
   score: number;
 }
 
-const STATUS_WEIGHT: Record<string, number> = { certified: 1, proposed: 0.6, stale: 0.3 };
-
 /**
- * Lexical search over the index for the dashboard's search box. FTS bm25 (lower
- * = better) folded into a 0–1 relevance, scaled by status (certified > proposed
- * > stale). The T14 embedding blend layers in here later; the shape is stable.
+ * Dashboard search box — the **same `rankFacts` blend** the MCP server uses
+ * (FTS lexical + structural + semantic × status), so search and agent retrieval
+ * agree. Includes `proposed` drafts (the dashboard surfaces them); `stale` is
+ * excluded as untrusted. `queryEmbedding` (model-matched, embedded by the server)
+ * adds semantic recall; absent → lexical-only, exactly as v0.1.
  */
-export function search(index: ArthaIndex, query: string, limit = 20): SearchHit[] {
-  const q = query.trim();
-  if (q === '') return [];
-
-  const bm25 = index.fts(q); // id → bm25 (lower better); empty if no FTS hit
-  const needle = q.toLowerCase();
-  const byId = new Map(index.facts.map((f) => [f.id, f]));
-
-  const candidates = new Set<string>(bm25.keys());
-  for (const f of index.facts) {
-    if (
-      (f.heading ?? '').toLowerCase().includes(needle) ||
-      (f.body ?? '').toLowerCase().includes(needle)
-    ) {
-      candidates.add(f.id);
-    }
-  }
-
-  const hits: SearchHit[] = [];
-  for (const id of candidates) {
-    const fact = byId.get(id);
-    if (!fact) continue;
-    // bm25 → (0,1]: 1/(1+score) when present, a small base for substring-only hits.
-    const lexical = bm25.has(id) ? 1 / (1 + Math.max(0, bm25.get(id) ?? 0)) : 0.25;
-    hits.push({
-      id,
-      kind: fact.kind,
-      heading: fact.heading,
-      status: fact.status,
-      score: lexical * (STATUS_WEIGHT[fact.status] ?? 0.5),
-    });
-  }
-
-  hits.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
-  return hits.slice(0, limit);
+export function search(
+  index: ArthaIndex,
+  query: string,
+  queryEmbedding?: ArrayLike<number>,
+  limit = 20,
+): SearchHit[] {
+  if (query.trim() === '') return [];
+  return rankFacts(index, { task: query, includeProposed: true, queryEmbedding })
+    .slice(0, limit)
+    .map((item) => ({
+      id: item.fact.id,
+      kind: item.fact.kind,
+      heading: item.fact.heading,
+      status: item.fact.status,
+      score: item.score,
+    }));
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

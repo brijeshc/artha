@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildIndex } from '../../src/build/build';
 import { openIndex } from '../../src/build/db';
 import { defaultConfig } from '../../src/config/config';
+import { openArthaIndex } from '../../src/mcp/query';
 import { loadEntries } from '../../src/schema/load';
+import { fakeEmbedder } from '../helpers/fakeEmbedder';
 
 let repo: string;
 
@@ -139,9 +141,36 @@ describe('buildIndex — emit', () => {
     expect(existsSync(dbPath())).toBe(true);
     expect(rows('SELECT count(*) AS n FROM artha_facts')[0]?.n).toBe(0);
     // v0.2 tables are present-but-empty, never absent-erroring.
-    for (const t of ['artha_states', 'artha_transitions', 'artha_flow_steps']) {
+    for (const t of ['artha_states', 'artha_transitions', 'artha_flow_steps', 'artha_embeddings']) {
       expect(rows(`SELECT count(*) AS n FROM ${t}`)[0]?.n).toBe(0);
     }
+  });
+
+  it('embeds each fact with the given embedder, tagged with the model id (T14)', async () => {
+    writeEntryFile('decisions', 'money.yaml', certifiedDecisionYaml());
+    money(ORIGINAL_ADD);
+    const emb = fakeEmbedder({}, { modelId: 'test-emb', dim: 4 });
+
+    const report = await buildIndex(repo, defaultConfig(), { embedder: emb });
+    expect(report.errors).toEqual([]);
+    expect(report.embedded).toBe(1);
+
+    const embeddings = rows('SELECT fact_id, model, dim FROM artha_embeddings');
+    expect(embeddings[0]).toMatchObject({ fact_id: 'decision.money', model: 'test-emb', dim: 4 });
+
+    // and the read layer exposes them as vectors + the model id
+    const idx = openArthaIndex(dbPath());
+    expect(idx.embeddingModel).toBe('test-emb');
+    expect(idx.embeddings.get('decision.money')?.length).toBe(4);
+    idx.close();
+  });
+
+  it('emits no embeddings when no embedder is given (hermetic default)', async () => {
+    writeEntryFile('decisions', 'money.yaml', certifiedDecisionYaml());
+    money(ORIGINAL_ADD);
+    const report = await buildIndex(repo, defaultConfig());
+    expect(report.embedded).toBe(0);
+    expect(rows('SELECT count(*) AS n FROM artha_embeddings')[0]?.n).toBe(0);
   });
 
   it('validates, resolves a pin, fills the hash, and emits a searchable index', async () => {

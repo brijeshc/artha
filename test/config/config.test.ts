@@ -54,7 +54,13 @@ describe('loadConfig', () => {
       defaultSeverity: 'low',
       codegraphDb: '.codegraph/graph.db',
       miner: { engine: 'api', model: 'claude-haiku-4-5' },
+      embeddings: { enabled: true, model: 'Xenova/all-MiniLM-L6-v2' },
     });
+  });
+
+  it('reads embeddings settings (enabled + model)', () => {
+    writeConfig('embeddings:\n  enabled: false\n  model: custom/model\n');
+    expect(loadConfig(tmp).embeddings).toEqual({ enabled: false, model: 'custom/model' });
   });
 
   it('reads the miner engine, ignoring an unknown value', () => {

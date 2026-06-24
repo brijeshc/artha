@@ -31,6 +31,10 @@ export interface ArthaIndex {
   readonly flowSteps: FlowStepRow[];
   /** `related` cross-links between entries. */
   readonly related: RelatedRow[];
+  /** Fact id → embedding vector (T14). Empty for pre-T14 / no-embedding indexes. */
+  readonly embeddings: Map<string, Float32Array>;
+  /** The model that produced the vectors, for query-side model matching; null if none. */
+  readonly embeddingModel: string | null;
   /** True when there is no index file or it holds no facts (cold start). */
   readonly empty: boolean;
   /** FTS5 MATCH over heading+body → `fact id → bm25` (lower = better). Empty on blank/invalid query. */
@@ -46,6 +50,8 @@ const EMPTY: ArthaIndex = {
   transitions: [],
   flowSteps: [],
   related: [],
+  embeddings: new Map(),
+  embeddingModel: null,
   empty: true,
   fts: () => new Map(),
   close: () => {},
@@ -71,6 +77,7 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
     const transitions = selectAll<TransitionRow>(db, 'artha_transitions');
     const flowSteps = selectAll<FlowStepRow>(db, 'artha_flow_steps');
     const related = selectAll<RelatedRow>(db, 'artha_related');
+    const { embeddings, embeddingModel } = loadEmbeddings(db);
     const handle = db;
     return {
       facts,
@@ -80,6 +87,8 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
       transitions,
       flowSteps,
       related,
+      embeddings,
+      embeddingModel,
       empty: facts.length === 0,
       fts: (query) => runFts(handle, query),
       close: () => {
@@ -109,6 +118,36 @@ function selectAll<T>(db: DatabaseSync, table: string): T[] {
   } catch {
     return [];
   }
+}
+
+/** Load fact vectors (T14) → `id → Float32Array` + the model that made them.
+ * Defensive: a pre-T14 index (no table) yields an empty map + null model. */
+function loadEmbeddings(db: DatabaseSync): {
+  embeddings: Map<string, Float32Array>;
+  embeddingModel: string | null;
+} {
+  const embeddings = new Map<string, Float32Array>();
+  let embeddingModel: string | null = null;
+  try {
+    const rows = db
+      .prepare('SELECT fact_id, model, vector FROM artha_embeddings')
+      .all() as unknown as Array<{
+      fact_id: string;
+      model: string;
+      vector: Uint8Array;
+    }>;
+    for (const r of rows) {
+      embeddingModel ??= r.model;
+      const bytes = Uint8Array.from(r.vector);
+      embeddings.set(
+        r.fact_id,
+        new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4),
+      );
+    }
+  } catch {
+    /* pre-T14 index → no embeddings */
+  }
+  return { embeddings, embeddingModel };
 }
 
 function runFts(db: DatabaseSync, raw: string): Map<string, number> {

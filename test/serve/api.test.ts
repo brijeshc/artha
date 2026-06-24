@@ -164,13 +164,20 @@ describe('search', () => {
       fact('decision.money', 'certified', { heading: 'Money as minor units', body: 'integers' }),
       fact('decision.draft', 'proposed', { heading: 'Money draft', body: 'maybe decimals' }),
     ],
-    fts: (q) => (q.includes('money') ? new Map([['decision.money', 0.5]]) : new Map()),
+    // sqlite bm25 is negative (more negative = better); money is the stronger hit.
+    fts: (q) =>
+      q.includes('money')
+        ? new Map([
+            ['decision.money', -2],
+            ['decision.draft', -1],
+          ])
+        : new Map(),
   });
 
   it('returns ranked hits, certified above proposed', () => {
     const hits = search(index, 'money');
     expect(hits.map((h) => h.id)).toContain('decision.money');
-    // certified outranks the proposed substring-only hit
+    // certified (×1.0) outranks the weaker proposed (×0.6) hit
     expect(hits[0]?.id).toBe('decision.money');
   });
 

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type ArthaIndex, openArthaIndex } from '../../src/mcp/query';
 import { estimateTokens, formatItem, rankFacts, selectWithinBudget } from '../../src/mcp/rank';
+import { fact, fakeIndex } from '../helpers/fakeIndex';
 import { writeFixtureIndex } from './fixture';
 
 let dir: string;
@@ -100,5 +101,43 @@ describe('formatItem / estimateTokens', () => {
 
   it('estimates ~4 chars per token', () => {
     expect(estimateTokens('12345678')).toBe(2);
+  });
+});
+
+describe('rankFacts — semantic (embedding) blend', () => {
+  const qVec = [1, 0, 0]; // the embedded query "money back to the customer"
+  const semanticIndex = fakeIndex({
+    facts: [
+      fact('decision.refund', 'certified', { heading: 'Refund a payment', body: '' }),
+      fact('decision.auth', 'certified', { heading: 'Login authentication', body: '' }),
+    ],
+    embeddings: new Map([
+      ['decision.refund', Float32Array.from([0.9, 0.1, 0])], // ~parallel to qVec → high cosine
+      ['decision.auth', Float32Array.from([0, 0, 1])], // orthogonal → below the floor
+    ]),
+    embeddingModel: 'fake',
+    fts: () => new Map(), // the synonym query shares no keywords → no lexical signal
+  });
+
+  it('the lexical baseline finds nothing for a synonym query (no shared keywords)', () => {
+    expect(rankFacts(semanticIndex, { task: 'money back to the customer' })).toEqual([]);
+  });
+
+  it('embeddings surface the semantic match the lexical baseline missed', () => {
+    const got = ids(
+      rankFacts(semanticIndex, { task: 'money back to the customer', queryEmbedding: qVec }),
+    );
+    expect(got).toEqual(['decision.refund']); // auth is below the similarity floor → excluded
+  });
+
+  it('falls back to lexical+structural when the index has no vectors', () => {
+    const noVecs = fakeIndex({
+      facts: [fact('decision.refund', 'certified', { heading: 'Refund', body: '' })],
+      fts: (q) => (q.includes('refund') ? new Map([['decision.refund', -1]]) : new Map()),
+    });
+    // queryEmbedding present but no fact vectors → embedding term is 0, lexical still ranks
+    expect(ids(rankFacts(noVecs, { task: 'refund', queryEmbedding: qVec }))).toEqual([
+      'decision.refund',
+    ]);
   });
 });

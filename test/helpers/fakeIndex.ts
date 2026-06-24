@@ -40,9 +40,12 @@ export function fakeIndex(parts: {
   transitions?: TransitionRow[];
   flowSteps?: FlowStepRow[];
   related?: RelatedRow[];
+  embeddings?: Map<string, Float32Array>;
+  embeddingModel?: string | null;
   fts?: (q: string) => Map<string, number>;
 }): ArthaIndex {
   const facts = parts.facts ?? [];
+  const embeddings = parts.embeddings ?? new Map();
   return {
     facts,
     pins: parts.pins ?? [],
@@ -51,6 +54,8 @@ export function fakeIndex(parts: {
     transitions: parts.transitions ?? [],
     flowSteps: parts.flowSteps ?? [],
     related: parts.related ?? [],
+    embeddings,
+    embeddingModel: parts.embeddingModel ?? (embeddings.size > 0 ? 'fake-model' : null),
     empty: facts.length === 0,
     fts: parts.fts ?? (() => new Map()),
     close: () => {},

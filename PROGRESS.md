@@ -10,9 +10,9 @@ Running log of task completion against [tasks/README.md](tasks/README.md) (v0.1)
 | 11 | Schema — `concept` + `flow`   | ✅ done  | additive kinds; validate · round-trip · index-compile; `design/schema-v0.2.md` |
 | 12 | `artha build` — concept/flow  | ✅ done  | flow entry/step pins resolved+hashed; states/transitions/steps tables; FTS |
 | 13 | Churn + coverage ranking      | ✅ done  | OQ4 locked (90d window · graded coverage); `darkZones()` queue, swappable `scoreModule()` |
-| 14 | Embedding-assisted ranking    | ⬜ next  | parallel off T12 (developer chose to do after T15) |
+| 14 | Embedding-assisted ranking    | ✅ done  | OQ3 local model (transformers.js/MiniLM); build vectors + cosine blend; offline query |
 | 15 | `artha serve` — server + API  | ✅ done  | OQ7 Vite+React · OQ5 top-level-folders+seam; node:http API, cold-start safe |
-| 16 | Product↔Code map UI           | ⬜       | unblocked (skeleton + API contract shipped) |
+| 16 | Product↔Code map UI           | ⬜ next  | unblocked (skeleton + API contract shipped) |
 | 17 | Write-back (link/certify/edit)| ⬜       | unblocked |
 | 18 | "Ask the human" loop          | ⬜       | |
 | 19 | Contradiction preview panel   | ⬜       | §6.1 deterministic only |
@@ -40,6 +40,38 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 ## Log
 
 ### 2026-06-24
+
+- **T14 — Embedding-assisted ranking** done. Retrieval (MCP `context_for_task` + dashboard
+  search) upgraded from lexical-FTS + structural to **+ semantic (embedding) similarity**, so
+  "find the right meaning" surfaces synonym matches the keyword baseline misses — without
+  inflating the token budget.
+  - **OQ3 LOCKED with developer**: a **local on-device model** (transformers.js,
+    `Xenova/all-MiniLM-L6-v2`, 384-d, ~23 MB quantized — WASM/ONNX, consistent with the existing
+    web-tree-sitter dep). Validated in a spike (synonym cosine 0.56 vs unrelated 0.06). The only
+    choice that keeps **query-time embedding offline** (no API key, no text egress); a one-time
+    model download is the sole network touch, to a stable per-user cache.
+  - **`Embedder` interface** (`src/embed/embedder.ts`) keeps it swappable; `createLocalEmbedder`
+    loads transformers.js **lazily** (dynamic import → externalized, never in `dist/cli.js`:
+    110 KB, no onnxruntime). `getEmbedder(config)` honors `embeddings.enabled/model` (new config,
+    default on). `embedQueryForIndex` embeds a query **only when its model matches the index
+    vectors** — never mixes models; best-effort + non-throwing → lexical fallback.
+  - **Build vectors** (`src/build/embeddings.ts`): `artha build` embeds each fact's heading+body
+    into `artha_embeddings(fact_id, model, dim, vector BLOB)`, **best-effort** (failure leaves
+    facts vector-less, build still succeeds) and **cached against the previous index** so a
+    rebuild re-embeds only new/changed facts; a model change re-embeds (different cache keys).
+    Library `buildIndex` embeds only when handed an embedder → existing build tests stay hermetic
+    /offline; `artha build` wires the real one.
+  - **Blend** (`rank.ts`): relevance = lexical + structural + **semantic**, each normalized to
+    its own max (equal footing), semantic gated by a 0.3 cosine floor so unrelated facts stay
+    out. Absent query vector / index vectors → term is 0 (exact v0.1 behavior). The token budget
+    is untouched. The **same `rankFacts` blend now powers dashboard search** (`/api/search`) and
+    MCP, so search and agent retrieval agree.
+  - **Verified**: typecheck + Biome clean; **193 tests pass** (+22 — cosine/blob, model-matched
+    query embedding, build embeds+tags, prev-index cache reuse, model-change re-embed, graceful
+    failure, and the headline blend test: a no-shared-keyword synonym query surfaces the right
+    fact that the lexical baseline returns *nothing* for). Live CLI smoke: real MiniLM build
+    embeds 2 facts (384-d, tagged); `/api/search?q=reimburse the purchaser` returns
+    `decision.refund` **first** despite zero keyword overlap. All 6 acceptance criteria met.
 
 - **T15 — `artha serve`: local web server + read API** done. A local-first, read-only HTTP
   server over `.artha/index.db` (read **fresh per request** → a new `artha build` shows up with

@@ -27,6 +27,13 @@ miner:
   # Cheaper opt-ins: claude-sonnet-4-6, claude-haiku-4-5.
   model: claude-opus-4-8
 
+# Embedding-assisted ranking (\`artha build\` / retrieval). A local on-device model
+# (downloaded once, then fully offline) sharpens "find the right meaning". Set
+# enabled: false to skip the model and rank on lexical + structural only.
+# embeddings:
+#   enabled: true
+#   model: Xenova/all-MiniLM-L6-v2
+
 # Forward-compat only — v0.1 uses the built-in tree-sitter resolver and ignores this.
 # codegraph_db: .codegraph/graph.db
 `;

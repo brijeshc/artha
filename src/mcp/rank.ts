@@ -1,8 +1,17 @@
 import type { FactRow } from '../build/db';
+import { cosineSimilarity } from '../embed/embedder';
 import type { ArthaIndex } from './query';
 
 /** SPEC default context budget (~1.5k tokens; Product.md §9). */
 export const DEFAULT_TOKEN_BUDGET = 1500;
+
+/**
+ * Minimum cosine for an embedding match to count (T14). Below this, the query and
+ * fact are unrelated noise (in practice ~0.05 for unrelated vs ~0.5+ for a real
+ * semantic match), so gating here keeps "everything is slightly similar" out of
+ * the bundle while letting genuine synonym matches in.
+ */
+const EMBEDDING_MIN_SIM = 0.3;
 
 export interface RankInput {
   /** Natural-language task text (drives the FTS lexical term). */
@@ -13,6 +22,13 @@ export interface RankInput {
   files?: string[];
   /** Include `proposed` drafts alongside `certified`. Default false. */
   includeProposed?: boolean;
+  /**
+   * Query embedding for semantic ranking (T14), precomputed by the caller so
+   * `rankFacts` stays sync. Must come from the **same model** that produced the
+   * index vectors — the caller passes it only on a model match; absent → the
+   * blend is lexical+structural exactly as in v0.1.
+   */
+  queryEmbedding?: ArrayLike<number>;
 }
 
 export interface RankedItem {
@@ -34,12 +50,14 @@ const STATUS_TAG: Record<string, string> = {
 };
 
 /**
- * Rank facts for a task by **lexical (FTS) + structural proximity, weighted by
- * status** (schema §8). The two relevance terms are added (not multiplied): a
- * pure multiply would zero an item that matches lexically but not structurally,
- * and the SPEC requires structural proximity to simply *not apply* when no
- * `symbols`/`files` are given. `stale` is always excluded (untrusted); `proposed`
- * is included only when asked. Items with zero relevance are dropped.
+ * Rank facts for a task by **lexical (FTS) + structural proximity + semantic
+ * (embedding) similarity, weighted by status** (schema §8; T14). The three
+ * relevance terms are added (not multiplied): a pure multiply would zero an item
+ * that matches on only one signal, and each term must simply *not apply* when its
+ * input is absent (no `symbols`/`files` → no structural; no `queryEmbedding`/
+ * vectors → no semantic). Each term is normalized to its own max so they blend on
+ * equal footing. `stale` is always excluded (untrusted); `proposed` is included
+ * only when asked. Items with zero relevance are dropped.
  */
 export function rankFacts(index: ArthaIndex, input: RankInput): RankedItem[] {
   const allowed = new Set(input.includeProposed ? ['certified', 'proposed'] : ['certified']);
@@ -78,11 +96,26 @@ export function rankFacts(index: ArthaIndex, input: RankInput): RankedItem[] {
   }
   const structMax = Math.max(0, ...structRaw.values());
 
+  // Semantic: cosine of the query vector against each fact vector, gated by a
+  // min-similarity floor so unrelated facts contribute nothing. Normalized like
+  // the other terms; absent query/vectors → this term is simply 0 (v0.1 fallback).
+  const embRaw = new Map<string, number>();
+  if (input.queryEmbedding && index.embeddings.size > 0) {
+    for (const fact of candidates) {
+      const vec = index.embeddings.get(fact.id);
+      if (!vec) continue;
+      const sim = cosineSimilarity(input.queryEmbedding, vec);
+      if (sim >= EMBEDDING_MIN_SIM) embRaw.set(fact.id, sim);
+    }
+  }
+  const embMax = Math.max(0, ...embRaw.values());
+
   const items: RankedItem[] = [];
   for (const fact of candidates) {
     const lexical = lexMax > 0 ? (lexRaw.get(fact.id) ?? 0) / lexMax : 0;
     const structural = structMax > 0 ? (structRaw.get(fact.id) ?? 0) / structMax : 0;
-    const relevance = lexical + structural;
+    const semantic = embMax > 0 ? (embRaw.get(fact.id) ?? 0) / embMax : 0;
+    const relevance = lexical + structural + semantic;
     if (relevance <= 0) continue;
     items.push({
       fact,

@@ -76,6 +76,12 @@ CREATE TABLE artha_flow_steps (
   pin_symbol_ref  TEXT,
   ord             INTEGER NOT NULL
 );
+CREATE TABLE artha_embeddings (
+  fact_id  TEXT NOT NULL,
+  model    TEXT NOT NULL,
+  dim      INTEGER NOT NULL,
+  vector   BLOB NOT NULL
+);
 CREATE VIRTUAL TABLE artha_fts USING fts5(id UNINDEXED, heading, body);
 `;
 
@@ -151,6 +157,15 @@ export interface FlowStepRow {
   ord: number;
 }
 
+/** One fact's embedding vector (T14). `model` tags which embedder produced it
+ * so a model change re-embeds rather than mixing vectors. */
+export interface EmbeddingRow {
+  fact_id: string;
+  model: string;
+  dim: number;
+  vector: Uint8Array;
+}
+
 export interface IndexData {
   facts: FactRow[];
   pins: PinRow[];
@@ -161,6 +176,7 @@ export interface IndexData {
   states: StateRow[];
   transitions: TransitionRow[];
   flowSteps: FlowStepRow[];
+  embeddings: EmbeddingRow[];
 }
 
 /** Emit a fresh `.artha/index.db` from scratch (idempotent: same input → same rows). */
@@ -238,6 +254,11 @@ export function writeIndex(dbPath: string, data: IndexData): void {
     for (const r of data.flowSteps) {
       flowStep.run(r.fact_id, r.on_event, r.do_action, r.pin_symbol_ref, r.ord);
     }
+
+    const embedding = db.prepare(
+      'INSERT INTO artha_embeddings (fact_id, model, dim, vector) VALUES (?, ?, ?, ?)',
+    );
+    for (const r of data.embeddings) embedding.run(r.fact_id, r.model, r.dim, r.vector);
 
     db.exec('COMMIT');
   } catch (error) {

@@ -1,6 +1,7 @@
 import { existsSync, globSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { ArthaConfig } from '../config/config';
+import type { Embedder } from '../embed/embedder';
 import type { ResolvedSymbol } from '../resolver/SymbolResolver';
 import { createTreeSitterResolver } from '../resolver/treeSitterResolver';
 import { loadEntries, writeEntry } from '../schema/load';
@@ -18,6 +19,7 @@ import {
   type TransitionRow,
   writeIndex,
 } from './db';
+import { embedFacts, readEmbedCache } from './embeddings';
 
 export interface BuildReport {
   /** Fatal problems; a non-empty list means the build failed and emitted nothing. */
@@ -27,12 +29,20 @@ export interface BuildReport {
   staled: string[];
   /** Number of facts written to the index. */
   emitted: number;
+  /** Number of facts that got an embedding vector this build (T14). */
+  embedded: number;
   dbPath: string;
 }
 
 export interface BuildOptions {
   /** Override the output path (default `.artha/index.db`). */
   dbPath?: string;
+  /**
+   * Embedder for build-time vectors (T14). Omitted → no embeddings (the library
+   * default keeps tests hermetic/offline); `artha build` wires the configured
+   * embedder. Best-effort: failure leaves facts vector-less, never fails build.
+   */
+  embedder?: Embedder | null;
 }
 
 /**
@@ -47,7 +57,14 @@ export async function buildIndex(
 ): Promise<BuildReport> {
   const arthaDir = join(repoRoot, '.artha');
   const dbPath = options.dbPath ?? join(arthaDir, 'index.db');
-  const report: BuildReport = { errors: [], warnings: [], staled: [], emitted: 0, dbPath };
+  const report: BuildReport = {
+    errors: [],
+    warnings: [],
+    staled: [],
+    emitted: 0,
+    embedded: 0,
+    dbPath,
+  };
 
   // 1–3. Load + schema/id/certification validation (T02). Hard failures here
   // abort the build without touching disk.
@@ -110,6 +127,16 @@ export async function buildIndex(
 
   // 6–8 + emit.
   const data = toIndexData(entries, resolved, config, repoRoot, report);
+
+  // T14 — build-time embeddings (best-effort, offline-by-default). Read the
+  // previous index's vectors first (reuse unchanged facts) before writeIndex
+  // wipes it; a model change re-embeds rather than mixing vectors.
+  if (options.embedder) {
+    const cache = readEmbedCache(dbPath);
+    data.embeddings = await embedFacts(data.facts, options.embedder, cache, report);
+    report.embedded = data.embeddings.length;
+  }
+
   writeIndex(dbPath, data);
   report.emitted = data.facts.length;
   return report;
@@ -233,7 +260,18 @@ function toIndexData(
     }
   }
 
-  return { facts, pins, scopeFiles, related, provenance, detect, states, transitions, flowSteps };
+  return {
+    facts,
+    pins,
+    scopeFiles,
+    related,
+    provenance,
+    detect,
+    states,
+    transitions,
+    flowSteps,
+    embeddings: [],
+  };
 }
 
 /**
