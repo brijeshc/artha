@@ -47,7 +47,14 @@ export function moduleChurn(
     out = execFileSync(
       'git',
       ['log', `--since=${since}`, '--name-only', `--format=${RECORD}%H`, '--', ...sourceRoots],
-      { cwd: repoRoot, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 },
+      // Capture stdout; silence stderr so the expected "not a git repository"
+      // path stays quiet (it's handled gracefully below, not surfaced).
+      {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        maxBuffer: 256 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
     );
   } catch (cause) {
     logger.debug(`churn: git log failed, treating as no churn — ${(cause as Error).message}`);

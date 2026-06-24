@@ -10,10 +10,10 @@ Running log of task completion against [tasks/README.md](tasks/README.md) (v0.1)
 | 11 | Schema — `concept` + `flow`   | ✅ done  | additive kinds; validate · round-trip · index-compile; `design/schema-v0.2.md` |
 | 12 | `artha build` — concept/flow  | ✅ done  | flow entry/step pins resolved+hashed; states/transitions/steps tables; FTS |
 | 13 | Churn + coverage ranking      | ✅ done  | OQ4 locked (90d window · graded coverage); `darkZones()` queue, swappable `scoreModule()` |
-| 14 | Embedding-assisted ranking    | ⬜       | parallel off T12 |
-| 15 | `artha serve` — server + API  | ⬜ next  | critical path; owns OQ5 (area) + OQ7 (stack) |
-| 16 | Product↔Code map UI           | ⬜       | |
-| 17 | Write-back (link/certify/edit)| ⬜       | |
+| 14 | Embedding-assisted ranking    | ⬜ next  | parallel off T12 (developer chose to do after T15) |
+| 15 | `artha serve` — server + API  | ✅ done  | OQ7 Vite+React · OQ5 top-level-folders+seam; node:http API, cold-start safe |
+| 16 | Product↔Code map UI           | ⬜       | unblocked (skeleton + API contract shipped) |
+| 17 | Write-back (link/certify/edit)| ⬜       | unblocked |
 | 18 | "Ask the human" loop          | ⬜       | |
 | 19 | Contradiction preview panel   | ⬜       | §6.1 deterministic only |
 | 20 | v0.2 success test             | ⬜       | non-author reads the map |
@@ -40,6 +40,37 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 ## Log
 
 ### 2026-06-24
+
+- **T15 — `artha serve`: local web server + read API** done. A local-first, read-only HTTP
+  server over `.artha/index.db` (read **fresh per request** → a new `artha build` shows up with
+  no restart) that serves the Product↔Code map JSON API + the static dashboard. **Viewing is
+  fully offline** (node:http + node:sqlite + git only; zero network on any read endpoint).
+  - **OQ7 LOCKED with developer**: **Vite + React** static bundle in `dist/web/` (46 KB gzip),
+    served by the zero-dep `node:http` server. React **never enters the CLI hot path** —
+    `dist/cli.js` carries only the server/API/analytics (104 KB, no react-dom; verified). Build
+    is `tsup && vite build` (web emitted after tsup's clean so `dist/web/` survives); `react-dom`
+    + `@vitejs/plugin-react` + `vite` are **devDependencies** (the bundle ships pre-built).
+  - **OQ5 LOCKED with developer**: an **`areasOf()`** seam — default **one area per top-level
+    module** (`moduleOf`, reused from T13), so the product column renders at cold start before
+    any concepts exist; `config.areas` (new optional, lenient-parsed) groups modules into named
+    areas, leftover modules keep their own. Final "what is an area" stays swappable here.
+  - **Read API** (`src/serve/api.ts`, pure over the index): `GET /api/map` (area/module
+    altitude, dark-zone flags, **never** the symbol graph), `/api/concept/:id` + `/api/flow/:id`
+    (states/transitions/steps + linked symbols; flow entry-pins separated from step-pins),
+    `/api/dark-zones` (T13 queue), `/api/search?q=` (FTS + substring, status-weighted; the T14
+    embedding blend slots in here). Module universe = on-disk top-level dirs ∪ covered modules.
+  - **Read layer** (`mcp/query.ts`): `ArthaIndex` extended to load `states`/`transitions`/
+    `flowSteps`/`related` **defensively** (per-table try/catch → `[]`), so an older pre-T12
+    index still yields its facts. Shared `test/helpers/fakeIndex.ts` for the read-layer tests.
+  - **Server** (`src/serve/server.ts`): binds `127.0.0.1` (never `0.0.0.0`), GET-only, opens the
+    index per request, serves `dist/web/` with a **resolve()-based path-containment** guard
+    (caught + fixed a real `%2f` traversal / cross-platform-separator 403 bug via a live smoke),
+    and a graceful placeholder page when the bundle isn't built. `artha serve --port/--host`.
+  - **Verified**: typecheck + `typecheck:web` + Biome clean; **171 tests pass** (+15 — map/detail/
+    search/areasOf over a fixture index incl. cold start, and a booted-server suite: live fetch,
+    cold start, fresh-build-without-restart, static bundle + traversal, 404/405). Live CLI smoke:
+    `init → author concept → build → serve` returns the map, concept detail, dark-zones, search,
+    and serves the real React bundle + assets. All 6 acceptance criteria met.
 
 - **T13 — Churn + coverage → dark-zone ranking** done. Per code module, *"how much it
   churns"* × *"how much certified meaning is attached"* → the **dark-zone health score** that

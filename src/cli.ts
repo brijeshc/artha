@@ -7,6 +7,7 @@ import { initCommand } from './commands/init';
 import { mcpCommand } from './commands/mcp';
 import { mineCommand } from './commands/mine';
 import { reviewCommand } from './commands/review';
+import { serveCommand } from './commands/serve';
 import { isArthaError } from './util/error';
 import { logger } from './util/logger';
 
@@ -51,6 +52,13 @@ export function buildProgram(): Command {
     .action((options: { agentsMd?: boolean; out?: string }) => exportCommand(options));
 
   program.command('mcp').description('start the stdio MCP server').action(mcpCommand);
+
+  program
+    .command('serve')
+    .description('launch the local web dashboard over .artha/index.db')
+    .option('--port <n>', 'port to bind (default: 4123; 0 = pick a free port)')
+    .option('--host <host>', 'interface to bind (default: 127.0.0.1)')
+    .action((options: { port?: string; host?: string }) => serveCommand(options));
 
   return program;
 }

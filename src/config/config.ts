@@ -31,6 +31,13 @@ export interface ArthaConfig {
   /** Stored for forward-compat; v0.1 uses the built-in resolver and ignores it. */
   codegraphDb?: string;
   miner: MinerConfig;
+  /**
+   * OQ5 seam (v0.2): named product **areas** → the code modules they cover, for
+   * the dashboard map's product column. Optional — when absent, `artha serve`
+   * derives one area per top-level module (top-level-folders default). Example:
+   * `{ Billing: ['src/billing', 'src/payments'] }`.
+   */
+  areas?: Record<string, string[]>;
 }
 
 const DEFAULTS = {
@@ -91,7 +98,21 @@ export function loadConfig(repoRoot: string): ArthaConfig {
     }
   }
 
+  const areas = parseAreas(obj.areas);
+  if (areas) config.areas = areas;
+
   return config;
+}
+
+/** Lenient parse of the optional `areas:` map (OQ5 seam): keep only entries
+ * shaped `name: [moduleGlob, …]` with ≥1 string module; drop anything else. */
+function parseAreas(value: unknown): Record<string, string[]> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const out: Record<string, string[]> = {};
+  for (const [name, mods] of Object.entries(value as Record<string, unknown>)) {
+    if (isNonEmptyStringArray(mods)) out[name] = mods;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** A fresh, independent defaults object (no shared mutable references). */

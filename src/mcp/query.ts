@@ -1,6 +1,15 @@
 import { existsSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
-import { type FactRow, type PinRow, type ScopeRow, openIndex } from '../build/db';
+import {
+  type FactRow,
+  type FlowStepRow,
+  type PinRow,
+  type RelatedRow,
+  type ScopeRow,
+  type StateRow,
+  type TransitionRow,
+  openIndex,
+} from '../build/db';
 
 /**
  * Read-only view over a built `.artha/index.db` (schema-v0.1 §8). The rows are
@@ -14,6 +23,14 @@ export interface ArthaIndex {
   readonly facts: FactRow[];
   readonly pins: PinRow[];
   readonly scopeFiles: ScopeRow[];
+  /** Concept state-machine nodes (T12). Empty for v0.1-only / pre-T12 indexes. */
+  readonly states: StateRow[];
+  /** Concept state-machine edges (T12). */
+  readonly transitions: TransitionRow[];
+  /** Flow ordered steps (T12). */
+  readonly flowSteps: FlowStepRow[];
+  /** `related` cross-links between entries. */
+  readonly related: RelatedRow[];
   /** True when there is no index file or it holds no facts (cold start). */
   readonly empty: boolean;
   /** FTS5 MATCH over heading+body → `fact id → bm25` (lower = better). Empty on blank/invalid query. */
@@ -25,6 +42,10 @@ const EMPTY: ArthaIndex = {
   facts: [],
   pins: [],
   scopeFiles: [],
+  states: [],
+  transitions: [],
+  flowSteps: [],
+  related: [],
   empty: true,
   fts: () => new Map(),
   close: () => {},
@@ -44,11 +65,21 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
     const facts = db.prepare('SELECT * FROM artha_facts').all() as unknown as FactRow[];
     const pins = db.prepare('SELECT * FROM artha_pins').all() as unknown as PinRow[];
     const scopeFiles = db.prepare('SELECT * FROM artha_scope_files').all() as unknown as ScopeRow[];
+    // The v0.2 product-model tables (T12). Loaded defensively so an older index
+    // (built before these tables existed) still yields its facts/pins/scope.
+    const states = selectAll<StateRow>(db, 'artha_states');
+    const transitions = selectAll<TransitionRow>(db, 'artha_transitions');
+    const flowSteps = selectAll<FlowStepRow>(db, 'artha_flow_steps');
+    const related = selectAll<RelatedRow>(db, 'artha_related');
     const handle = db;
     return {
       facts,
       pins,
       scopeFiles,
+      states,
+      transitions,
+      flowSteps,
+      related,
       empty: facts.length === 0,
       fts: (query) => runFts(handle, query),
       close: () => {
@@ -68,6 +99,15 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
       }
     }
     return EMPTY;
+  }
+}
+
+/** `SELECT *` from a table that may not exist in an older index → `[]` if absent. */
+function selectAll<T>(db: DatabaseSync, table: string): T[] {
+  try {
+    return db.prepare(`SELECT * FROM ${table}`).all() as unknown as T[];
+  } catch {
+    return [];
   }
 }
 

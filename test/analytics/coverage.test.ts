@@ -5,47 +5,9 @@ import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { darkZones, moduleCoverage, scoreModule } from '../../src/analytics/coverage';
 import { moduleOf } from '../../src/analytics/module';
-import type { FactRow, PinRow, ScopeRow } from '../../src/build/db';
 import { defaultConfig } from '../../src/config/config';
 import type { ArthaIndex } from '../../src/mcp/query';
-
-// ── helpers ─────────────────────────────────────────────────────────────────
-
-function fact(id: string, status: string): FactRow {
-  return {
-    id,
-    kind: id.split('.')[0] ?? 'decision',
-    status,
-    heading: null,
-    body: null,
-    severity: null,
-    why: null,
-    supersedes: null,
-    certified_by: null,
-    certified_at: null,
-    source_path: null,
-  };
-}
-
-function pin(fact_id: string, symbol_ref: string): PinRow {
-  return { fact_id, symbol_id: symbol_ref, symbol_ref, content_hash: 'h', is_stale: 0 };
-}
-
-function fakeIndex(parts: {
-  facts?: FactRow[];
-  pins?: PinRow[];
-  scopeFiles?: ScopeRow[];
-}): ArthaIndex {
-  const facts = parts.facts ?? [];
-  return {
-    facts,
-    pins: parts.pins ?? [],
-    scopeFiles: parts.scopeFiles ?? [],
-    empty: facts.length === 0,
-    fts: () => new Map(),
-    close: () => {},
-  };
-}
+import { fact, fakeIndex, pin } from '../helpers/fakeIndex';
 
 // ── moduleOf ──────────────────────────────────────────────────────────────────
 
