@@ -55,6 +55,27 @@ CREATE TABLE artha_detect (
   method        TEXT NOT NULL,
   spec          TEXT NOT NULL
 );
+CREATE TABLE artha_states (
+  fact_id       TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  effect        TEXT,
+  invariant     TEXT,
+  ord           INTEGER NOT NULL
+);
+CREATE TABLE artha_transitions (
+  fact_id       TEXT NOT NULL,
+  from_state    TEXT NOT NULL,
+  to_state      TEXT NOT NULL,
+  trigger       TEXT NOT NULL,
+  ord           INTEGER NOT NULL
+);
+CREATE TABLE artha_flow_steps (
+  fact_id         TEXT NOT NULL,
+  on_event        TEXT,
+  do_action       TEXT NOT NULL,
+  pin_symbol_ref  TEXT,
+  ord             INTEGER NOT NULL
+);
 CREATE VIRTUAL TABLE artha_fts USING fts5(id UNINDEXED, heading, body);
 `;
 
@@ -102,6 +123,34 @@ export interface DetectRow {
   spec: string;
 }
 
+/** A concept's state-machine node (schema-v0.2.md §3/§6). `ord` preserves authoring order. */
+export interface StateRow {
+  fact_id: string;
+  name: string;
+  effect: string | null;
+  invariant: string | null;
+  ord: number;
+}
+
+/** A concept's state-machine edge (schema-v0.2.md §3/§6). */
+export interface TransitionRow {
+  fact_id: string;
+  from_state: string;
+  to_state: string;
+  trigger: string;
+  ord: number;
+}
+
+/** One ordered step of a flow (schema-v0.2.md §4/§6). `pin_symbol_ref` is null
+ * for a not-yet-linked step (the v0.3 coverage signal). */
+export interface FlowStepRow {
+  fact_id: string;
+  on_event: string | null;
+  do_action: string;
+  pin_symbol_ref: string | null;
+  ord: number;
+}
+
 export interface IndexData {
   facts: FactRow[];
   pins: PinRow[];
@@ -109,6 +158,9 @@ export interface IndexData {
   related: RelatedRow[];
   provenance: ProvenanceRow[];
   detect: DetectRow[];
+  states: StateRow[];
+  transitions: TransitionRow[];
+  flowSteps: FlowStepRow[];
 }
 
 /** Emit a fresh `.artha/index.db` from scratch (idempotent: same input → same rows). */
@@ -167,6 +219,25 @@ export function writeIndex(dbPath: string, data: IndexData): void {
 
     const detect = db.prepare('INSERT INTO artha_detect (fact_id, method, spec) VALUES (?, ?, ?)');
     for (const r of data.detect) detect.run(r.fact_id, r.method, r.spec);
+
+    const state = db.prepare(
+      'INSERT INTO artha_states (fact_id, name, effect, invariant, ord) VALUES (?, ?, ?, ?, ?)',
+    );
+    for (const r of data.states) state.run(r.fact_id, r.name, r.effect, r.invariant, r.ord);
+
+    const transition = db.prepare(
+      'INSERT INTO artha_transitions (fact_id, from_state, to_state, trigger, ord) VALUES (?, ?, ?, ?, ?)',
+    );
+    for (const r of data.transitions) {
+      transition.run(r.fact_id, r.from_state, r.to_state, r.trigger, r.ord);
+    }
+
+    const flowStep = db.prepare(
+      'INSERT INTO artha_flow_steps (fact_id, on_event, do_action, pin_symbol_ref, ord) VALUES (?, ?, ?, ?, ?)',
+    );
+    for (const r of data.flowSteps) {
+      flowStep.run(r.fact_id, r.on_event, r.do_action, r.pin_symbol_ref, r.ord);
+    }
 
     db.exec('COMMIT');
   } catch (error) {

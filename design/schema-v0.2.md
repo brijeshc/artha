@@ -202,19 +202,29 @@ transition agreement (that's the §6.1 contradiction preview's read-only job, T1
 
 ---
 
-## 6. Index (additions to §8, schema-v0.1.md) — owned by T12
+## 6. Index (additions to §8, schema-v0.1.md) — built by T12
 
-For reference; **built by T12**, not T11. Concept/flow rows land in `artha_facts` with
-`heading = name` and `body = summary` (so FTS + structural retrieval works immediately). The
-state machine / sequence get their own tables so the dashboard and `why`/`context_for_task` can
-serve them:
+Concept/flow rows land in `artha_facts` with `heading = name` and `body = summary` (so FTS +
+structural retrieval works immediately, and is also searchable). The state machine / sequence get
+their own ordered tables so the dashboard and `why`/`context_for_task` can serve them:
 
 ```sql
 artha_states(fact_id TEXT, name TEXT, effect TEXT, invariant TEXT, ord INT);
 artha_transitions(fact_id TEXT, from_state TEXT, to_state TEXT, trigger TEXT, ord INT);
-artha_flow_steps(fact_id TEXT, on_trigger TEXT, do_text TEXT, symbol_ref TEXT, content_hash TEXT, ord INT);
--- a flow's `entry` pins and a concept's `pins` reuse the existing artha_pins table.
+artha_flow_steps(fact_id TEXT, on_event TEXT, do_action TEXT, pin_symbol_ref TEXT, ord INT);
 ```
+
+`ord` is the 0-based authoring order (states/steps render as written). **All pins** — a
+decision/invariant/convention/concept's base `pins`, a flow's `entry` points, *and* each
+`steps[].pin` — reuse the existing `artha_pins` table (resolved symbol id, content hash, stale
+flag). A flow step's `pin_symbol_ref` therefore joins to `artha_pins.symbol_ref` for that step's
+code link and staleness; a `null` `pin_symbol_ref` is the not-yet-linked / v0.3-coverage signal.
+A v0.1-only repo builds these three tables **empty** (present, not absent) — no regression.
+
+> **Area/module map feed (SPEC §B):** each pin's `symbol_ref` already carries the file path
+> (`src/billing/Subscription.ts#Subscription`), which is the raw material for the area/module
+> column of the map. *How* a file rolls up into an "area" is **OQ5**, owned by T15 — the build
+> deliberately does not bake a granularity choice into the index here.
 
 T11 stops at "loads, validates, round-trips, and is part of the `ArthaEntry` union"; it makes the
 existing build *compile and not crash* on the new kinds (heading/body from name/summary), and

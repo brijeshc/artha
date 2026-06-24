@@ -8,8 +8,8 @@ Running log of task completion against [tasks/README.md](tasks/README.md) (v0.1)
 | #  | Task                          | Status   | Notes |
 |----|-------------------------------|----------|-------|
 | 11 | Schema — `concept` + `flow`   | ✅ done  | additive kinds; validate · round-trip · index-compile; `design/schema-v0.2.md` |
-| 12 | `artha build` — concept/flow  | ⬜ next  | pin resolution + states/transitions/steps tables |
-| 13 | Churn + coverage ranking      | ⬜       | dark-zone queue |
+| 12 | `artha build` — concept/flow  | ✅ done  | flow entry/step pins resolved+hashed; states/transitions/steps tables; FTS |
+| 13 | Churn + coverage ranking      | ⬜ next  | dark-zone queue |
 | 14 | Embedding-assisted ranking    | ⬜       | |
 | 15 | `artha serve` — server + API  | ⬜       | |
 | 16 | Product↔Code map UI           | ⬜       | |
@@ -40,6 +40,32 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 ## Log
 
 ### 2026-06-24
+
+- **T12 — `artha build`: index concepts & flows** done. Concept/flow entries are now
+  pin-resolved, content-hashed, staleness-tracked, and written to the SQLite index as
+  queryable rows — the read contract the dashboard (T15/16) and MCP serve from.
+  - **Pins generalized** ([build.ts](src/build/build.ts)): a new `collectPins(entry)` gathers
+    every pin a kind carries — base `pins` (all kinds), plus a **flow's `entry` points and each
+    `steps[].pin`** — and the resolve / hash / staleness / emit paths all run over it. So a
+    flow's entry + per-step symbols resolve (or fail the build, naming the ref) and content-hash
+    exactly like a v0.1 decision pin, and **all** of them land in `artha_pins` → the map's
+    concept/flow↔code links and pin staleness work uniformly. A certified concept whose pinned
+    symbol drifts flips to `stale`, same mechanism as v0.1.
+  - **Three ordered tables** ([db.ts](src/build/db.ts)): `artha_states(fact_id, name, effect,
+    invariant, ord)`, `artha_transitions(fact_id, from_state, to_state, trigger, ord)`,
+    `artha_flow_steps(fact_id, on_event, do_action, pin_symbol_ref, ord)`. `ord` is 0-based
+    authoring order (states/steps render as written); a step's `pin_symbol_ref` is **null** for a
+    not-yet-linked step (the v0.3 coverage signal) and otherwise joins to `artha_pins`. Base
+    `artha_facts` carries `heading=name`/`body=summary` (from T11) so FTS already finds them.
+  - **`schema-v0.2.md` §6** reconciled to the final column names + documented the all-pins-in-
+    `artha_pins` rule and that area/module rollup for the map is **OQ5 (T15)**, deliberately not
+    baked into the index (the pin's `symbol_ref` file path is the raw material).
+  - **No v0.1 regression**: the three tables build **present-but-empty** for a v0.1-only repo;
+    all prior build tests pass unchanged. Build stays **offline** (local tree-sitter resolver).
+  - **Verified**: typecheck + Biome clean; **140 tests pass** (+4 — full concept+flow row
+    assertions, unresolvable flow-step-pin fails the build, certified-concept staleness, FTS-by-
+    summary). Live CLI smoke (dist): `init → author concept+flow → build` populates
+    states/transitions/flow_steps + resolves the concept pin's hash. All 6 acceptance criteria met.
 
 - **T11 — Schema: `concept` + `flow` kinds** done. The two product-meaning kinds the
   dashboard's Product↔Code map maps *to*, added as a **clean additive extension** of the

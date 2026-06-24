@@ -8,11 +8,14 @@ import type { ArthaEntry, Pin } from '../schema/types';
 import {
   type DetectRow,
   type FactRow,
+  type FlowStepRow,
   type IndexData,
   type PinRow,
   type ProvenanceRow,
   type RelatedRow,
   type ScopeRow,
+  type StateRow,
+  type TransitionRow,
   writeIndex,
 } from './db';
 
@@ -57,13 +60,14 @@ export async function buildIndex(
   }
 
   // 4. Pin resolution (ERROR). Resolve everything first; any miss fails the
-  // build before we write hashes or staleness back to disk.
+  // build before we write hashes or staleness back to disk. A flow's `entry`
+  // and per-step `pin`s resolve through the same mechanism as base `pins`.
   const resolved = new Map<Pin, ResolvedSymbol>();
-  const pinnedEntries = entries.filter((entry) => (entry.pins?.length ?? 0) > 0);
+  const pinnedEntries = entries.filter((entry) => collectPins(entry).length > 0);
   if (pinnedEntries.length > 0) {
     const resolver = await createTreeSitterResolver(repoRoot);
     for (const entry of pinnedEntries) {
-      for (const pin of entry.pins ?? []) {
+      for (const pin of collectPins(entry)) {
         const hit = resolver.resolve(pin.symbol);
         if (hit) {
           resolved.set(pin, hit);
@@ -82,7 +86,7 @@ export async function buildIndex(
   for (const entry of pinnedEntries) {
     let modified = false;
     let drifted = false;
-    for (const pin of entry.pins ?? []) {
+    for (const pin of collectPins(entry)) {
       const hit = resolved.get(pin);
       if (!hit) continue;
       const previous = pin.content_hash;
@@ -125,6 +129,9 @@ function toIndexData(
   const related: RelatedRow[] = [];
   const provenance: ProvenanceRow[] = [];
   const detect: DetectRow[] = [];
+  const states: StateRow[] = [];
+  const transitions: TransitionRow[] = [];
+  const flowSteps: FlowStepRow[] = [];
 
   for (const entry of entries) {
     facts.push({
@@ -141,8 +148,11 @@ function toIndexData(
       source_path: relPath(repoRoot, entry.source_path),
     });
 
+    // Every resolved pin — base `pins`, a flow's `entry`, and each flow step's
+    // `pin` — lands in artha_pins, so the map's concept/flow↔code links and pin
+    // staleness work uniformly across kinds.
     const isStale = entry.status === 'stale' ? 1 : 0;
-    for (const pin of entry.pins ?? []) {
+    for (const pin of collectPins(entry)) {
       pins.push({
         fact_id: entry.id,
         symbol_id: resolved.get(pin)?.symbolId ?? null,
@@ -171,6 +181,41 @@ function toIndexData(
       });
     }
 
+    // Concept state machine + flow sequence (schema-v0.2.md §6). `ord` preserves
+    // the authored order so the dashboard renders states/steps as written.
+    if (entry.kind === 'concept') {
+      entry.states?.forEach((s, ord) => {
+        states.push({
+          fact_id: entry.id,
+          name: s.name,
+          effect: s.effect ?? null,
+          invariant: s.invariant ?? null,
+          ord,
+        });
+      });
+      entry.transitions?.forEach((t, ord) => {
+        transitions.push({
+          fact_id: entry.id,
+          from_state: t.from,
+          to_state: t.to,
+          trigger: t.trigger,
+          ord,
+        });
+      });
+    }
+
+    if (entry.kind === 'flow') {
+      entry.steps?.forEach((step, ord) => {
+        flowSteps.push({
+          fact_id: entry.id,
+          on_event: step.on ?? null,
+          do_action: step.do,
+          pin_symbol_ref: step.pin?.symbol ?? null,
+          ord,
+        });
+      });
+    }
+
     // 6. Scope expansion (WARN) for invariants/conventions.
     if (entry.kind === 'invariant' || entry.kind === 'convention') {
       const matched = expandScope(entry.scope, repoRoot);
@@ -188,7 +233,23 @@ function toIndexData(
     }
   }
 
-  return { facts, pins, scopeFiles, related, provenance, detect };
+  return { facts, pins, scopeFiles, related, provenance, detect, states, transitions, flowSteps };
+}
+
+/**
+ * Every pin an entry carries: base `pins` for all kinds, plus a flow's `entry`
+ * points and each (non-null) `steps[].pin`. These are the actual Pin objects, so
+ * resolution writes `content_hash` straight back onto them (and thus to disk).
+ */
+function collectPins(entry: ArthaEntry): Pin[] {
+  const pins: Pin[] = [...(entry.pins ?? [])];
+  if (entry.kind === 'flow') {
+    pins.push(...(entry.entry ?? []));
+    for (const step of entry.steps ?? []) {
+      if (step.pin) pins.push(step.pin);
+    }
+  }
+  return pins;
 }
 
 function expandScope(globs: string[], repoRoot: string): string[] {
