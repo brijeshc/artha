@@ -3,7 +3,10 @@
   "$defs": {
     "symbolRef": { "type": "string", "pattern": "^[^#]+#[^#]+$" },
     "glob": { "type": "string", "minLength": 1 },
-    "id": { "type": "string", "pattern": "^(decision|invariant|convention)\\.[a-z0-9_]+$" },
+    "id": {
+      "type": "string",
+      "pattern": "^(decision|invariant|convention|concept|flow)\\.[a-z0-9_]+$"
+    },
     "pin": {
       "type": "object",
       "required": ["symbol"],
@@ -48,12 +51,42 @@
         }
       ]
     },
+    "state": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "effect": { "type": "string" },
+        "invariant": { "type": "string" }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "required": ["from", "to", "trigger"],
+      "additionalProperties": false,
+      "properties": {
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "trigger": { "type": "string", "minLength": 1 }
+      }
+    },
+    "flowStep": {
+      "type": "object",
+      "required": ["do"],
+      "additionalProperties": false,
+      "properties": {
+        "on": { "type": "string" },
+        "do": { "type": "string", "minLength": 1 },
+        "pin": { "oneOf": [{ "$ref": "#/$defs/pin" }, { "type": "null" }] }
+      }
+    },
     "base": {
       "type": "object",
       "required": ["id", "kind", "status"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "kind": { "enum": ["decision", "invariant", "convention"] },
+        "kind": { "enum": ["decision", "invariant", "convention", "concept", "flow"] },
         "status": { "enum": ["proposed", "certified", "stale"] },
         "certified_by": { "type": "string" },
         "certified_at": { "type": "string", "format": "date" },
@@ -119,6 +152,38 @@
           "example_bad": { "oneOf": [{ "$ref": "#/$defs/symbolRef" }, { "type": "null" }] }
         },
         "required": ["name", "rule", "scope"]
+      }
+    ]
+  },
+
+  "concept": {
+    "allOf": [
+      { "$ref": "#/$defs/base" },
+      {
+        "properties": {
+          "kind": { "const": "concept" },
+          "name": { "type": "string" },
+          "summary": { "type": "string" },
+          "states": { "type": "array", "items": { "$ref": "#/$defs/state" } },
+          "transitions": { "type": "array", "items": { "$ref": "#/$defs/transition" } }
+        },
+        "required": ["name", "summary"]
+      }
+    ]
+  },
+
+  "flow": {
+    "allOf": [
+      { "$ref": "#/$defs/base" },
+      {
+        "properties": {
+          "kind": { "const": "flow" },
+          "name": { "type": "string" },
+          "summary": { "type": "string" },
+          "steps": { "type": "array", "items": { "$ref": "#/$defs/flowStep" } },
+          "entry": { "type": "array", "items": { "$ref": "#/$defs/pin" } }
+        },
+        "required": ["name", "summary"]
       }
     ]
   }

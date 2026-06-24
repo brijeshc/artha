@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Convention, Decision, Invariant } from '../../src/schema/types';
+import type { Concept, Convention, Decision, Flow, Invariant } from '../../src/schema/types';
 import { validateEntry } from '../../src/schema/validate';
 
 const validDecision: Decision = {
@@ -31,6 +31,32 @@ const validConvention: Convention = {
   scope: ['src/**/repositories/**'],
 };
 
+const validConcept: Concept = {
+  id: 'concept.subscription',
+  kind: 'concept',
+  status: 'proposed',
+  name: 'Subscription',
+  summary: 'A customer’s ongoing paid access to a plan.',
+  states: [
+    { name: 'active', invariant: 'currentPeriodEnd in the future' },
+    { name: 'past_due', effect: 'entitlement retained for a grace window' },
+  ],
+  transitions: [{ from: 'active', to: 'past_due', trigger: 'invoice payment failed' }],
+};
+
+const validFlow: Flow = {
+  id: 'flow.checkout',
+  kind: 'flow',
+  status: 'proposed',
+  name: 'Checkout',
+  summary: 'Turns a cart into a paid order.',
+  entry: [{ symbol: 'src/checkout/startCheckout.ts#startCheckout' }],
+  steps: [
+    { on: 'cart submitted', do: 'validate the cart', pin: { symbol: 'src/checkout/v.ts#v' } },
+    { do: 'create the order', pin: null },
+  ],
+};
+
 function errorPaths(obj: unknown): string[] {
   const result = validateEntry(obj);
   expect(result.ok).toBe(false);
@@ -38,11 +64,44 @@ function errorPaths(obj: unknown): string[] {
 }
 
 describe('validateEntry', () => {
-  it('accepts valid entries of all three kinds', () => {
-    for (const entry of [validDecision, validInvariant, validConvention]) {
+  it('accepts valid entries of all five kinds', () => {
+    for (const entry of [validDecision, validInvariant, validConvention, validConcept, validFlow]) {
       const result = validateEntry(entry);
       expect(result.ok).toBe(true);
     }
+  });
+
+  it('accepts a concept with neither states nor transitions (summary-first capture)', () => {
+    const { states, transitions, ...bare } = validConcept;
+    void states;
+    void transitions;
+    expect(validateEntry(bare).ok).toBe(true);
+  });
+
+  it('rejects a concept missing the required summary', () => {
+    const { summary, ...rest } = validConcept;
+    void summary;
+    expect(errorPaths(rest)).toContain('/summary');
+  });
+
+  it('rejects a concept whose id prefix does not match kind', () => {
+    expect(errorPaths({ ...validConcept, id: 'decision.subscription' })).toContain('/id');
+  });
+
+  it('rejects a concept with a malformed transition (missing trigger)', () => {
+    const bad = { ...validConcept, transitions: [{ from: 'active', to: 'past_due' }] };
+    expect(errorPaths(bad)).toContain('/transitions/0/trigger');
+  });
+
+  it('rejects a flow step missing the required do', () => {
+    const bad = { ...validFlow, steps: [{ on: 'cart submitted' }] };
+    expect(errorPaths(bad)).toContain('/steps/0/do');
+  });
+
+  it('requires certified_by + certified_at on a certified concept', () => {
+    const paths = errorPaths({ ...validConcept, status: 'certified' });
+    expect(paths).toContain('/certified_by');
+    expect(paths).toContain('/certified_at');
   });
 
   it('rejects a certified entry missing certified_by / certified_at with field paths', () => {
@@ -76,8 +135,8 @@ describe('validateEntry', () => {
     expect(validateEntry({ ...validInvariant, scope: [] }).ok).toBe(false);
   });
 
-  it('reports unknown/reserved kinds as a /kind error (caller skips these)', () => {
-    expect(errorPaths({ id: 'concept.invoice', kind: 'concept', status: 'proposed' })).toContain(
+  it('reports unknown/still-reserved kinds (exception) as a /kind error (caller skips these)', () => {
+    expect(errorPaths({ id: 'exception.legacy', kind: 'exception', status: 'proposed' })).toContain(
       '/kind',
     );
   });

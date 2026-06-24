@@ -274,23 +274,45 @@ function diffColor(line: string): string | undefined {
 
 function draftFields(entry: ArthaEntry): Array<{ label: string; value: string }> {
   const fields: Array<{ label: string; value: string }> = [];
-  if (entry.kind === 'decision') {
-    fields.push({ label: 'context', value: entry.context });
-    fields.push({ label: 'decision', value: entry.decision });
-    if (entry.consequences) fields.push({ label: 'consequences', value: entry.consequences });
-    if (entry.supersedes) fields.push({ label: 'supersedes', value: entry.supersedes });
-    return fields;
+  switch (entry.kind) {
+    case 'decision':
+      fields.push({ label: 'context', value: entry.context });
+      fields.push({ label: 'decision', value: entry.decision });
+      if (entry.consequences) fields.push({ label: 'consequences', value: entry.consequences });
+      if (entry.supersedes) fields.push({ label: 'supersedes', value: entry.supersedes });
+      return fields;
+    case 'invariant':
+      fields.push({ label: 'rule', value: entry.rule });
+      fields.push({ label: 'scope', value: entry.scope.join(', ') });
+      if (entry.why) fields.push({ label: 'why', value: entry.why });
+      if (entry.severity) fields.push({ label: 'severity', value: entry.severity });
+      return fields;
+    case 'convention':
+      fields.push({ label: 'rule', value: entry.rule });
+      fields.push({ label: 'scope', value: entry.scope.join(', ') });
+      if (entry.example_good) fields.push({ label: 'example (good)', value: entry.example_good });
+      if (entry.example_bad) fields.push({ label: 'example (bad)', value: entry.example_bad });
+      return fields;
+    case 'concept':
+      fields.push({ label: 'summary', value: entry.summary });
+      for (const s of entry.states ?? []) {
+        const note = s.effect ?? s.invariant;
+        fields.push({ label: `state ${s.name}`, value: note ?? '' });
+      }
+      for (const t of entry.transitions ?? []) {
+        fields.push({ label: 'transition', value: `${t.from} → ${t.to}: ${t.trigger}` });
+      }
+      return fields;
+    case 'flow':
+      fields.push({ label: 'summary', value: entry.summary });
+      for (const p of entry.entry ?? []) fields.push({ label: 'entry', value: p.symbol });
+      for (const step of entry.steps ?? []) {
+        const prefix = step.on ? `${step.on} → ` : '';
+        const pin = step.pin ? `  [${step.pin.symbol}]` : '';
+        fields.push({ label: 'step', value: `${prefix}${step.do}${pin}` });
+      }
+      return fields;
   }
-  fields.push({ label: 'rule', value: entry.rule });
-  fields.push({ label: 'scope', value: entry.scope.join(', ') });
-  if (entry.kind === 'invariant') {
-    if (entry.why) fields.push({ label: 'why', value: entry.why });
-    if (entry.severity) fields.push({ label: 'severity', value: entry.severity });
-  } else {
-    if (entry.example_good) fields.push({ label: 'example (good)', value: entry.example_good });
-    if (entry.example_bad) fields.push({ label: 'example (bad)', value: entry.example_bad });
-  }
-  return fields;
 }
 
 /**

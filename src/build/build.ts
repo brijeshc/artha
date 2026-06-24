@@ -132,7 +132,7 @@ function toIndexData(
       kind: entry.kind,
       status: entry.status,
       heading: entry.kind === 'decision' ? entry.title : entry.name,
-      body: entry.kind === 'decision' ? entry.decision : entry.rule,
+      body: bodyText(entry),
       severity: entry.kind === 'invariant' ? (entry.severity ?? config.defaultSeverity) : null,
       why: entry.kind === 'invariant' ? (entry.why ?? null) : null,
       supersedes: entry.kind === 'decision' ? (entry.supersedes ?? null) : null,
@@ -202,6 +202,23 @@ function expandScope(globs: string[], repoRoot: string): string[] {
     }
   }
   return [...matched].sort();
+}
+
+/**
+ * The retrieval body for FTS — the kind's primary prose. Concept/flow index on
+ * their `summary`; their structured state machine / step tables are added by T12.
+ */
+function bodyText(entry: ArthaEntry): string {
+  switch (entry.kind) {
+    case 'decision':
+      return entry.decision;
+    case 'invariant':
+    case 'convention':
+      return entry.rule;
+    case 'concept':
+    case 'flow':
+      return entry.summary;
+  }
 }
 
 function referencesOf(entry: ArthaEntry): string[] {

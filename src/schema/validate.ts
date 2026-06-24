@@ -14,7 +14,7 @@ export type ValidateResult =
   | { ok: true; entry: ArthaEntry }
   | { ok: false; errors: ValidationError[] };
 
-const CORE_KINDS = new Set<string>(['decision', 'invariant', 'convention']);
+const CORE_KINDS = new Set<string>(['decision', 'invariant', 'convention', 'concept', 'flow']);
 
 // `strict: false` because the §9 document carries the per-kind schemas as
 // sibling keys (decision/invariant/convention) alongside `$defs`, which AJV
@@ -27,6 +27,8 @@ const validators: Record<Kind, ValidateFunction> = {
   decision: ajv.compile({ $ref: 'artha#/decision' }),
   invariant: ajv.compile({ $ref: 'artha#/invariant' }),
   convention: ajv.compile({ $ref: 'artha#/convention' }),
+  concept: ajv.compile({ $ref: 'artha#/concept' }),
+  flow: ajv.compile({ $ref: 'artha#/flow' }),
 };
 
 function toError(error: ErrorObject): ValidationError {
@@ -42,8 +44,8 @@ function toError(error: ErrorObject): ValidationError {
  * one cross-field rule JSON Schema can't express (§7.2: the id prefix must
  * match `kind`). Returns the entry typed, or a list of field-pathed errors.
  *
- * Note: callers handle *unknown kinds* (concept/flow/exception) by skipping
- * before reaching here; a non-core `kind` is reported as an error if it does.
+ * Note: callers handle *reserved* kinds (`exception.*`, v0.3) by skipping before
+ * reaching here; a non-core `kind` that does reach here is reported as an error.
  */
 export function validateEntry(obj: unknown): ValidateResult {
   if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {

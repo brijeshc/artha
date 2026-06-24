@@ -1,7 +1,8 @@
 // The single source of truth in code for the `.artha/` data model. Mirrors
-// design/schema-v0.1.md §2/§4/§5/§9 exactly. Frozen for v0.1.
+// design/schema-v0.1.md §2/§4/§5/§9 (frozen v0.1 base) and design/schema-v0.2.md
+// §3/§4/§7 (the additive `concept` + `flow` kinds).
 
-export type Kind = 'decision' | 'invariant' | 'convention';
+export type Kind = 'decision' | 'invariant' | 'convention' | 'concept' | 'flow';
 export type Status = 'proposed' | 'certified' | 'stale';
 export type Severity = 'high' | 'medium' | 'low';
 export type DetectMethod = 'structural' | 'type' | 'llm';
@@ -80,5 +81,50 @@ export interface Convention extends BaseEntry {
   example_bad?: string | null;
 }
 
+/** schema-v0.2 §3 — one node in a concept's state machine. `effect`/`invariant`
+ * are free-text intent (the meaning not in the TS types), not cross-refs. */
+export interface State {
+  name: string;
+  effect?: string;
+  invariant?: string;
+}
+
+/** schema-v0.2 §3 — one edge in a concept's state machine. */
+export interface Transition {
+  from: string;
+  to: string;
+  trigger: string;
+}
+
+/** schema-v0.2 §3 — a domain capability with its state machine. */
+export interface Concept extends BaseEntry {
+  kind: 'concept';
+  name: string;
+  summary: string;
+  states?: State[];
+  transitions?: Transition[];
+}
+
+/** schema-v0.2 §4 — one ordered step in a flow. `pin: null` is valid in v0.2
+ * (a known-but-not-yet-linked step; coverage is a v0.3 check). */
+export interface FlowStep {
+  /** The trigger/condition for this step, if any. */
+  on?: string;
+  /** What happens at this step. */
+  do: string;
+  /** The symbol implementing the step; `null` when not yet linked. */
+  pin?: Pin | null;
+}
+
+/** schema-v0.2 §4 — a cross-cutting sequence spanning services. */
+export interface Flow extends BaseEntry {
+  kind: 'flow';
+  name: string;
+  summary: string;
+  steps?: FlowStep[];
+  /** Entry-point symbol(s) for the flow. */
+  entry?: Pin[];
+}
+
 /** Discriminated union keyed on `kind`. */
-export type ArthaEntry = Decision | Invariant | Convention;
+export type ArthaEntry = Decision | Invariant | Convention | Concept | Flow;

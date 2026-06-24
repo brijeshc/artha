@@ -6,21 +6,21 @@ import { logger } from '../util/logger';
 import type { ArthaEntry, Kind } from './types';
 import { validateEntry } from './validate';
 
-const KIND_DIRS = ['decisions', 'invariants', 'conventions'] as const;
-const CORE_KINDS = new Set<string>(['decision', 'invariant', 'convention']);
+const KIND_DIRS = ['decisions', 'invariants', 'conventions', 'concepts', 'flows'] as const;
+const CORE_KINDS = new Set<string>(['decision', 'invariant', 'convention', 'concept', 'flow']);
 const YAML_EXT = new Set(['.yaml', '.yml']);
 
 export interface LoadResult {
   /** Validated entries, each with `source_path` attached. */
   entries: ArthaEntry[];
-  /** Paths skipped as unknown/reserved kinds (concept.*, flow.*, exception.*). */
+  /** Paths skipped as unknown/reserved kinds (e.g. exception.*, reserved for v0.3). */
   skipped: string[];
 }
 
 /**
- * Walk `.artha/{decisions,invariants,conventions}/*.{yaml,yml}`, parse and
- * validate each entry, and return them with `source_path` attached. The
- * filename is not load-bearing — identity is the `id` field.
+ * Walk `.artha/{decisions,invariants,conventions,concepts,flows}/*.{yaml,yml}`,
+ * parse and validate each entry, and return them with `source_path` attached.
+ * The filename is not load-bearing — identity is the `id` field.
  *
  * - Unknown/reserved kinds are skipped (reported in `skipped`), not errored.
  * - Duplicate `id` across the whole tree throws, naming both files.
@@ -112,6 +112,36 @@ const FIELD_ORDER: Record<Kind, readonly string[]> = {
     'scope',
     'example_good',
     'example_bad',
+    'pins',
+    'mined_from',
+    'related',
+    'tags',
+    'certified_by',
+    'certified_at',
+  ],
+  concept: [
+    'id',
+    'kind',
+    'status',
+    'name',
+    'summary',
+    'states',
+    'transitions',
+    'pins',
+    'mined_from',
+    'related',
+    'tags',
+    'certified_by',
+    'certified_at',
+  ],
+  flow: [
+    'id',
+    'kind',
+    'status',
+    'name',
+    'summary',
+    'steps',
+    'entry',
     'pins',
     'mined_from',
     'related',

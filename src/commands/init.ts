@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../util/logger';
 
-const KIND_DIRS = ['decisions', 'invariants', 'conventions'] as const;
+const KIND_DIRS = ['decisions', 'invariants', 'conventions', 'concepts', 'flows'] as const;
 
 // Commented template showing the defaults. Must stay in sync with the defaults
 // in config.ts — the init round-trip test (loadConfig after init === defaults)
@@ -41,9 +41,9 @@ export interface InitResult {
 }
 
 /**
- * Scaffold `.artha/` idempotently: the three kind dirs (each with a `.gitkeep`)
- * and a commented `config.yaml`. Re-running never clobbers an existing config
- * or deletes entries — it only fills in what's missing.
+ * Scaffold `.artha/` idempotently: the kind dirs (each with a `.gitkeep`) and a
+ * commented `config.yaml`. Re-running never clobbers an existing config or
+ * deletes entries — it only fills in what's missing.
  */
 export function initArtha(repoRoot: string): InitResult {
   const arthaDir = join(repoRoot, '.artha');
@@ -74,8 +74,8 @@ export function initArtha(repoRoot: string): InitResult {
 }
 
 /**
- * `artha init` — scaffold `.artha/{decisions,invariants,conventions}/` and a
- * default `config.yaml` in the current directory.
+ * `artha init` — scaffold `.artha/{decisions,invariants,conventions,concepts,flows}/`
+ * and a default `config.yaml` in the current directory.
  */
 export async function initCommand(): Promise<void> {
   const result = initArtha(process.cwd());

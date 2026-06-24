@@ -1,0 +1,6 @@
+# A reserved kind (`exception`, v0.3) dropped into the tree: must be skipped,
+# never errored. concept/flow are real kinds as of v0.2 and load normally.
+id: exception.legacy_money_path
+kind: exception
+status: proposed
+title: Legacy money path sanctioned exception

@@ -1,8 +1,26 @@
 # Artha — build progress log
 
-Running log of task completion against [tasks/README.md](tasks/README.md). Newest entries first.
+Running log of task completion against [tasks/README.md](tasks/README.md) (v0.1) and
+[tasks-v0.2/README.md](tasks-v0.2/README.md) (v0.2). Newest entries first.
 
-## Status
+## Status — v0.2
+
+| #  | Task                          | Status   | Notes |
+|----|-------------------------------|----------|-------|
+| 11 | Schema — `concept` + `flow`   | ✅ done  | additive kinds; validate · round-trip · index-compile; `design/schema-v0.2.md` |
+| 12 | `artha build` — concept/flow  | ⬜ next  | pin resolution + states/transitions/steps tables |
+| 13 | Churn + coverage ranking      | ⬜       | dark-zone queue |
+| 14 | Embedding-assisted ranking    | ⬜       | |
+| 15 | `artha serve` — server + API  | ⬜       | |
+| 16 | Product↔Code map UI           | ⬜       | |
+| 17 | Write-back (link/certify/edit)| ⬜       | |
+| 18 | "Ask the human" loop          | ⬜       | |
+| 19 | Contradiction preview panel   | ⬜       | §6.1 deterministic only |
+| 20 | v0.2 success test             | ⬜       | non-author reads the map |
+
+Critical path: 11 → 12 → 15 → 16/17 → 18 → 20. Tasks 13, 14, 19 parallelize off it.
+
+## Status — v0.1
 
 | #  | Task                          | Status   | Notes |
 |----|-------------------------------|----------|-------|
@@ -20,6 +38,38 @@ Running log of task completion against [tasks/README.md](tasks/README.md). Newes
 Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 
 ## Log
+
+### 2026-06-24
+
+- **T11 — Schema: `concept` + `flow` kinds** done. The two product-meaning kinds the
+  dashboard's Product↔Code map maps *to*, added as a **clean additive extension** of the
+  frozen v0.1 base model — they validate, round-trip through YAML, and are part of the
+  `ArthaEntry` union, ready to build (T12) and serve (T15/16).
+  - **Locked the model first** in [design/schema-v0.2.md](design/schema-v0.2.md) (field
+    tables + examples + the JSON Schema additions), same discipline as v0.1.
+    - `concept` (`concept.*`): `name`, `summary` (both req) + the high-value payload **not
+      in the TS types** — `states` (`{ name, effect?, invariant? }`) and `transitions`
+      (`{ from, to, trigger }`). States/transitions are **optional** so a concept can be
+      captured summary-first and grow its machine via the v0.2 interview.
+    - `flow` (`flow.*`): `name`, `summary` (both req) + `steps` (ordered `{ on?, do, pin? }`)
+      and `entry` (entry-point pins). A step with **`pin: null` is valid** — coverage-of-every-
+      step is a v0.3 check, not a v0.2 validation error.
+  - **Schema/types/validation** all extended additively: `id` pattern + base `kind` enum gain
+    `concept|flow`; new `$defs` `state`/`transition`/`flowStep`; two `allOf`-on-`base`
+    sub-schemas; `Concept`/`Flow`/`State`/`Transition`/`FlowStep` added to the union; both AJV
+    validators wired. `certified` still requires `certified_by`+`certified_at` for the new kinds.
+  - **Loader + init**: `concepts/` and `flows/` join the walked dirs and `artha init`'s
+    scaffold (5 kind dirs now); canonical `FIELD_ORDER` added for stable dumps.
+    `exception.*` stays the **still-reserved** kind that the loader skips (the old
+    `reserved-concept` fixture/tests moved to `exception`, since concept now loads for real).
+  - **Build kept green, not extended**: `build.ts` now compiles + indexes concept/flow facts
+    with `heading=name`, `body=summary` (so FTS/structural retrieval works immediately); the
+    `review` TUI's `draftFields` made exhaustive over all five kinds. The **states/transitions/
+    steps tables + per-step pin resolution are T12**, per the spec's scope split.
+  - **Verified**: typecheck + Biome clean; **136 tests pass** (+8 — concept/flow validate &
+    round-trip, summary-first concept, malformed transition/step, certified-requires-stamps,
+    exception-still-skipped). Live smoke: `init → author concept+flow → build` emits a 2-entry
+    index with the rows above. Acceptance criteria (SPEC Done-when #1) all met.
 
 ### 2026-06-21
 

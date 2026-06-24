@@ -16,10 +16,10 @@ afterEach(() => {
 });
 
 describe('initArtha', () => {
-  it('scaffolds the three kind dirs (each with .gitkeep) and a config.yaml', () => {
+  it('scaffolds the five kind dirs (each with .gitkeep) and a config.yaml', () => {
     const result = initArtha(tmp);
     expect(result.alreadyInitialized).toBe(false);
-    for (const dir of ['decisions', 'invariants', 'conventions']) {
+    for (const dir of ['decisions', 'invariants', 'conventions', 'concepts', 'flows']) {
       expect(existsSync(join(tmp, '.artha', dir, '.gitkeep'))).toBe(true);
     }
     expect(existsSync(join(tmp, '.artha', 'config.yaml'))).toBe(true);

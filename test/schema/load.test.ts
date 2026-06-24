@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadEntries, writeEntry } from '../../src/schema/load';
-import type { Convention } from '../../src/schema/types';
+import type { Concept, Convention, Flow } from '../../src/schema/types';
 
 const FIXTURES = join(__dirname, '..', 'fixtures', 'artha');
 
@@ -11,7 +11,7 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'artha-load-'));
-  for (const dir of ['decisions', 'invariants', 'conventions']) {
+  for (const dir of ['decisions', 'invariants', 'conventions', 'concepts', 'flows']) {
     mkdirSync(join(tmp, dir), { recursive: true });
   }
 });
@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe('loadEntries', () => {
-  it('loads all three §5 example kinds and skips a reserved kind', () => {
+  it('loads the v0.1 example kinds and skips a still-reserved kind (exception)', () => {
     const { entries, skipped } = loadEntries(FIXTURES);
 
     const ids = entries.map((e) => e.id).sort();
@@ -35,7 +35,7 @@ describe('loadEntries', () => {
     }
 
     expect(skipped).toHaveLength(1);
-    expect(skipped[0]).toMatch(/reserved-concept\.yaml$/);
+    expect(skipped[0]).toMatch(/reserved-exception\.yaml$/);
   });
 
   it('returns empty for a missing .artha directory', () => {
@@ -84,6 +84,63 @@ describe('loadEntries', () => {
     const { entries } = loadEntries(tmp);
     expect(entries).toHaveLength(1);
     const { source_path, ...loaded } = entries[0] as Convention & { source_path?: string };
+    expect(source_path).toBe(file);
+    expect(loaded).toEqual(original);
+  });
+
+  it('round-trips a concept (states + transitions) through dump → load', () => {
+    const original: Concept = {
+      id: 'concept.subscription',
+      kind: 'concept',
+      status: 'certified',
+      name: 'Subscription',
+      summary: 'A customer’s ongoing paid access to a plan.\nSource of truth for entitlement.\n',
+      states: [
+        { name: 'trialing', effect: 'no charge; entitlement granted' },
+        { name: 'active', invariant: 'currentPeriodEnd is non-null and in the future' },
+      ],
+      transitions: [{ from: 'trialing', to: 'active', trigger: 'first successful invoice' }],
+      pins: [{ symbol: 'src/billing/Subscription.ts#Subscription' }],
+      related: ['concept.invoice'],
+      certified_by: 'brijesh',
+      certified_at: '2026-06-24',
+    };
+
+    const file = join(tmp, 'concepts', 'subscription.yaml');
+    writeEntry(original, file);
+
+    const { entries } = loadEntries(tmp);
+    expect(entries).toHaveLength(1);
+    const { source_path, ...loaded } = entries[0] as Concept & { source_path?: string };
+    expect(source_path).toBe(file);
+    expect(loaded).toEqual(original);
+  });
+
+  it('round-trips a flow with ordered steps including pin: null', () => {
+    const original: Flow = {
+      id: 'flow.checkout',
+      kind: 'flow',
+      status: 'proposed',
+      name: 'Checkout',
+      summary: 'Turns a cart into a paid order.',
+      entry: [{ symbol: 'src/checkout/startCheckout.ts#startCheckout' }],
+      steps: [
+        {
+          on: 'cart submitted',
+          do: 'validate the cart',
+          pin: { symbol: 'src/checkout/validateCart.ts#validateCart' },
+        },
+        { do: 'create the order', pin: null },
+      ],
+      related: ['concept.subscription'],
+    };
+
+    const file = join(tmp, 'flows', 'checkout.yaml');
+    writeEntry(original, file);
+
+    const { entries } = loadEntries(tmp);
+    expect(entries).toHaveLength(1);
+    const { source_path, ...loaded } = entries[0] as Flow & { source_path?: string };
     expect(source_path).toBe(file);
     expect(loaded).toEqual(original);
   });
