@@ -24,5 +24,7 @@
     "noEmit": true
   },
   "include": ["src", "test", "tsup.config.ts", "vitest.config.ts"],
-  "exclude": ["node_modules", "dist", "test/fixtures"]
+  // `test/web` renders the DOM-typed dashboard components; it is typechecked by
+  // `typecheck:web` (which has the DOM lib), not the node-only root config.
+  "exclude": ["node_modules", "dist", "test/fixtures", "test/web"]
 }

@@ -12,8 +12,12 @@ Running log of task completion against [tasks/README.md](tasks/README.md) (v0.1)
 | 13 | Churn + coverage ranking      | ✅ done  | OQ4 locked (90d window · graded coverage); `darkZones()` queue, swappable `scoreModule()` |
 | 14 | Embedding-assisted ranking    | ✅ done  | OQ3 local model (transformers.js/MiniLM); build vectors + cosine blend; offline query |
 | 15 | `artha serve` — server + API  | ✅ done  | OQ7 Vite+React · OQ5 top-level-folders+seam; node:http API, cold-start safe |
-| 16 | Product↔Code map UI           | ⬜ next  | unblocked (skeleton + API contract shipped) |
-| 17 | Write-back (link/certify/edit)| ⬜       | unblocked |
+| 16 | Product↔Code map UI           | ✅ done  | map (lit/dim cross-links) + concept/flow detail + search + cold-start ask-queue; 12 SSR render tests. **UI read as confusing → redesigned (16a–c, see [design/Dashboard.md](design/Dashboard.md))** |
+| 16a| Dashboard redesign Ph.1        | ✅ done  | instrument re-skin: Understanding Map (churn=size, coverage=brightness) + KPI strip + drawn state machine; 19 SSR render tests |
+| 16b| Dashboard redesign Ph.2        | ✅ done  | capability catalog (state-chain/coverage cards + filters) · hover-to-connect leader lines · ⌘K command bar · `/api/catalog`; 24 web render tests |
+| 16c| Dashboard redesign Ph.3        | ✅ done  | engineer module view (`/api/module/:id`) + flow ladder + cold-start funnel — shipped inside the **atlas shell** rebuild ([Dashboard.md §11](design/Dashboard.md)) |
+| 16d| Dashboard v3 — the atlas shell | ✅ done  | page-of-sections → full-screen app shell: treemap Understanding Atlas, hash routes (deep-linkable selection), navigator/inspector, product-language everywhere; 30 web tests |
+| 17 | Write-back (link/certify/edit)| ⬜ next  | unblocked (selection/drill-down state shipped) |
 | 18 | "Ask the human" loop          | ⬜       | |
 | 19 | Contradiction preview panel   | ⬜       | §6.1 deterministic only |
 | 20 | v0.2 success test             | ⬜       | non-author reads the map |
@@ -39,7 +43,153 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 
 ## Log
 
+### 2026-07-04
+
+- **Dashboard v3 — the atlas shell (16c + 16d)** done. The 16a/16b instrument page was
+  reviewed against the product goal and found still short: a 2,800px scroll of sections,
+  a "map" of flex-wrapped buttons, a light page around one dark panel, ids where product
+  language belonged, and no engineer lens.
+  Diagnosis + the new design are recorded in [design/Dashboard.md §11](design/Dashboard.md);
+  this build replaces the page with a **full-screen application shell** and completes 16c.
+  - **`/api/module/:id`** (`src/serve/api.ts` `moduleDetail()` + a slash-tolerant route in
+    `server.ts`): everything governing one module — concepts/flows built on it, invariants/
+    conventions in scope, decisions (the why) — each with status, pinned symbols, stale-pin
+    count, and the scope join; plus churn/coverage/stale stats and the module's dark-zone
+    queue rank. Pure over the index; 4 new API tests.
+  - **The shell** (`web/src/App.tsx`): 100vh instrument — top bar (wordmark, breadcrumb, the
+    four KPI readouts, ⌘K), left **navigator** (views + one expandable section per product
+    area: capabilities in product language, modules in mono), center canvas, right
+    **inspector** on atlas selection. Panes scroll internally; the page never does.
+  - **Hash router** (`web/src/router.ts`): every view *and the atlas selection* live in the
+    URL (`#/module/src%2Fbilling`, `#/?a=Billing`), so the knowledge base deep-links and
+    back always retraces. Esc clears selection; ⌘K searches; plain anchors throughout.
+  - **The Understanding Atlas** (`web/src/treemap.ts` + `components/Atlas.tsx`): a
+    hand-rolled **squarified treemap** (zero deps, deterministic) — tile area ∝ churn,
+    brightness = coverage ramp, stale = hatched seam, areas drawn as named provinces;
+    labels degrade with tile size; selection lights, others dim. Replaces the button field.
+  - **Views**: module page (the 16c engineer lens, incl. dark-empty → queue funnel) ·
+    concept page (drawn state machine kept) · **flow ladder** (filled vs dashed-hollow
+    rungs + `n/m linked`) · catalog grouped by area with filter chips · queue with churn
+    bars · **cold start** = all-dark terrain + "0% of active code explained" funnel.
+  - **Identity** (design-dna: *cartographic · instrumental · assured*): one fully dark
+    world (satellite night-map — understanding glows, dark zones recede), phosphor/amber/
+    ember as the only meaning-bearing hues, mono-forward system stacks (still no fetched
+    fonts → offline holds), sharp + hairline throughout.
+  - **Fixed en route:** `typecheck:web` had been silently skipping `test/web` — the root
+    tsconfig's `exclude: ["test/web"]` was inherited by `web/tsconfig.json` and cancelled
+    its `include` — so the web suite was type-unchecked since 16a. Overridden; it checks now.
+  - **Verified**: typecheck + typecheck:web + Biome clean; **229 tests pass** (+10 net: 4
+    moduleDetail, 30 rewritten web render tests asserting the treemap geometry
+    [area ∝ value, in-bounds, no overlap, deterministic], router round-trips, coverage
+    classes, ladder rungs, module-page grouping, cold funnel). Bundle 58.3 KB gzip JS /
+    5.5 KB CSS. Live-verified in headless Edge against a rich mock fixture (atlas,
+    inspector, module/concept/flow/catalog/queue, cold start, 820px narrow) **and against
+    the real `dist/cli.js serve` on this repo** (cold index → real churn terrain + funnel;
+    `/api/module/src%2Fserve` returns live data). All 16c acceptance criteria met.
+
+### 2026-06-27
+
+- **Dashboard redesign — Phase 2 (T16b)** done. Capabilities made discoverable and
+  connected, on the 16a instrument.
+  - **`/api/catalog`** (`src/serve/api.ts` `catalog()` + server route): pure, offline summaries
+    of every concept (state chain) / flow (step coverage) with the modules each touches — the
+    map feed carries only ids, so this is what the cards render from.
+  - **Capability catalog** (`web/src/components/Catalog.tsx`): concept/flow **cards** with a
+    state-chain or coverage-bar preview, a colored status dot, and modules; **filter by area +
+    standing**; cold/empty → an inviting empty state. Replaces the buried area chips as the
+    capability browser.
+  - **Hover-to-connect** (`Connections.tsx` + `derive.modulesForCapability` + MapView
+    `connectionModules`/tile-ref registry): hovering/focusing a card lights the modules it
+    touches on the map and draws **dashed leader lines** from card to tile (client-only overlay
+    reading live rects → renders nothing in SSR; the connection *set* is unit-tested instead).
+    Selecting a map tile reverse-highlights the cards that touch it. Only the focused item's
+    links ever draw — no hairball.
+  - **⌘K command bar** (`CommandBar.tsx`, replaces the inline search box): keyboard-opened
+    overlay over `/api/search`, results grouped into **modules** (jump to the map tile),
+    **capabilities** (→ detail), and **rules/decisions** (context, inert); module names matched
+    locally off the map feed. Esc/scrim to close.
+  - **Verified**: typecheck (CLI+web) + Biome clean; **219 tests pass** (+7 — `catalog()` shape +
+    cold; the connection-set helper; catalog cards/filters/connected/empty; command-bar open/closed;
+    the map connection-highlight). Bundle builds (55 KB gzip JS, 4.2 KB CSS). **Live-previewed** in
+    a real browser against a rich fixture (mock-API server over the built bundle): map, catalog,
+    ⌘K bar, and leader-line connections all confirmed working. All 16b acceptance criteria met.
+
+- **Dashboard redesign — research + Phase 1 (T16a)** done. The shipped T16 map read as
+  *confusing — failing to deliver meaning*: it was a **scholarly document** (abstract, glossary,
+  margin sidenotes, two text-list "columns") when the brief wanted a **rich, at-a-glance
+  instrument**. Diagnosed and re-specced before any code.
+  - **Research memo** ([design/Dashboard.md](design/Dashboard.md)): six concrete failures (the
+    map isn't a map; teaches vocabulary instead of showing the thing; explains Artha not the
+    codebase; computed quantities hidden as 9pt text; register fights the medium; the leadership
+    "where am I flying blind" view never built). Grounded in CodeScene hotspots, the Backstage
+    catalog, and dashboard-design practice (5-second rule, progressive disclosure, visual
+    hierarchy). Proposes a hero **Understanding Map**, capability catalog, drawn state machines,
+    KPI header, engineer lens — same API/data, genre + encoding change only.
+  - **Phased specs**: [16a](tasks-v0.2/16a-dashboard-foundation.md) (foundation, this),
+    [16b](tasks-v0.2/16b-catalog-connections.md), [16c](tasks-v0.2/16c-engineer-lens-polish.md);
+    index + critical path updated. T17 now depends on 16a.
+  - **Design DNA** (design-dna): *instrumental · legible · honest*; reference world an
+    observatory/radar console; **mono-forward** system-font identity (serif dropped); one signal
+    hue (teal) used as data; sharp + hairline; the dark map panel is the single art-directed
+    surface. Fonts stay system stacks → **viewing remains fully offline**.
+  - **Built** (`web/src/`): `derive.ts` (pure KPI + churn/coverage bucketing) · `Kpis` (the four
+    stats: % active code explained [churn-weighted], dark zones, stale, certified) · `HowToRead`
+    (one opt-in panel replacing abstract + glossary + sidenotes) · `MapView` rewritten as the
+    **Understanding Map** — a dark instrument screen of module tiles where **size = churn,
+    brightness = coverage**; understood code glows, dark zones recede, selection lights links ·
+    `StateMachine` (hand-rolled, dependency-free SVG: vertical spine + right-side arcs for
+    branches/loop-backs) wired into `ConceptView` · `DarkZoneQueue` + `Scholar` trimmed to the
+    instrument register · `styles.css` fully rewritten.
+  - **Verified**: typecheck + typecheck:web + Biome clean; **212 tests pass** (web render rewritten
+    to assert the *encoding* — KPI figures, tile size/coverage classes, a node-per-state +
+    edge-per-transition SVG; 19 web tests); bundle builds (53 KB gzip JS, 3.35 KB gzip CSS).
+    Visual QA via headless-Edge screenshots of a rich seeded fixture (map + concept) confirmed the
+    design renders correctly and legibly (caught + fixed a state-machine label collision). All 16a
+    acceptance criteria met (structural; the human legibility run stays gated to T20).
+
 ### 2026-06-24
+
+- **T16 — Product↔Code map + concept/flow detail (UI)** done. The dashboard's
+  centerpiece on the T15 skeleton: an area/module-altitude map, concept & flow detail views,
+  find-a-capability search, and a cold-start ask-queue — all **read-only and offline**.
+  Legibility is the load-bearing requirement (the human run is T20); this ships the structure.
+  - **Map** (`web/src/components/MapView.tsx`): two columns (product areas ↔ code modules) at
+    **area/module altitude — never the symbol graph**. Selecting an area **lights up** the
+    modules it covers (and a module lights up the areas reaching it); unrelated rows dim. Dark
+    zones are visually distinct; concepts/flows in an area are clickable chips that open detail.
+  - **Detail** (`web/src/components/Detail.tsx`): concept view = states + transitions +
+    invariants + governing-rules/why (related), each with `status`, pins shown linked/stale;
+    flow view = entry pins + ordered steps, with a `pin: null` step rendered **"not yet linked"**
+    (the v0.3 coverage seam), never an error. `← map` back nav.
+  - **Search** (`SearchBox.tsx` + debounced container): wires `GET /api/search` into a
+    find-a-capability box; concept/flow hits open detail, other kinds render inert.
+  - **Cold start** (`DarkZoneQueue.tsx`): a mostly-dark map turns into an inviting "explain
+    these" entry into the T13 dark-zone queue (darkest-first) — never a blank/error screen.
+  - **Architecture for testability**: pure presentational components (props in, JSX out, no CSS
+    import) + a thin `App.tsx` container owning fetch + selection/drill-down state (the seam T17
+    write features hook into). The test env is `node`, so **12 rendering tests** assert structure
+    via `react-dom/server` `renderToStaticMarkup` — no jsdom/testing-library added. `test/web` is
+    DOM-typed, so it's excluded from the node root `tsc` and folded into `typecheck:web` instead.
+  - **Legibility/design pass (design-scholarly + design-scene:thesis)**: the bare two-column
+    list was rebuilt as a self-explaining scholarly document — a university-press/journal
+    register chosen because the product's whole premise is a stranger reading the map. Adds an
+    **abstract** (what this is / who it's for / how to read it), a one-line gloss under every
+    heading, and **margin sidenotes that define every term from scratch** (product area, code
+    module, concept, flow, state machine, invariant, pin, stale, dark zone, churn) — no prior
+    knowledge assumed. Text-serif stack + IBM Plex Sans small-caps + mono; one evidence accent
+    (archive blue) for links/data/section numbers; hairline rules, journal-style tables (states,
+    dark zones), status as small-caps text (not pills), dark zones rendered grey/“unexplained”
+    not alarm-red, near-zero motion. All copy centralised in `web/src/copy.ts`; primitives in
+    `components/Scholar.tsx` (Term/sidenote, StatusBadge, SectionHead). Fonts are a **system
+    stack — no font is fetched**, so offline viewing holds. Verified in headless Edge against the
+    seeded demo: map + concept detail render with margin definitions correctly placed (caught &
+    fixed a float-collision bug where a sidenote inside a `<table>` overprinted — sidenotes now
+    live only in flowing prose).
+  - **Verified**: `typecheck` + `typecheck:web` + Biome clean; **207 tests pass** (+14, incl.
+    assertions that the abstract + glossary definitions actually ship in the markup); web bundle
+    builds (52 KB gzip JS, 2.8 KB gzip CSS); live serve smoke against the real `dist/web` bundle —
+    `/` returns the hashed-asset app, cold `/api/map` + `/api/dark-zones` return 200. All 6
+    acceptance criteria met (structural; the human legibility run is gated to T20).
 
 - **T14 — Embedding-assisted ranking** done. Retrieval (MCP `context_for_task` + dashboard
   search) upgraded from lexical-FTS + structural to **+ semantic (embedding) similarity**, so

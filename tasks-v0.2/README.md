@@ -23,8 +23,11 @@ ready.
 | 13 | [Churn + coverage → dark-zone ranking](13-churn-coverage.md) | 12 | per-module churn/coverage health score; ranked dark-zone queue API |
 | 14 | [Embedding-assisted ranking](14-embeddings.md) | 12 | build-time embeddings + vector-assisted retrieval (MCP + dashboard) |
 | 15 | [`artha serve` — server + read API](15-serve-server.md) | 12, 13 | local web server, read endpoints over the index + churn, app skeleton |
-| 16 | [Product↔Code map + concept/flow detail (UI)](16-map-ui.md) | 15 | area-level map, dark-zone markers, detail views, status everywhere |
-| 17 | [Write-back — link, certify, edit YAML](17-write-back.md) | 15 | drag-to-pin, in-browser certify, dashboard edits as git diffs |
+| 16 | [Product↔Code map + concept/flow detail (UI)](16-map-ui.md) | 15 | ~~area-level map, detail views~~ — shipped, but read as *confusing*; UI superseded by the 16a–c redesign (see [Dashboard.md](../design/Dashboard.md)) |
+| 16a | [Dashboard redesign Ph.1 — Understanding Map + KPI header + drawn state machine](16a-dashboard-foundation.md) | 15, 16 | the make-or-break re-skin: churn/coverage encoded visually; KPIs; state machine drawn |
+| 16b | [Dashboard redesign Ph.2 — catalog + connections + command-bar search](16b-catalog-connections.md) | 16a | capability cards, focused product↔code leader-lines, ⌘K search |
+| 16c | [Dashboard redesign Ph.3 — engineer module view + flow ladder + cold-start funnel](16c-engineer-lens-polish.md) | 16a, 16b | the third lens (enter from code), honest flow coverage, cold-start funnel |
+| 17 | [Write-back — link, certify, edit YAML](17-write-back.md) | 15, 16a | drag-to-pin, in-browser certify, dashboard edits as git diffs |
 | 18 | [The "ask the human" loop](18-ask-loop.md) | 13, 17, v0.1 T06 | confidence-scored drafts + LLM-guided interview + manual free-capture |
 | 19 | [Contradiction preview panel](19-contradiction-preview.md) | 12, 16 | read-only §6.1 deterministic conflicting-facts findings |
 | 20 | [v0.2 success test — non-author reads the map](20-success-test.md) | 16, 17, 18 | repeatable protocol + harness for the legibility proof |
@@ -44,7 +47,17 @@ v0.1 T05 build  ───────────────────┴ 12 
                                                                           20 success test (16,17,18)
 ```
 
-**Critical path:** 11 → 12 → 15 → 16/17 → 18 → 20. Tasks 13, 14, 19 parallelize off it.
+**Critical path:** 11 → 12 → 15 → 16a → 16b/16c · 17 → 18 → 20. Tasks 13, 14, 19 parallelize
+off it. The original T16 shipped but read as confusing; the **16a–16c redesign** (rationale +
+target design in [Dashboard.md](../design/Dashboard.md)) is now load-bearing for the T20
+legibility proof — **16a is the make-or-break demo**.
+
+> **Update 2026-07-04:** 16a–16c are done.
+> The 16a/16b page layout was reviewed a second time and rebuilt as the **full-screen atlas
+> shell** (treemap atlas + hash routes + navigator/inspector; see
+> [Dashboard.md §11](../design/Dashboard.md)), and 16c's engineer lens shipped inside it as
+> the module page over a new `/api/module/:id`.
+> T17 write-back and T18 ask-loop now hook into the shell's routes and inspector.
 
 ## Suggested source layout (shared contract across tasks)
 

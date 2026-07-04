@@ -8,8 +8,8 @@ import { rankFacts } from '../mcp/rank';
 
 /**
  * The read API the dashboard renders (T16/17/19 build against these shapes).
- * Every function here is **pure over a read-only index** (+ git for churn) — no
- * mutation, no network — so the whole viewing surface stays offline.
+ * Every function here is **pure over a read-only index** (+ git for churn) - no
+ * mutation, no network - so the whole viewing surface stays offline.
  */
 
 // ── /api/map ──────────────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ export interface MapArea {
 export interface MapFeed {
   areas: MapArea[];
   modules: MapModule[];
-  /** True when nothing is certified yet — the intended mostly-dark cold start. */
+  /** True when nothing is certified yet - the intended mostly-dark cold start. */
   cold: boolean;
 }
 
@@ -52,7 +52,7 @@ export interface AreaDef {
 
 /**
  * OQ5 (developer-chosen 2026-06-24: **top-level folders, with a config seam**).
- * Default — one area per top-level module, so the map's product column is
+ * Default - one area per top-level module, so the map's product column is
  * populated from day one (before any concepts exist). When `config.areas` is
  * declared, those named areas group modules and any leftover module keeps its
  * own area (nothing is hidden). Isolated here so the definition stays swappable.
@@ -78,7 +78,7 @@ export function areasOf(modules: string[], config: ArthaConfig): AreaDef[] {
 }
 
 /**
- * The Product↔Code map feed at **area/module altitude** (SPEC §B) — never the
+ * The Product↔Code map feed at **area/module altitude** (SPEC §B) - never the
  * per-symbol graph. Modules carry dark-zone flags + churn/coverage (T13); areas
  * (OQ5) group modules and list the concepts/flows that pin into them.
  */
@@ -224,6 +224,74 @@ export function flowDetail(index: ArthaIndex, id: string, config: ArthaConfig): 
   };
 }
 
+// ── /api/catalog ──────────────────────────────────────────────────────────────
+
+/** A concept summarised for the catalog card - its state chain, not its full machine. */
+export interface CatalogConcept {
+  id: string;
+  name: string | null;
+  status: string;
+  modules: string[];
+  /** Ordered state names, for the card's state-chain preview. */
+  states: string[];
+}
+
+/** A flow summarised for the catalog card - its step spine + coverage. */
+export interface CatalogFlow {
+  id: string;
+  name: string | null;
+  status: string;
+  modules: string[];
+  steps: number;
+  /** Steps with a resolved pin (the rest are "not yet linked"). */
+  linked: number;
+}
+
+export interface Catalog {
+  concepts: CatalogConcept[];
+  flows: CatalogFlow[];
+}
+
+/**
+ * Lightweight summaries of every concept/flow for the dashboard catalog - name,
+ * status, the modules each touches, and a glanceable preview (a concept's state
+ * chain, a flow's step coverage). Pure over the index; the map feed carries only
+ * ids, so this is the read contract the catalog cards render from.
+ */
+export function catalog(index: ArthaIndex, config: ArthaConfig): Catalog {
+  const roots = config.sourceRoots;
+  const concepts: CatalogConcept[] = index.facts
+    .filter((f) => f.kind === 'concept')
+    .map((f) => ({
+      id: f.id,
+      name: f.heading,
+      status: f.status,
+      modules: modulesOf(index, f.id, roots),
+      states: index.states
+        .filter((s) => s.fact_id === f.id)
+        .sort((a, b) => a.ord - b.ord)
+        .map((s) => s.name),
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  const flows: CatalogFlow[] = index.facts
+    .filter((f) => f.kind === 'flow')
+    .map((f) => {
+      const steps = index.flowSteps.filter((s) => s.fact_id === f.id);
+      return {
+        id: f.id,
+        name: f.heading,
+        status: f.status,
+        modules: modulesOf(index, f.id, roots),
+        steps: steps.length,
+        linked: steps.filter((s) => s.pin_symbol_ref !== null).length,
+      };
+    })
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  return { concepts, flows };
+}
+
 // ── /api/dark-zones ───────────────────────────────────────────────────────────
 
 export function darkZonesFeed(
@@ -232,6 +300,117 @@ export function darkZonesFeed(
   config: ArthaConfig,
 ): RankedModule[] {
   return darkZones(repoRoot, index, config);
+}
+
+// ── /api/module/:id ───────────────────────────────────────────────────────────
+
+/** One fact as it touches a module: what it is, its standing, and the join. */
+export interface ModuleFact {
+  id: string;
+  kind: string;
+  name: string | null;
+  status: string;
+  /** The rule / decision / summary text - what the fact actually says. */
+  body: string | null;
+  /** Pinned symbols that land inside this module. */
+  symbols: string[];
+  /** Count of those pins whose code has drifted. */
+  stalePins: number;
+  /** True when the fact reaches the module via a scope glob (not a pin). */
+  viaScope: boolean;
+}
+
+/**
+ * The engineer lens (16c): everything certified/proposed that governs one code
+ * module. `capabilities` are the concepts/flows built on it; `rules` the
+ * invariants + conventions in scope; `decisions` the *why*. Stats echo the
+ * dark-zone ranking so the view can say how dark the module is and where it
+ * sits in the ask queue.
+ */
+export interface ModuleDetail {
+  module: string;
+  /** Named areas containing this module (config.areas), else itself. */
+  areas: string[];
+  dark: boolean;
+  churn: number;
+  score: number;
+  certifiedFacts: number;
+  staleFacts: number;
+  /** 1-based position in the dark-zone queue; null when not ranked. */
+  queueRank: number | null;
+  concepts: ModuleFact[];
+  flows: ModuleFact[];
+  rules: ModuleFact[];
+  decisions: ModuleFact[];
+}
+
+export function moduleDetail(
+  repoRoot: string,
+  index: ArthaIndex,
+  config: ArthaConfig,
+  module: string,
+): ModuleDetail | null {
+  const ranked = darkZones(repoRoot, index, config);
+  const universe = moduleUniverse(repoRoot, index, config);
+  for (const r of ranked) universe.add(r.module);
+  if (!universe.has(module)) return null;
+
+  const roots = config.sourceRoots;
+  const facts: ModuleFact[] = [];
+  for (const f of index.facts) {
+    const symbols: string[] = [];
+    let stalePins = 0;
+    for (const p of index.pins) {
+      if (p.fact_id !== f.id) continue;
+      if (moduleOf(p.symbol_ref.split('#')[0] ?? '', roots) !== module) continue;
+      symbols.push(p.symbol_ref);
+      if (p.is_stale === 1) stalePins += 1;
+    }
+    const viaScope = index.scopeFiles.some(
+      (s) => s.fact_id === f.id && moduleOf(s.file_path, roots) === module,
+    );
+    if (symbols.length === 0 && !viaScope) continue;
+    facts.push({
+      id: f.id,
+      kind: f.kind,
+      name: f.heading,
+      status: f.status,
+      body: f.body,
+      symbols: symbols.sort(),
+      stalePins,
+      viaScope,
+    });
+  }
+  facts.sort((a, b) => statusWeight(b.status) - statusWeight(a.status) || a.id.localeCompare(b.id));
+
+  const rank = ranked.findIndex((r) => r.module === module);
+  const stats = rank >= 0 ? ranked[rank] : null;
+  const declared = Object.entries(config.areas ?? {})
+    .filter(([, mods]) => mods.includes(module))
+    .map(([area]) => area);
+
+  return {
+    module,
+    areas: declared.length > 0 ? declared.sort() : [module],
+    dark: (stats?.certifiedFacts ?? 0) === 0,
+    churn: stats?.churn ?? 0,
+    score: stats?.score ?? 0,
+    certifiedFacts: stats?.certifiedFacts ?? 0,
+    staleFacts: stats?.staleFacts ?? 0,
+    queueRank: rank >= 0 ? rank + 1 : null,
+    concepts: facts.filter((f) => f.kind === 'concept'),
+    flows: facts.filter((f) => f.kind === 'flow'),
+    rules: facts.filter((f) => f.kind === 'invariant' || f.kind === 'convention'),
+    decisions: facts.filter((f) => f.kind === 'decision'),
+  };
+}
+
+/** Certified first, then proposed, then stale - trust order for listing. */
+function statusWeight(status: string): number {
+  if (status === 'certified') return 3;
+  if (status === 'proposed') return 2;
+  if (status === 'stale') return 1;
+  return 0;
 }
 
 // ── /api/search?q= ────────────────────────────────────────────────────────────
@@ -245,7 +424,7 @@ export interface SearchHit {
 }
 
 /**
- * Dashboard search box — the **same `rankFacts` blend** the MCP server uses
+ * Dashboard search box - the **same `rankFacts` blend** the MCP server uses
  * (FTS lexical + structural + semantic × status), so search and agent retrieval
  * agree. Includes `proposed` drafts (the dashboard surfaces them); `stale` is
  * excluded as untrusted. `queryEmbedding` (model-matched, embedded by the server)

@@ -5,14 +5,22 @@ import { fileURLToPath } from 'node:url';
 import type { ArthaConfig } from '../config/config';
 import { type Embedder, embedQueryForIndex, getEmbedder } from '../embed/embedder';
 import { openArthaIndex } from '../mcp/query';
-import { conceptDetail, darkZonesFeed, flowDetail, mapFeed, search } from './api';
+import {
+  catalog,
+  conceptDetail,
+  darkZonesFeed,
+  flowDetail,
+  mapFeed,
+  moduleDetail,
+  search,
+} from './api';
 
 export interface ServeOptions {
   repoRoot: string;
   config: ArthaConfig;
   /** Port to bind (default 4123). `0` picks an ephemeral free port (tests). */
   port?: number;
-  /** Interface to bind. Default `127.0.0.1` — local-first, never `0.0.0.0`. */
+  /** Interface to bind. Default `127.0.0.1` - local-first, never `0.0.0.0`. */
   host?: string;
   /** Override the built frontend dir (default `<pkg>/dist/web`). */
   webDir?: string;
@@ -94,6 +102,10 @@ async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void>
       sendJson(res, 200, darkZonesFeed(ctx.repoRoot, index, ctx.config));
       return;
     }
+    if (path === '/api/catalog') {
+      sendJson(res, 200, catalog(index, ctx.config));
+      return;
+    }
     if (path === '/api/search') {
       const q = url.searchParams.get('q') ?? '';
       // Embed the query offline for semantic search (best-effort, model-matched).
@@ -113,6 +125,12 @@ async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void>
       detail ? sendJson(res, 200, detail) : sendJson(res, 404, { error: `no flow ${flow}` });
       return;
     }
+    const module = matchModule(path);
+    if (module) {
+      const detail = moduleDetail(ctx.repoRoot, index, ctx.config, module);
+      detail ? sendJson(res, 200, detail) : sendJson(res, 404, { error: `no module ${module}` });
+      return;
+    }
     sendJson(res, 404, { error: `no such endpoint: ${path}` });
   } finally {
     index.close();
@@ -125,7 +143,7 @@ function handleStatic(url: URL, res: ServerResponse, ctx: Ctx): void {
   const root = resolve(ctx.webDir);
   const rel =
     url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
-  // Resolve against root and require the result to stay inside it — `resolve`
+  // Resolve against root and require the result to stay inside it - `resolve`
   // normalizes separators on both sides, so any `..` escape is caught here.
   const file = resolve(root, rel);
   if (file !== root && !file.startsWith(root + sep)) {
@@ -172,6 +190,15 @@ function matchId(path: string, prefix: string): string | null {
   if (!path.startsWith(prefix)) return null;
   const id = decodeURIComponent(path.slice(prefix.length));
   return id.length > 0 && !id.includes('/') ? id : null;
+}
+
+/** Module ids contain slashes (`src/billing`) - encoded or literal - so this
+ * matcher allows them while still rejecting empties and path escapes. */
+function matchModule(path: string): string | null {
+  const prefix = '/api/module/';
+  if (!path.startsWith(prefix)) return null;
+  const id = decodeURIComponent(path.slice(prefix.length));
+  return id.length > 0 && !id.split('/').some((seg) => seg === '' || seg === '..') ? id : null;
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {

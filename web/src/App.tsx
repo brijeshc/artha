@@ -1,87 +1,304 @@
-import { useEffect, useState } from 'react';
-import { type MapFeed, getMap } from './api';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type Catalog as CatalogData,
+  type ConceptDetail,
+  type FlowDetail,
+  type MapFeed,
+  type ModuleDetail,
+  type ModuleFact,
+  type RankedModule,
+  getCatalog,
+  getConcept,
+  getDarkZones,
+  getFlow,
+  getMap,
+  getModule,
+} from './api';
+import { AtlasViewport } from './components/Atlas';
+import { ConceptPage, FlowPage } from './components/CapabilityPages';
+import { CatalogPage } from './components/CatalogPage';
+import { CommandBar } from './components/CommandBar';
+import { Inspector } from './components/Inspector';
+import { ModulePage } from './components/ModulePage';
+import { Navigator } from './components/Navigator';
+import { QueuePage } from './components/QueuePage';
+import { type Crumb, TopBar } from './components/TopBar';
+import { MISC, NAV, WORDMARK } from './copy';
+import {
+  type CapabilityEntry,
+  areaStats,
+  capabilitiesByArea,
+  capabilityEntries,
+  capabilityNames,
+  kpis,
+  shortName,
+} from './derive';
+import { type Route, navigate, parseRoute, routeHref } from './router';
 
 /**
- * The dashboard skeleton (T15): fetches the area/module map feed and renders the
- * two columns + dark-zone markers, proving the API↔UI pipeline. The real
- * Product↔Code map, concept/flow detail, drag-to-link, and panels land in T16+.
+ * The shell: a full-screen instrument - top bar, navigator, canvas, inspector -
+ * over the read API. Every view and even the atlas *selection* lives in the
+ * URL hash, so the whole knowledge base deep-links and the back button always
+ * retraces your path. Read-only and offline; write-back (T17) and the ask loop
+ * (T18) hook into the same routes.
  */
 export function App(): JSX.Element {
+  const [route, setRoute] = useState<Route>(() =>
+    typeof window === 'undefined' ? { view: 'atlas' } : parseRoute(window.location.hash),
+  );
   const [map, setMap] = useState<MapFeed | null>(null);
+  const [zones, setZones] = useState<RankedModule[]>([]);
+  const [catalog, setCatalog] = useState<CatalogData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cmdkOpen, setCmdkOpen] = useState(false);
+
+  // Per-id detail caches - a local server answers in ~1ms, but caching keeps
+  // back/forward instant and avoids refetch loops on selection changes.
+  const [moduleDetails, setModuleDetails] = useState<Map<string, ModuleDetail | null>>(new Map());
+  const [conceptDetail, setConceptDetail] = useState<ConceptDetail | null>(null);
+  const [flowDetail, setFlowDetail] = useState<FlowDetail | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onHash = () => setRoute(parseRoute(window.location.hash));
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   useEffect(() => {
     getMap()
       .then(setMap)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => setError(errMsg(e)));
+    getDarkZones()
+      .then(setZones)
+      .catch(() => setZones([]));
+    getCatalog()
+      .then(setCatalog)
+      .catch(() => setCatalog({ concepts: [], flows: [] }));
   }, []);
+
+  // ⌘K / Ctrl-K toggles the command bar; Esc closes it, else clears selection.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCmdkOpen((o) => !o);
+      } else if (e.key === 'Escape') {
+        setCmdkOpen((open) => {
+          if (!open) {
+            const r = parseRoute(window.location.hash);
+            if (r.view === 'atlas' && (r.area || r.module)) navigate({ view: 'atlas' });
+          }
+          return false;
+        });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // The module the UI is inspecting (atlas selection) or reading (module page).
+  const neededModule =
+    route.view === 'module' ? route.id : route.view === 'atlas' ? (route.module ?? null) : null;
+
+  useEffect(() => {
+    if (!neededModule || moduleDetails.has(neededModule)) return;
+    getModule(neededModule)
+      .then((d) => setModuleDetails((prev) => new Map(prev).set(neededModule, d)))
+      .catch(() => setModuleDetails((prev) => new Map(prev).set(neededModule, null)));
+  }, [neededModule, moduleDetails]);
+
+  const capabilityRoute =
+    route.view === 'concept' || route.view === 'flow' ? { kind: route.view, id: route.id } : null;
+  const capabilityKey = capabilityRoute ? `${capabilityRoute.kind}:${capabilityRoute.id}` : null;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: capabilityKey is the identity of capabilityRoute
+  useEffect(() => {
+    setDetailError(null);
+    if (!capabilityRoute) return;
+    if (capabilityRoute.kind === 'concept') {
+      setConceptDetail(null);
+      getConcept(capabilityRoute.id)
+        .then(setConceptDetail)
+        .catch((e: unknown) => setDetailError(errMsg(e)));
+    } else {
+      setFlowDetail(null);
+      getFlow(capabilityRoute.id)
+        .then(setFlowDetail)
+        .catch((e: unknown) => setDetailError(errMsg(e)));
+    }
+  }, [capabilityKey]);
+
+  const onGo = useCallback((r: Route) => {
+    setCmdkOpen(false);
+    navigate(r);
+  }, []);
+
+  const names = useMemo(
+    () => (catalog ? capabilityNames(catalog) : new Map<string, string>()),
+    [catalog],
+  );
+  const entries = useMemo(() => (catalog ? capabilityEntries(catalog) : []), [catalog]);
+  const entryById = useMemo(() => new Map(entries.map((e) => [e.ref.id, e])), [entries]);
+  const capabilityOf = useCallback(
+    (fact: ModuleFact): CapabilityEntry | null => entryById.get(fact.id) ?? null,
+    [entryById],
+  );
 
   if (error) {
     return (
-      <main className="wrap">
-        <h1>Artha</h1>
-        <p className="err">{error}</p>
-      </main>
+      <div className="boot">
+        <p className="wordmark">{WORDMARK}</p>
+        <p className="boot-error">Could not read the index: {error}</p>
+        <p className="boot-hint mono">artha build && artha serve</p>
+      </div>
     );
   }
-  if (!map) {
+  if (!map || !catalog) {
     return (
-      <main className="wrap">
-        <h1>Artha</h1>
-        <p>Loading…</p>
-      </main>
+      <div className="boot">
+        <p className="wordmark">{WORDMARK}</p>
+        <p className="boot-loading">{MISC.loading}</p>
+      </div>
     );
   }
+
+  const stats = areaStats(map);
+  const selectedArea = route.view === 'atlas' ? (route.area ?? null) : null;
+  const selectedModule = route.view === 'atlas' ? (route.module ?? null) : null;
+
+  const inspector = (() => {
+    if (route.view !== 'atlas') return null;
+    if (selectedModule) {
+      return (
+        <Inspector
+          content={{
+            kind: 'module',
+            module: selectedModule,
+            mapModule: map.modules.find((m) => m.module === selectedModule) ?? null,
+            detail: moduleDetails.get(selectedModule) ?? null,
+          }}
+        />
+      );
+    }
+    if (selectedArea) {
+      const stat = stats.find((s) => s.area.area === selectedArea);
+      if (!stat) return null;
+      const group = capabilitiesByArea(catalog, map.areas).find(
+        (g) => g.area?.area === selectedArea,
+      );
+      return <Inspector content={{ kind: 'area', stat, entries: group?.entries ?? [] }} />;
+    }
+    return null;
+  })();
+
+  const canvas = (() => {
+    switch (route.view) {
+      case 'atlas':
+        return (
+          <AtlasViewport
+            feed={map}
+            selectedArea={selectedArea}
+            selectedModule={selectedModule}
+            zones={zones}
+          />
+        );
+      case 'capabilities':
+        return <CatalogPage catalog={catalog} feed={map} />;
+      case 'queue':
+        return <QueuePage zones={zones} cold={map.cold} />;
+      case 'module': {
+        const detail = moduleDetails.get(route.id);
+        if (detail === null) return <NotFound label={route.id} />;
+        if (!detail) return <Loading />;
+        return <ModulePage detail={detail} capabilityOf={capabilityOf} />;
+      }
+      case 'concept':
+        if (detailError) return <NotFound label={route.id} note={detailError} />;
+        if (!conceptDetail) return <Loading />;
+        return <ConceptPage detail={conceptDetail} names={names} />;
+      case 'flow':
+        if (detailError) return <NotFound label={route.id} note={detailError} />;
+        if (!flowDetail) return <Loading />;
+        return <FlowPage detail={flowDetail} names={names} />;
+    }
+  })();
 
   return (
-    <main className="wrap">
-      <header>
-        <h1>
-          Artha — Product<span className="link-arrow">↔</span>Code map
-        </h1>
-        <p className="sub">
-          Area / module altitude ·{' '}
-          {map.cold ? 'cold start — nothing certified yet' : `${map.modules.length} modules`}
-        </p>
-      </header>
-
-      {map.cold && (
-        <p className="banner">
-          Most of the map is dark: nobody has explained this code yet. That’s the signal, not an
-          error — work the dark-zone queue to light it up.
-        </p>
-      )}
-
-      <section className="cols">
-        <div className="col">
-          <h2>Product areas</h2>
-          <ul className="list">
-            {map.areas.map((a) => (
-              <li key={a.area} className={a.dark ? 'item dark' : 'item'}>
-                <span className="name">{a.area}</span>
-                <span className="meta">
-                  {a.concepts.length} concepts · {a.flows.length} flows
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="col">
-          <h2>Code modules</h2>
-          <ul className="list">
-            {map.modules.map((m) => (
-              <li key={m.module} className={m.dark ? 'item dark' : 'item'}>
-                <span className="name">{m.module}</span>
-                <span className="meta">
-                  {m.dark ? 'dark zone' : `${m.certifiedFacts} certified`}
-                  {m.staleFacts > 0 ? ` · ${m.staleFacts} stale` : ''} · churn {m.churn}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-    </main>
+    <div className="shell">
+      <TopBar crumbs={crumbs(route, names)} kpis={kpis(map)} onOpenCmdk={() => setCmdkOpen(true)} />
+      <div className="shell-body">
+        <Navigator
+          route={route}
+          feed={map}
+          catalog={catalog}
+          stats={stats}
+          zoneCount={darkCount(map)}
+        />
+        <main className={inspector ? 'canvas with-inspector' : 'canvas'}>{canvas}</main>
+        {inspector}
+      </div>
+      <CommandBar open={cmdkOpen} feed={map} onClose={() => setCmdkOpen(false)} onGo={onGo} />
+    </div>
   );
+}
+
+function crumbs(route: Route, names: Map<string, string>): Crumb[] {
+  switch (route.view) {
+    case 'atlas': {
+      const out: Crumb[] = [
+        { label: NAV.atlas, href: route.area || route.module ? '#/' : undefined },
+      ];
+      if (route.area) out.push({ label: route.area });
+      if (route.module) out.push({ label: route.module, mono: true });
+      return out;
+    }
+    case 'capabilities':
+      return [{ label: NAV.capabilities }];
+    case 'queue':
+      return [{ label: NAV.queue }];
+    case 'module':
+      return [
+        { label: NAV.atlas, href: '#/' },
+        { label: route.id, mono: true },
+      ];
+    case 'concept':
+    case 'flow':
+      return [
+        { label: NAV.capabilities, href: '#/capabilities' },
+        { label: names.get(route.id) ?? route.id },
+      ];
+  }
+}
+
+function darkCount(map: MapFeed): number {
+  return map.modules.filter((m) => m.dark && m.churn > 0).length;
+}
+
+function Loading(): JSX.Element {
+  return (
+    <div className="page">
+      <p className="boot-loading">{MISC.loading}</p>
+    </div>
+  );
+}
+
+function NotFound({ label, note }: { label: string; note?: string }): JSX.Element {
+  return (
+    <div className="page">
+      <p className="empty-note">
+        {MISC.notFound} <span className="mono">{label}</span>
+        {note ? ` - ${note}` : ''}
+      </p>
+      <p>
+        <a className="inspector-cta" href="#/">
+          ← {MISC.backToAtlas}
+        </a>
+      </p>
+    </div>
+  );
+}
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }

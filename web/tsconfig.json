@@ -5,5 +5,10 @@
     "types": [],
     "noEmit": true
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "../test/web"],
+  // The base config's `exclude` lists "test/web" (kept out of the node-only
+  // root check); inherited here it resolves to the same folder and silently
+  // dropped `../test/web` from this check too. Override so the web tests are
+  // actually typechecked by `typecheck:web`.
+  "exclude": ["../node_modules"]
 }
