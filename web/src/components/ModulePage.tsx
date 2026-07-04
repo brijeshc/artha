@@ -3,6 +3,7 @@ import { MODULE_PAGE } from '../copy';
 import { type CapabilityEntry, shortName } from '../derive';
 import { routeHref } from '../router';
 import { CapCard } from './CapCard';
+import { CertifyButton, type Curation } from './Curate';
 import { KindTag, SectionHead, StatusBadge } from './Status';
 
 /**
@@ -15,10 +16,12 @@ import { KindTag, SectionHead, StatusBadge } from './Status';
 export function ModulePage({
   detail,
   capabilityOf,
+  curation,
 }: {
   detail: ModuleDetail;
   /** Resolve a concept/flow ModuleFact into a card entry (from the catalog). */
   capabilityOf: (fact: ModuleFact) => CapabilityEntry | null;
+  curation: Curation;
 }): JSX.Element {
   const caps = [...detail.concepts, ...detail.flows];
   const bucketWord =
@@ -95,7 +98,7 @@ export function ModulePage({
               />
               <ul className="rule-list">
                 {detail.rules.map((f) => (
-                  <RuleItem key={f.id} fact={f} />
+                  <RuleItem key={f.id} fact={f} curation={curation} />
                 ))}
               </ul>
             </section>
@@ -112,7 +115,7 @@ export function ModulePage({
               />
               <ul className="rule-list">
                 {detail.decisions.map((f) => (
-                  <RuleItem key={f.id} fact={f} />
+                  <RuleItem key={f.id} fact={f} curation={curation} />
                 ))}
               </ul>
             </section>
@@ -123,14 +126,16 @@ export function ModulePage({
   );
 }
 
-/** A rule/decision with its full text and the exact symbols it pins here. */
-function RuleItem({ fact }: { fact: ModuleFact }): JSX.Element {
+/** A rule/decision with its full text, the symbols it pins here, and - when it
+ * isn't certified yet - the engineer-lens certify action. */
+function RuleItem({ fact, curation }: { fact: ModuleFact; curation: Curation }): JSX.Element {
   return (
     <li className="rule-item">
       <div className="rule-head">
         <KindTag kind={fact.kind} />
         <span className="rule-name">{fact.name ?? fact.id}</span>
         <StatusBadge status={fact.status} />
+        <CertifyButton id={fact.id} status={fact.status} curation={curation} />
       </div>
       {fact.body && <p className="rule-body">{fact.body}</p>}
       <div className="rule-joins">

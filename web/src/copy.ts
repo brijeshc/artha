@@ -104,6 +104,28 @@ export const DETAIL = {
   noPins: 'No code has been linked yet.',
 } as const;
 
+/** Curation actions (T17) - the words on the certify / link / edit controls. */
+export const CURATE = {
+  certify: 'Certify',
+  certifying: 'Certifying…',
+  certifyHint: 'Vouch for this meaning - stamps it certified and lights the module on the atlas.',
+  edit: 'Edit',
+  editNote: 'Saving returns this to proposed - certify again to re-vouch.',
+  save: 'Save',
+  saving: 'Saving…',
+  cancel: 'Cancel',
+  nameLabel: 'Name',
+  summaryLabel: 'Summary',
+  link: 'Link code',
+  linkLabel: 'Search your code for a symbol to link',
+  linkPlaceholder: 'type a class, function, or file name…',
+  searching: 'searching your code…',
+  noSymbols: 'No symbol matches - try a class, function, or file name.',
+  linking: 'Linking…',
+  pickerKeys: '↑↓ pick · enter links · esc closes',
+  openModuleHint: 'Open the module this code lives in',
+} as const;
+
 export const MISC = {
   loading: 'reading the index…',
   notFound: 'Nothing at this address.',
@@ -111,3 +133,11 @@ export const MISC = {
   searchPlaceholder: 'Find a capability, module, or rule…',
   searchHint: 'Type to search meaning - capabilities open, modules focus the atlas.',
 } as const;
+
+/** The search shortcut as this platform actually spells it. The handler accepts
+ * both ⌘K and Ctrl-K; the label must not show a Mac glyph to a Windows reader.
+ * (SSR render tests see Node's navigator and settle on the Ctrl spelling.) */
+export const SEARCH_KEY: string =
+  typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? '')
+    ? '⌘K'
+    : 'Ctrl K';

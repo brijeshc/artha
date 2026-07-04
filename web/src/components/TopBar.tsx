@@ -1,4 +1,4 @@
-import { WORDMARK } from '../copy';
+import { SEARCH_KEY, WORDMARK } from '../copy';
 import type { Kpi } from '../derive';
 
 /**
@@ -60,7 +60,7 @@ export function TopBar({
         </dl>
         <button type="button" className="cmdk-trigger" onClick={onOpenCmdk}>
           <span className="cmdk-trigger-text">Search</span>
-          <kbd>⌘K</kbd>
+          <kbd>{SEARCH_KEY}</kbd>
         </button>
       </div>
     </header>

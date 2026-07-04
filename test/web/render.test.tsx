@@ -25,6 +25,7 @@ import {
   capabilityEntries,
   coverageBucket,
   kpis,
+  moduleOfPath,
   shortName,
 } from '../../web/src/derive';
 import { parseRoute, routeHref } from '../../web/src/router';
@@ -37,6 +38,14 @@ import { treemap } from '../../web/src/treemap';
 // linked/hollow rungs, the module page's fact grouping.
 
 const noop = () => {};
+
+// Curation is exercised at the server/write layer; here the pages only need a
+// no-op so the presentational structure (the affordances) renders.
+const noopCuration = {
+  certify: async () => {},
+  link: async () => {},
+  edit: async () => {},
+};
 
 function markup(el: JSX.Element): string {
   return renderToStaticMarkup(el);
@@ -265,6 +274,14 @@ describe('derive', () => {
     expect(shortName('src/billing')).toBe('billing');
     expect(shortName('lib')).toBe('lib');
   });
+
+  it('resolves a pinned path to its owning module (longest prefix wins)', () => {
+    expect(moduleOfPath('src/billing/refund.ts', ['src', 'src/billing'])).toBe('src/billing');
+    expect(moduleOfPath('src/billing', ['src/billing'])).toBe('src/billing');
+    // `src/billing-x` must not match `src/billing` (prefix ends at a separator)
+    expect(moduleOfPath('src/billing-x/a.ts', ['src/billing'])).toBeNull();
+    expect(moduleOfPath('lib/util.ts', ['src/billing'])).toBeNull();
+  });
 });
 
 // ── atlas rendering ──────────────────────────────────────────────────────────
@@ -337,7 +354,8 @@ describe('TopBar', () => {
     expect(html).toContain('src/billing');
     expect(html).toContain('71%');
     expect(html).toContain('dark zones');
-    expect(html).toContain('⌘K');
+    // platform-spelled shortcut: ⌘K on a Mac, Ctrl K everywhere else
+    expect(html).toMatch(/⌘K|Ctrl K/);
   });
 });
 
@@ -484,7 +502,9 @@ describe('ModulePage (engineer lens, 16c)', () => {
     capabilityEntries(catalog).find((e) => e.ref.id === f.id) ?? null;
 
   it('groups capabilities, rules (with their text), and the why', () => {
-    const html = markup(<ModulePage detail={detail} capabilityOf={capabilityOf} />);
+    const html = markup(
+      <ModulePage detail={detail} capabilityOf={capabilityOf} curation={noopCuration} />,
+    );
     expect(html).toContain('Built on this module');
     expect(html).toContain('Invoice');
     expect(html).toContain('Rules in scope');
@@ -508,7 +528,9 @@ describe('ModulePage (engineer lens, 16c)', () => {
       rules: [],
       decisions: [],
     };
-    const html = markup(<ModulePage detail={darkDetail} capabilityOf={capabilityOf} />);
+    const html = markup(
+      <ModulePage detail={darkDetail} capabilityOf={capabilityOf} curation={noopCuration} />,
+    );
     expect(html).toContain('dark zone');
     expect(html).toContain('#/queue');
     expect(html).toContain('#1'); // its queue position
@@ -543,7 +565,11 @@ describe('ConceptPage', () => {
 
   it('draws the machine (node per state, edge per transition) plus the table', () => {
     const html = markup(
-      <ConceptPage detail={detail} names={new Map([['flow.refund', 'Refund a purchase']])} />,
+      <ConceptPage
+        detail={detail}
+        names={new Map([['flow.refund', 'Refund a purchase']])}
+        curation={noopCuration}
+      />,
     );
     expect(count(html, /sm-node-box/g)).toBe(3);
     expect(count(html, /class="sm-edge /g)).toBe(3); // one <g> per transition
@@ -554,6 +580,13 @@ describe('ConceptPage', () => {
     expect(html).toContain('Refund a purchase');
     expect(html).toContain('decision.no_float_money');
     expect(html).toContain('certified by brijesh');
+  });
+
+  it('links each pin to the module that owns the code (the engineer lens)', () => {
+    const html = markup(<ConceptPage detail={detail} names={new Map()} curation={noopCuration} />);
+    expect(html).toContain(
+      `class="pin-link" href="${routeHref({ view: 'module', id: 'src/billing' })}"`,
+    );
   });
 });
 
@@ -587,7 +620,7 @@ describe('FlowPage', () => {
   };
 
   it('renders the ladder with linked and hollow rungs and the coverage count', () => {
-    const html = markup(<FlowPage detail={detail} names={new Map()} />);
+    const html = markup(<FlowPage detail={detail} names={new Map()} curation={noopCuration} />);
     expect(html).toContain('1/2 linked');
     expect(count(html, /class="rung linked"/g)).toBe(1);
     expect(count(html, /class="rung"/g)).toBe(1); // the not-yet-linked rung
@@ -595,6 +628,121 @@ describe('FlowPage', () => {
     expect(html).toContain('Entry points');
     expect(html).toContain('on customer asks');
     expect(html).not.toContain('error');
+  });
+
+  it('entry and step pins link to their module page', () => {
+    const html = markup(<FlowPage detail={detail} names={new Map()} curation={noopCuration} />);
+    const href = routeHref({ view: 'module', id: 'src/refunds' });
+    // the entry pin and the one linked step both resolve to src/refunds
+    // (the header's module chip also links there, so count pin-links only)
+    expect(
+      count(
+        html,
+        new RegExp(`class="pin-link" href="${href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'g'),
+      ),
+    ).toBe(2);
+  });
+});
+
+describe('curation affordances (T17)', () => {
+  const concept = (status: string): ConceptDetail => ({
+    id: 'concept.checkout',
+    kind: 'concept',
+    name: 'Checkout',
+    summary: 'Cart to a paid order.',
+    status,
+    certifiedBy: status === 'certified' ? 'ada' : null,
+    certifiedAt: status === 'certified' ? '2026-06-01' : null,
+    states: [],
+    transitions: [],
+    pins: [],
+    related: [],
+    modules: [],
+  });
+
+  it('a proposed capability offers certify, link, and edit', () => {
+    const html = markup(
+      <ConceptPage detail={concept('proposed')} names={new Map()} curation={noopCuration} />,
+    );
+    expect(count(html, /btn-certify/g)).toBeGreaterThanOrEqual(1);
+    expect(html).toContain('Certify');
+    expect(html).toContain('Link code'); // the drag-to-pin affordance
+    expect(html).toContain('Edit');
+  });
+
+  it('a certified capability hides certify but still allows link + edit', () => {
+    const html = markup(
+      <ConceptPage detail={concept('certified')} names={new Map()} curation={noopCuration} />,
+    );
+    // the "Certify" button is gone once certified…
+    expect(count(html, /class="btn btn-certify"/g)).toBe(0);
+    // …but you can still link more code and edit
+    expect(html).toContain('Link code');
+    expect(html).toContain('Edit');
+  });
+
+  it('a flow always exposes an entry-point link surface, even with no pins', () => {
+    const emptyFlow: FlowDetail = {
+      id: 'flow.onboarding',
+      kind: 'flow',
+      name: 'Onboarding',
+      summary: 'First run.',
+      status: 'proposed',
+      certifiedBy: null,
+      certifiedAt: null,
+      entry: [],
+      steps: [],
+      related: [],
+      modules: [],
+    };
+    const html = markup(<FlowPage detail={emptyFlow} names={new Map()} curation={noopCuration} />);
+    expect(html).toContain('Entry points');
+    expect(html).toContain('Link code');
+    expect(html).toContain('Certify');
+  });
+
+  it('the module lens certifies exactly the not-yet-certified rules/decisions', () => {
+    const detail: ModuleDetail = {
+      module: 'src/billing',
+      areas: ['src/billing'],
+      dark: false,
+      churn: 12,
+      score: 0.3,
+      certifiedFacts: 1,
+      staleFacts: 0,
+      queueRank: null,
+      concepts: [],
+      flows: [],
+      rules: [
+        {
+          id: 'invariant.money',
+          kind: 'invariant',
+          name: 'Money',
+          status: 'certified',
+          body: 'Integer minor units.',
+          symbols: [],
+          stalePins: 0,
+          viaScope: true,
+        },
+      ],
+      decisions: [
+        {
+          id: 'decision.stripe',
+          kind: 'decision',
+          name: 'Use Stripe',
+          status: 'proposed',
+          body: 'Fewer PCI burdens.',
+          symbols: ['src/billing/stripe.ts#client'],
+          stalePins: 0,
+          viaScope: false,
+        },
+      ],
+    };
+    const html = markup(
+      <ModulePage detail={detail} capabilityOf={() => null} curation={noopCuration} />,
+    );
+    // one certify button: the proposed decision, not the certified invariant
+    expect(count(html, /btn-certify/g)).toBe(1);
   });
 });
 

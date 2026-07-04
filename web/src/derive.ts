@@ -25,6 +25,22 @@ export function shortName(module: string): string {
   return parts[parts.length - 1] || module;
 }
 
+/**
+ * The module that owns a pinned file - longest-prefix match, so with modules
+ * `src` and `src/billing` the path `src/billing/refund.ts` belongs to the
+ * deeper one. `null` when no module contains the path (the pin stays plain
+ * text rather than linking somewhere wrong).
+ */
+export function moduleOfPath(path: string, modules: string[]): string | null {
+  let best: string | null = null;
+  for (const m of modules) {
+    if (path === m || path.startsWith(`${m}/`)) {
+      if (best === null || m.length > best.length) best = m;
+    }
+  }
+  return best;
+}
+
 export type Tone = 'signal' | 'warn' | 'alert' | 'muted';
 
 export interface Kpi {

@@ -1,7 +1,8 @@
 import type { ConceptDetail, FlowDetail, PinView } from '../api';
-import { DETAIL } from '../copy';
-import { shortName } from '../derive';
+import { CURATE, DETAIL } from '../copy';
+import { moduleOfPath, shortName } from '../derive';
 import { routeHref } from '../router';
+import { CertifyButton, type Curation, EditFields, LinkCode } from './Curate';
 import { StateMachine } from './StateMachine';
 import { KindTag, SectionHead, StatusBadge } from './Status';
 
@@ -16,14 +17,16 @@ import { KindTag, SectionHead, StatusBadge } from './Status';
 export function ConceptPage({
   detail,
   names,
+  curation,
 }: {
   detail: ConceptDetail;
   names: Map<string, string>;
+  curation: Curation;
 }): JSX.Element {
   const hasStates = detail.states.length > 0;
   return (
     <div className="page capability-page">
-      <CapabilityHead kind="concept" detail={detail} />
+      <CapabilityHead kind="concept" detail={detail} curation={curation} />
 
       <section className="cap-section">
         <SectionHead
@@ -58,7 +61,13 @@ export function ConceptPage({
         )}
       </section>
 
-      <PinsSection n="02" title={DETAIL.pinsHead} pins={detail.pins} />
+      <PinsSection
+        n="02"
+        title={DETAIL.pinsHead}
+        pins={detail.pins}
+        modules={detail.modules}
+        linkTo={{ id: detail.id, curation }}
+      />
       <RelatedSection n="03" related={detail.related} names={names} />
     </div>
   );
@@ -67,23 +76,30 @@ export function ConceptPage({
 export function FlowPage({
   detail,
   names,
+  curation,
 }: {
   detail: FlowDetail;
   names: Map<string, string>;
+  curation: Curation;
 }): JSX.Element {
   const linked = detail.steps.filter((s) => s.pin !== null).length;
   const total = detail.steps.length;
   return (
     <div className="page capability-page">
-      <CapabilityHead kind="flow" detail={detail} />
+      <CapabilityHead kind="flow" detail={detail} curation={curation} />
 
-      {detail.entry.length > 0 && (
-        <PinsSection n="01" title={DETAIL.entryHead} pins={detail.entry} />
-      )}
+      {/* Always shown: a flow's entry pins are where you link its first symbol. */}
+      <PinsSection
+        n="01"
+        title={DETAIL.entryHead}
+        pins={detail.entry}
+        modules={detail.modules}
+        linkTo={{ id: detail.id, curation }}
+      />
 
       <section className="cap-section">
         <SectionHead
-          n={detail.entry.length > 0 ? '02' : '01'}
+          n="02"
           title={DETAIL.stepsHead}
           gloss={total > 0 ? DETAIL.flowLede : undefined}
           aside={
@@ -108,7 +124,7 @@ export function FlowPage({
                     {s.do}
                   </p>
                   {s.pin ? (
-                    <PinLine pin={s.pin} />
+                    <PinLine pin={s.pin} modules={detail.modules} />
                   ) : (
                     <span className="unlinked">{DETAIL.notLinked}</span>
                   )}
@@ -119,11 +135,7 @@ export function FlowPage({
         )}
       </section>
 
-      <RelatedSection
-        n={detail.entry.length > 0 ? '03' : '02'}
-        related={detail.related}
-        names={names}
-      />
+      <RelatedSection n="03" related={detail.related} names={names} />
     </div>
   );
 }
@@ -131,9 +143,11 @@ export function FlowPage({
 function CapabilityHead({
   kind,
   detail,
+  curation,
 }: {
   kind: 'concept' | 'flow';
   detail: ConceptDetail | FlowDetail;
+  curation: Curation;
 }): JSX.Element {
   return (
     <header className="page-head">
@@ -163,6 +177,15 @@ function CapabilityHead({
           </>
         )}
       </p>
+      <div className="curate-bar">
+        <CertifyButton id={detail.id} status={detail.status} curation={curation} />
+        <EditFields
+          id={detail.id}
+          name={detail.name}
+          summary={detail.summary}
+          curation={curation}
+        />
+      </div>
     </header>
   );
 }
@@ -171,7 +194,17 @@ function PinsSection({
   n,
   title,
   pins,
-}: { n: string; title: string; pins: PinView[] }): JSX.Element {
+  modules,
+  linkTo,
+}: {
+  n: string;
+  title: string;
+  pins: PinView[];
+  /** The modules this capability touches - lets each pin open its engineer lens. */
+  modules: string[];
+  /** When present, render the "link a symbol" affordance under the list. */
+  linkTo?: { id: string; curation: Curation };
+}): JSX.Element {
   return (
     <section className="cap-section">
       <SectionHead n={n} title={title} />
@@ -181,19 +214,34 @@ function PinsSection({
         <ul className="pins">
           {pins.map((p) => (
             <li key={p.symbol}>
-              <PinLine pin={p} />
+              <PinLine pin={p} modules={modules} />
             </li>
           ))}
         </ul>
       )}
+      {linkTo && <LinkCode id={linkTo.id} curation={linkTo.curation} />}
     </section>
   );
 }
 
-function PinLine({ pin }: { pin: PinView }): JSX.Element {
+/** A pinned `path#Symbol`. When the path falls inside a known module, the pin
+ * links to that module's page - product meaning to engineer lens in one step. */
+function PinLine({ pin, modules }: { pin: PinView; modules: string[] }): JSX.Element {
+  const module = moduleOfPath(pin.symbol.split('#')[0] ?? '', modules);
+  const code = <code>{pin.symbol}</code>;
   return (
     <span className={pin.stale ? 'pin stale' : 'pin'}>
-      <code>{pin.symbol}</code>
+      {module ? (
+        <a
+          className="pin-link"
+          href={routeHref({ view: 'module', id: module })}
+          title={CURATE.openModuleHint}
+        >
+          {code}
+        </a>
+      ) : (
+        code
+      )}
       <span className={`status status-${pin.stale ? 'stale' : 'certified'}`}>
         <span className="status-dot" aria-hidden="true" />
         {pin.stale ? 'stale' : 'linked'}

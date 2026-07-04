@@ -57,7 +57,13 @@ legibility proof — **16a is the make-or-break demo**.
 > shell** (treemap atlas + hash routes + navigator/inspector; see
 > [Dashboard.md §11](../design/Dashboard.md)), and 16c's engineer lens shipped inside it as
 > the module page over a new `/api/module/:id`.
-> T17 write-back and T18 ask-loop now hook into the shell's routes and inspector.
+>
+> **T17 write-back is done:** `POST /api/certify · /api/pin · /api/entry` over
+> `src/serve/write.ts` — each mutation is a `.artha/*.yaml` git diff with a transactional
+> rebuild (roll back on a broken build), and certify/edit/link controls live on the
+> capability + module pages in the atlas identity (design contract
+> [Dashboard.md §11.5](../design/Dashboard.md)). **T18 ask-loop** now hooks into this same
+> curation seam (its interview produces the drafts these endpoints persist + certify).
 
 ## Suggested source layout (shared contract across tasks)
 

@@ -171,3 +171,61 @@ export function getModule(id: string): Promise<ModuleDetail> {
 export function getSearch(query: string): Promise<SearchHit[]> {
   return getJson<SearchHit[]>(`api/search?q=${encodeURIComponent(query)}`);
 }
+
+/** One symbol candidate for the link picker (T17). */
+export interface SymbolHit {
+  /** The pin ref: `src/billing/Money.ts#Money`. */
+  ref: string;
+  name: string;
+  path: string;
+  kind: string;
+}
+
+/** Search the repo's resolvable symbols (name or path) for the link picker. */
+export function getSymbols(query: string): Promise<SymbolHit[]> {
+  return getJson<SymbolHit[]>(`api/symbols?q=${encodeURIComponent(query)}`);
+}
+
+// ── curation writes (T17) ───────────────────────────────────────────────────
+// Each POST mutates one `.artha/*.yaml` (a git diff) and rebuilds the index, so
+// the very next read reflects it. The server rolls a bad write back; on failure
+// these throw the server's message so the UI can surface it inline.
+
+/** What a successful mutation reports back. `staled` names entries the rebuild
+ * flipped to `stale` (their pinned code had drifted). */
+export interface WriteResult {
+  ok: true;
+  id: string;
+  status: string;
+  created: boolean;
+  staled: string[];
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data: unknown = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = (data as { error?: string }).error;
+    throw new Error(message ?? `POST ${path} → ${res.status}`);
+  }
+  return data as T;
+}
+
+/** Certify an entry - the one path to `certified` (never auto-certify). */
+export function certify(id: string): Promise<WriteResult> {
+  return postJson<WriteResult>('api/certify', { id });
+}
+
+/** Link an entry to a `path#Symbol`; the server refuses an unresolvable ref. */
+export function linkPin(id: string, symbol: string): Promise<WriteResult> {
+  return postJson<WriteResult>('api/pin', { id, symbol });
+}
+
+/** Upsert an entry's fields (merged over the existing entry); edits un-certify. */
+export function saveEntry(patch: { id: string } & Record<string, unknown>): Promise<WriteResult> {
+  return postJson<WriteResult>('api/entry', patch);
+}

@@ -19,9 +19,24 @@ export interface ResolvedSymbol {
   contentHash: string;
 }
 
+/** One symbol a file exposes, for the dashboard's link picker (T17). */
+export interface SymbolDecl {
+  /** Qualified name `resolve` accepts: `Foo` or `Foo.bar` for a class member. */
+  name: string;
+  /** Friendly kind: class · function · interface · type · enum · const · method · field. */
+  kind: string;
+}
+
 export interface SymbolResolver {
   /** Resolve a `path#Symbol` ref to a symbol, or `null` if it cannot be found. */
   resolve(symbolRef: string): ResolvedSymbol | null;
   /** Recompute the content hash of an already-resolved symbol from disk. */
   hash(sym: ResolvedSymbol): string;
+  /**
+   * Enumerate the resolvable symbols a file exposes (top-level declarations +
+   * class members), so linking code is search-and-pick, not typing paths. A
+   * non-JS/TS or missing file yields `[]`. Every returned name resolves via
+   * {@link resolve} (same rules), so a picked symbol always makes a valid pin.
+   */
+  list(relPath: string): SymbolDecl[];
 }

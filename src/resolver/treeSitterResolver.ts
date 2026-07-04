@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, extname, join } from 'node:path';
 import Parser from 'web-tree-sitter';
-import type { ResolvedSymbol, SymbolResolver } from './SymbolResolver';
+import type { ResolvedSymbol, SymbolDecl, SymbolResolver } from './SymbolResolver';
 import { contentHash } from './hash';
 
 const require = createRequire(import.meta.url);
@@ -112,6 +112,70 @@ function findSymbol(root: Parser.SyntaxNode, qualified: string): Parser.SyntaxNo
   return null; // deeper nesting unsupported in v0.1
 }
 
+/** A tree-sitter node type → the friendly kind shown in the link picker. */
+function friendlyKind(type: string): string {
+  switch (type) {
+    case 'function_declaration':
+    case 'generator_function_declaration':
+      return 'function';
+    case 'class_declaration':
+    case 'abstract_class_declaration':
+      return 'class';
+    case 'interface_declaration':
+      return 'interface';
+    case 'type_alias_declaration':
+      return 'type';
+    case 'enum_declaration':
+      return 'enum';
+    case 'module':
+    case 'internal_module':
+      return 'module';
+    case 'method_definition':
+    case 'abstract_method_signature':
+      return 'method';
+    case 'public_field_definition':
+      return 'field';
+    default:
+      return 'symbol';
+  }
+}
+
+/**
+ * Every symbol a file exposes, mirroring exactly what {@link findSymbol} can
+ * resolve: top-level declarations (function/class/interface/type/enum/module +
+ * const/let/var), plus each class's members as `Class.member`. So every name
+ * this returns is a valid pin target.
+ */
+function enumerate(root: Parser.SyntaxNode): SymbolDecl[] {
+  const out: SymbolDecl[] = [];
+  for (const child of root.namedChildren) {
+    const decl = unwrapExport(child);
+    if (!decl) continue;
+
+    if (NAMED_DECLARATIONS.has(decl.type)) {
+      const name = nameOf(decl);
+      if (!name) continue;
+      out.push({ name, kind: friendlyKind(decl.type) });
+      if (CLASS_TYPES.has(decl.type)) {
+        const body = decl.childForFieldName('body');
+        for (const member of body?.namedChildren ?? []) {
+          if (!MEMBER_TYPES.has(member.type)) continue;
+          const memberName = nameOf(member);
+          if (memberName)
+            out.push({ name: `${name}.${memberName}`, kind: friendlyKind(member.type) });
+        }
+      }
+    } else if (decl.type === 'lexical_declaration' || decl.type === 'variable_declaration') {
+      for (const d of decl.namedChildren) {
+        if (d.type !== 'variable_declarator') continue;
+        const name = nameOf(d);
+        if (name) out.push({ name, kind: 'const' });
+      }
+    }
+  }
+  return out;
+}
+
 interface ParsedFile {
   lines: string[];
   root: Parser.SyntaxNode;
@@ -191,5 +255,12 @@ export async function createTreeSitterResolver(repoRoot: string): Promise<Symbol
     return contentHash(spanText(lines, sym.startLine - 1, sym.endLine - 1));
   }
 
-  return { resolve, hash };
+  function list(relPath: string): SymbolDecl[] {
+    const lang = langForExt(extname(relPath));
+    if (lang === null) return [];
+    const parsed = parseFile(join(repoRoot, relPath), lang);
+    return parsed ? enumerate(parsed.root) : [];
+  }
+
+  return { resolve, hash, list };
 }

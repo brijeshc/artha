@@ -16,6 +16,8 @@
 > **Part 2 (§11) documents the second redesign — the shipped full-screen atlas
 > shell — which supersedes the page-of-sections layout while keeping every
 > principle in §4.**
+> **§11.5 documents the T17 curation surface layered onto that shell — certify,
+> edit, and link as instrument operations, not a form beside the map.**
 
 ---
 
@@ -404,6 +406,31 @@ Product names lead everywhere; ids demote to metadata lines.
 
 The §4 principles (show don't define, encode on visual channels, progressive disclosure, content over chrome), the read API and its offline guarantees, `copy.ts` as the single voice file, the pure-component + SSR render-test architecture, and the drawn `StateMachine`.
 The T17 write-back and T18 ask-loop seams now hang off routes and the inspector instead of a page's selection state.
+
+## 11.5 Curation — the map you can write to (T17, shipped 2026-07-04)
+
+The atlas stops being read-only: you certify, edit, and link from the same surface you read.
+The design rule was that curation must feel like *operating the instrument*, not filling in a form beside it.
+
+- **Certify is the one loud action.**
+It borrows the phosphor of understanding and, on hover, fills and glows — so certifying a dark capability literally lights it up, in the same phosphor the atlas uses for certified coverage.
+It is the only path to `certified` (never auto-certify), and it disappears once an entry is certified, because the header stamp already carries that signal.
+- **Edit and link stay quiet.**
+Edit opens an inline name/summary panel; link opens a **search-and-pick symbol picker** under the pins list — you type a class, function, or file name and choose from ranked candidates, never a hand-typed path (that doesn't scale past a toy repo).
+The candidates come from an offline catalog of every resolvable symbol under the source roots (`/api/symbols`, warmed at server start), so every pick is guaranteed to resolve.
+Both controls are hairline and collapsed until asked for.
+Editing an entry returns it to `proposed` and clears the stamp, because changed content is no longer the thing a human vouched for; you re-certify to re-vouch.
+- **Every kind has exactly one certify surface.**
+Concepts and flows certify on their capability page; invariants, conventions, and decisions certify in place on the module (engineer) lens.
+The inspector stays a read-only quick-look — curation happens on the full page you open into.
+- **Every pin is a road to the code.**
+A `path#Symbol` pin (concept pins, flow entry points, ladder rungs) links to the module page that owns that path, so the reading loop closes in both directions: the map names the meaning, the pin opens the engineer lens on the code that carries it.
+The affordance stays hairline - mono text, underline only on hover, in the pin's own status colour.
+- **The picture never drifts from the source.**
+Each write is a `.artha/*.yaml` git diff; the server rebuilds the index so the map redraws, and rolls the file back if that rebuild would break — the on-disk YAML is always buildable, and `index.db` is never the system of record.
+- **Viewing and curating stay offline.**
+Certify, link, and edit touch no model; a write reuses the previous index's embedding vectors when they exist (a certify/link changes no fact text) so the map and search stay warm with no download.
+The LLM only enters for the T18 interview that *drafts* the prose — the persist/certify plumbing here is fully local.
 
 ## Sources
 

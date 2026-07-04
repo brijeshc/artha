@@ -7,17 +7,21 @@ import {
   type ModuleDetail,
   type ModuleFact,
   type RankedModule,
+  certify,
   getCatalog,
   getConcept,
   getDarkZones,
   getFlow,
   getMap,
   getModule,
+  linkPin,
+  saveEntry,
 } from './api';
 import { AtlasViewport } from './components/Atlas';
 import { ConceptPage, FlowPage } from './components/CapabilityPages';
 import { CatalogPage } from './components/CatalogPage';
 import { CommandBar } from './components/CommandBar';
+import type { Curation } from './components/Curate';
 import { Inspector } from './components/Inspector';
 import { ModulePage } from './components/ModulePage';
 import { Navigator } from './components/Navigator';
@@ -134,6 +138,38 @@ export function App(): JSX.Element {
     navigate(r);
   }, []);
 
+  // After a curation write the index is rebuilt server-side; re-read every feed
+  // (and the open capability detail, whose route key hasn't changed) so the map
+  // redraws and the just-certified item glows without a reload.
+  const refresh = useCallback(async () => {
+    const [m, c, z] = await Promise.allSettled([getMap(), getCatalog(), getDarkZones()]);
+    if (m.status === 'fulfilled') setMap(m.value);
+    if (c.status === 'fulfilled') setCatalog(c.value);
+    if (z.status === 'fulfilled') setZones(z.value);
+    setModuleDetails(new Map());
+    const r = parseRoute(window.location.hash);
+    if (r.view === 'concept') setConceptDetail(await getConcept(r.id).catch(() => null));
+    if (r.view === 'flow') setFlowDetail(await getFlow(r.id).catch(() => null));
+  }, []);
+
+  const curation = useMemo<Curation>(
+    () => ({
+      certify: async (id) => {
+        await certify(id);
+        await refresh();
+      },
+      link: async (id, symbol) => {
+        await linkPin(id, symbol);
+        await refresh();
+      },
+      edit: async (patch) => {
+        await saveEntry(patch);
+        await refresh();
+      },
+    }),
+    [refresh],
+  );
+
   const names = useMemo(
     () => (catalog ? capabilityNames(catalog) : new Map<string, string>()),
     [catalog],
@@ -211,16 +247,16 @@ export function App(): JSX.Element {
         const detail = moduleDetails.get(route.id);
         if (detail === null) return <NotFound label={route.id} />;
         if (!detail) return <Loading />;
-        return <ModulePage detail={detail} capabilityOf={capabilityOf} />;
+        return <ModulePage detail={detail} capabilityOf={capabilityOf} curation={curation} />;
       }
       case 'concept':
         if (detailError) return <NotFound label={route.id} note={detailError} />;
         if (!conceptDetail) return <Loading />;
-        return <ConceptPage detail={conceptDetail} names={names} />;
+        return <ConceptPage detail={conceptDetail} names={names} curation={curation} />;
       case 'flow':
         if (detailError) return <NotFound label={route.id} note={detailError} />;
         if (!flowDetail) return <Loading />;
-        return <FlowPage detail={flowDetail} names={names} />;
+        return <FlowPage detail={flowDetail} names={names} curation={curation} />;
     }
   })();
 

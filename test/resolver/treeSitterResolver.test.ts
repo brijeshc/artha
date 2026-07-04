@@ -105,3 +105,32 @@ describe('treeSitterResolver — content hashing', () => {
     expect(resolver.hash(orig)).toBe(orig.contentHash);
   });
 });
+
+describe('treeSitterResolver — enumeration (list, for the link picker)', () => {
+  let resolver: SymbolResolver;
+  beforeAll(async () => {
+    resolver = await createTreeSitterResolver(REPO);
+  });
+
+  it('lists top-level symbols + class members, every one of which resolves', () => {
+    const names = resolver.list('src/billing/Money.ts').map((d) => d.name);
+    expect(names).toEqual(expect.arrayContaining(['Money', 'Money.add', 'formatMoney', 'RATE']));
+    // the picker's guarantee: every enumerated name is a valid pin target
+    for (const name of names) {
+      expect(resolver.resolve(`src/billing/Money.ts#${name}`)).not.toBeNull();
+    }
+  });
+
+  it('tags friendly kinds', () => {
+    const decls = resolver.list('src/billing/Money.ts');
+    expect(decls.find((d) => d.name === 'Money')?.kind).toBe('class');
+    expect(decls.find((d) => d.name === 'Money.add')?.kind).toBe('method');
+    expect(decls.find((d) => d.name === 'formatMoney')?.kind).toBe('function');
+    expect(decls.find((d) => d.name === 'RATE')?.kind).toBe('const');
+  });
+
+  it('returns [] for a non-JS/TS or missing file (never throws)', () => {
+    expect(resolver.list('src/data.json')).toEqual([]);
+    expect(resolver.list('src/does-not-exist.ts')).toEqual([]);
+  });
+});

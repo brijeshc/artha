@@ -17,8 +17,8 @@ Running log of task completion against [tasks/README.md](tasks/README.md) (v0.1)
 | 16b| Dashboard redesign Ph.2        | ✅ done  | capability catalog (state-chain/coverage cards + filters) · hover-to-connect leader lines · ⌘K command bar · `/api/catalog`; 24 web render tests |
 | 16c| Dashboard redesign Ph.3        | ✅ done  | engineer module view (`/api/module/:id`) + flow ladder + cold-start funnel — shipped inside the **atlas shell** rebuild ([Dashboard.md §11](design/Dashboard.md)) |
 | 16d| Dashboard v3 — the atlas shell | ✅ done  | page-of-sections → full-screen app shell: treemap Understanding Atlas, hash routes (deep-linkable selection), navigator/inspector, product-language everywhere; 30 web tests |
-| 17 | Write-back (link/certify/edit)| ⬜ next  | unblocked (selection/drill-down state shipped) |
-| 18 | "Ask the human" loop          | ⬜       | |
+| 17 | Write-back (link/certify/edit)| ✅ done  | `POST /api/certify·pin·entry` over `src/serve/write.ts`; YAML git diffs + transactional rebuild/rollback; certify "lights up" the atlas; edit un-certifies; +22 tests, live E2E |
+| 18 | "Ask the human" loop          | ⬜ next  | unblocked (write/certify plumbing shipped; hooks into the curation seam) |
 | 19 | Contradiction preview panel   | ⬜       | §6.1 deterministic only |
 | 20 | v0.2 success test             | ⬜       | non-author reads the map |
 
@@ -44,6 +44,68 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 ## Log
 
 ### 2026-07-04
+
+- **T17 polish — review + live preview pass.**
+  Reviewed the T17 diff against a served demo repo (headless-Edge drive of the picker, edit form, and a real certify round-trip; YAML git diff verified) and landed four improvements.
+  - **Pins now open the engineer lens.**
+    Every `path#Symbol` pin (concept pins, flow entry points, ladder rungs) links to the module page that owns the code via a longest-prefix `moduleOfPath` match - product meaning to code surface in one click, quiet hairline hover in the pin's own status colour.
+  - **Platform-spelled search shortcut.**
+    The top bar showed a hardcoded `⌘K` to Windows/Linux readers; `SEARCH_KEY` in `copy.ts` now spells it `Ctrl K` off-Mac (the handler always accepted both).
+  - **Symbol picker: keyboard affordance + combobox a11y.**
+    A `↑↓ pick · enter links · esc closes` hint in the picker footer, ARIA combobox/listbox/option semantics with `aria-activedescendant`, and the active option scrolls into view while arrowing through a long list.
+  - **Write endpoints require `application/json` (415 otherwise).**
+    A cross-site form can only send text/plain-family types without a CORS preflight, so this stops a random web page from mutating `.artha/` through the localhost server; verified live with a text/plain POST.
+  - Typecheck (CLI+web) + Biome clean; **264 tests pass** (+4: `moduleOfPath` unit, concept + flow pin-link render, 415 guard).
+    Live E2E re-run on the rebuilt bundle: pin hrefs resolve on both capability pages, picker hint renders, 415 confirmed.
+
+- **T17 — Write-back: link · certify · edit** done. The dashboard becomes an **authoring
+  surface**: every mutation writes `.artha/*.yaml` as a plain git diff, the index is rebuilt so
+  the map redraws, and a write that would break the build is rolled back - disk is always left
+  buildable. Fully offline; **nothing auto-certifies**.
+  - **Write layer** (`src/serve/write.ts`, pure over the `.artha/` tree): `certifyEntry` reuses
+    T07's `certifyDraft` (stamps `certified_by`/`certified_at`, validates the exact shape, refuses
+    an invalid entry) - the **one** path to `certified`. `addPin` resolves the `path#Symbol`
+    against the live repo **before** writing (an unresolvable ref is a 400, never touches disk, so
+    the YAML stays buildable) and is idempotent. `upsertEntry` **merges** a partial patch over the
+    existing entry (editing just `summary` never drops `pins`/`tags`/`mined_from`), re-validates
+    through T02, and **forces `proposed`** - an edit is never a certification; changed content must
+    be re-vouched.
+  - **Transactional commit** (`commitWrite`): write → `buildIndex` → if the rebuild errors, restore
+    the one changed file and return 422. A failed build aborts before emitting, so the served
+    `index.db` is untouched and still matches the restored YAML. Embeddings are reused from the
+    previous index only when it already had vectors (a certify/link changes no fact text → all
+    cache hits, no model load, still offline; a vector-less index stays fast — a full `artha build`
+    refreshes vectors).
+  - **Server** (`src/serve/server.ts`): `POST /api/certify · /api/pin · /api/entry` with size-capped
+    JSON bodies and a per-server **write lock** serializing writes (two tabs can't interleave a
+    rebuild). Read endpoints stay GET-only (`POST /api/map` is still 405). A concurrent external
+    editor/git edit is the user's to reconcile via git — YAML stays the system of record.
+  - **Link discovery** (`src/serve/symbols.ts` + a new `resolver.list()`): linking is
+    **search-and-pick, not path-typing** — hand-typing `path#Symbol` doesn't scale to a real
+    codebase. `list()` enumerates every resolvable symbol a file exposes (top-level declarations +
+    class members); `GET /api/symbols?q=` searches a cached, offline catalog of them (warmed at
+    server start, ranked by name then path). Every candidate is guaranteed to resolve as a pin.
+  - **UI** (design-dna *cartographic · instrumental · assured*): curation reads as native, not
+    bolted-on. A **Certify** button borrows the phosphor of understanding and lights up (fill +
+    glow) on hover — certifying a dark capability literally makes it glow — then disappears once
+    certified. **Edit** opens an inline name/summary panel; **Link code** opens a **typeahead
+    symbol picker** (type a class/function/file name → ranked candidates → arrow/click to pick),
+    so no one types a path (a flow always exposes an entry-link surface). The engineer lens
+    (module page) certifies rules/decisions in place. `web/src/components/Curate.tsx`; `App` owns
+    the POST-then-refresh so the map redraws without a reload. Design contract:
+    [Dashboard.md §11.5](design/Dashboard.md).
+  - **Verified**: typecheck (CLI+web) + Biome clean; **260 tests pass** (+31 — 13 write-layer unit
+    [certify/pin/upsert valid+invalid+refused, merge-preserve, never-auto-certify, rollback on a
+    failed rebuild], 5 booted-server POST round-trips incl. concurrent writes, 4 web render
+    [certify by status, link/edit affordances], and +9 for the link picker: 3 `resolver.list`
+    enumeration, 5 `symbols` rank/search, 1 `/api/symbols` endpoint). Bundle 59.9 KB gzip JS /
+    6.0 KB CSS; `dist/cli.js` stays react-free (124 KB). **Live E2E** against the real
+    `dist/cli.js serve`: certify stamps a real `certified_by` + today's date as a YAML diff, a
+    resolvable pin links, an unresolvable pin is a 400, an edit un-certifies while preserving the
+    pin, and `/api/symbols?q=refund` returns the three refund functions. **Headless-Edge visual
+    pass** on the concept + module pages, the open forms, and the live symbol picker (caught +
+    fixed a flex-column bug that stretched the edit NAME input to full height). All 6 acceptance
+    criteria met.
 
 - **Dashboard v3 — the atlas shell (16c + 16d)** done. The 16a/16b instrument page was
   reviewed against the product goal and found still short: a 2,800px scroll of sections,

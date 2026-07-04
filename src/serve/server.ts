@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { ArthaConfig } from '../config/config';
 import { type Embedder, embedQueryForIndex, getEmbedder } from '../embed/embedder';
 import { openArthaIndex } from '../mcp/query';
+import { createTreeSitterResolver } from '../resolver/treeSitterResolver';
 import {
   catalog,
   conceptDetail,
@@ -14,6 +15,8 @@ import {
   moduleDetail,
   search,
 } from './api';
+import { searchSymbols, symbolCatalog } from './symbols';
+import { addPin, certifyEntry, commitWrite, upsertEntry } from './write';
 
 export interface ServeOptions {
   repoRoot: string;
@@ -48,16 +51,23 @@ export function serve(options: ServeOptions): Promise<ServeHandle> {
   // Built once; the model loads lazily only when a query hits an index that has
   // matching vectors (a no-embedding index never touches the model).
   const embedder = getEmbedder(options.config);
+  // Serialize curation writes (T17) so two dashboard tabs can't interleave a rebuild.
+  const writeLock = createWriteLock();
 
   const server = createServer((req, res) => {
-    handle(req, res, { ...options, webDir, dbPath, embedder }).catch((error: unknown) => {
-      sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
-    });
+    handle(req, res, { ...options, webDir, dbPath, embedder, writeLock }).catch(
+      (error: unknown) => {
+        sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
+      },
+    );
   });
 
   return new Promise((resolve, reject) => {
     server.on('error', reject);
     server.listen(port, host, () => {
+      // Warm the link-picker symbol catalog off the request path so the first
+      // "link code" search is instant (best-effort; a search rebuilds it if not).
+      void symbolCatalog(options.repoRoot, options.config).catch(() => {});
       const actual = server.address();
       const boundPort = typeof actual === 'object' && actual ? actual.port : port;
       resolve({
@@ -73,16 +83,30 @@ interface Ctx extends ServeOptions {
   webDir: string;
   dbPath: string;
   embedder: Embedder | null;
+  writeLock: <T>(fn: () => Promise<T>) => Promise<T>;
 }
 
 async function handle(req: IncomingMessage, res: ServerResponse, ctx: Ctx): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
-  if (req.method !== 'GET') {
-    sendJson(res, 405, { error: 'method not allowed' });
+  if (url.pathname.startsWith('/api/')) {
+    if (req.method === 'GET') {
+      // The symbol catalog is repo-derived, not index-derived - answer it
+      // without opening the index (it's hit per keystroke in the link picker).
+      if (url.pathname === '/api/symbols') {
+        const q = url.searchParams.get('q') ?? '';
+        sendJson(res, 200, await searchSymbols(ctx.repoRoot, ctx.config, q));
+        return;
+      }
+      await handleApi(url, res, ctx);
+    } else if (req.method === 'POST') {
+      await handleWrite(url, req, res, ctx);
+    } else {
+      sendJson(res, 405, { error: 'method not allowed' });
+    }
     return;
   }
-  if (url.pathname.startsWith('/api/')) {
-    await handleApi(url, res, ctx);
+  if (req.method !== 'GET') {
+    sendJson(res, 405, { error: 'method not allowed' });
     return;
   }
   handleStatic(url, res, ctx);
@@ -135,6 +159,127 @@ async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void>
   } finally {
     index.close();
   }
+}
+
+/**
+ * The T17 curation writes: **certify** · **link** (pin) · **edit**. Each mutates
+ * one `.artha/*.yaml` and rebuilds the index so the next read reflects it (the
+ * map redraws); a write that would break the build is rolled back. Writes are
+ * serialized (`ctx.writeLock`) so concurrent tabs can't interleave a rebuild.
+ * Read endpoints stay GET-only, so `POST /api/map` is a 405.
+ */
+async function handleWrite(
+  url: URL,
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: Ctx,
+): Promise<void> {
+  const path = url.pathname;
+  if (path !== '/api/certify' && path !== '/api/pin' && path !== '/api/entry') {
+    sendJson(res, 405, { error: 'method not allowed' });
+    return;
+  }
+
+  // Writes must declare application/json. A cross-site form can only send
+  // text/plain-family types without a CORS preflight (which this server never
+  // grants), so this keeps a random web page from mutating `.artha/` through
+  // the localhost server.
+  const contentType = (req.headers['content-type'] ?? '').toLowerCase();
+  if (!contentType.includes('application/json')) {
+    sendJson(res, 415, { error: 'content-type must be application/json' });
+    return;
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    return;
+  }
+
+  const deps = {
+    repoRoot: ctx.repoRoot,
+    config: ctx.config,
+    embedder: ctx.embedder,
+    dbPath: ctx.dbPath,
+  };
+
+  const result = await ctx.writeLock(() =>
+    commitWrite(deps, async () => {
+      if (path === '/api/certify') {
+        return certifyEntry(ctx.repoRoot, asString(body.id));
+      }
+      if (path === '/api/pin') {
+        // Resolve against the live repo so an unresolvable pin is refused before
+        // it ever reaches disk (the on-disk YAML stays buildable).
+        const resolver = await createTreeSitterResolver(ctx.repoRoot);
+        return addPin(ctx.repoRoot, asString(body.id), asString(body.symbol), resolver);
+      }
+      return upsertEntry(ctx.repoRoot, body);
+    }),
+  );
+
+  if (result.ok) {
+    sendJson(res, 200, result);
+  } else {
+    sendJson(res, result.code, { error: result.error });
+  }
+}
+
+/** Entries are small YAML; cap the body so a runaway POST can't exhaust memory. */
+const MAX_BODY_BYTES = 1_000_000;
+
+/** Read + JSON-parse a request body into an object (empty body → `{}`). */
+function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        reject(new Error('request body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      const text = Buffer.concat(chunks).toString('utf8').trim();
+      if (text === '') {
+        resolve({});
+        return;
+      }
+      try {
+        const parsed: unknown = JSON.parse(text);
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          reject(new Error('request body must be a JSON object'));
+          return;
+        }
+        resolve(parsed as Record<string, unknown>);
+      } catch {
+        reject(new Error('request body must be valid JSON'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+/** A per-server mutex: chains write closures so only one runs (and rebuilds) at a time. */
+function createWriteLock(): <T>(fn: () => Promise<T>) => Promise<T> {
+  let chain: Promise<unknown> = Promise.resolve();
+  return <T>(fn: () => Promise<T>): Promise<T> => {
+    const run = chain.then(fn, fn);
+    chain = run.then(
+      () => {},
+      () => {},
+    );
+    return run;
+  };
+}
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
 }
 
 /** Serve the built frontend from `webDir`; fall back to a placeholder page so
