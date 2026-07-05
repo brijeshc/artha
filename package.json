@@ -17,6 +17,7 @@
     "build:web": "vite build --config web/vite.config.ts",
     "dev": "tsup --watch",
     "dev:web": "vite --config web/vite.config.ts",
+    "demo": "npm run build && node scripts/demo.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome check .",

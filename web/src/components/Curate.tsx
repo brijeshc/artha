@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
-import { type SymbolHit, getSymbols } from '../api';
-import { CURATE } from '../copy';
+import { type Suggestion, type SymbolHit, getSymbols } from '../api';
+import { CURATE, SUGGEST } from '../copy';
 
 /**
  * Curation primitives (T17): the dashboard as an authoring surface. Each control
@@ -245,6 +245,94 @@ function SymbolPicker({
       </div>
     </div>
   );
+}
+
+/**
+ * Suggested code (T17b): machine-proposed pins the human confirms with one click.
+ * Structural edges (imports) are drawn automatically; these *meaning* edges stay
+ * proposed until vouched for. Each row states its `why`; linking rides the same
+ * `POST /api/pin` a hand-picked link does - ignoring a suggestion writes nothing.
+ */
+export function SuggestedCode({
+  id,
+  suggestions,
+  curation,
+}: {
+  id: string;
+  suggestions: Suggestion[];
+  curation: Curation;
+}): JSX.Element | null {
+  if (suggestions.length === 0) return null;
+  return (
+    <div className="suggest">
+      <p className="suggest-head">
+        <span className="suggest-title">{SUGGEST.head}</span>
+        <span className="suggest-gloss">{SUGGEST.gloss}</span>
+      </p>
+      <ul className="suggest-list">
+        {suggestions.map((s) => (
+          <SuggestRow key={s.ref} id={id} suggestion={s} curation={curation} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SuggestRow({
+  id,
+  suggestion,
+  curation,
+}: {
+  id: string;
+  suggestion: Suggestion;
+  curation: Curation;
+}): JSX.Element {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const link = async (): Promise<void> => {
+    setError(null);
+    setPending(true);
+    try {
+      // the re-read drops this suggestion (now a pin) and shows it in the list above
+      await curation.link(id, suggestion.ref);
+    } catch (e) {
+      setError(errText(e));
+      setPending(false);
+    }
+  };
+
+  return (
+    <li className="suggest-item">
+      <span className="sym-name mono">{suggestion.name}</span>
+      <span className="sym-kind">{suggestion.kind}</span>
+      <span className="sym-path mono">{suggestion.path}</span>
+      <span className={`suggest-why why-${whyClass(suggestion.why)}`}>
+        {SUGGEST.why[suggestion.why] ?? suggestion.why}
+      </span>
+      <button
+        type="button"
+        className="btn btn-ghost suggest-link"
+        onClick={link}
+        disabled={pending}
+        title={`${suggestion.why} → link ${suggestion.ref}`}
+      >
+        {pending ? SUGGEST.linking : `+ ${SUGGEST.link}`}
+      </button>
+      {error && (
+        <span className="curate-error" role="alert">
+          {error}
+        </span>
+      )}
+    </li>
+  );
+}
+
+/** A short class per why so each reason reads in its own quiet hue. */
+function whyClass(why: string): string {
+  if (why === 'referenced by pinned code') return 'ref';
+  if (why === 'related meaning') return 'sem';
+  return 'name';
 }
 
 /** Edit an entry's name + summary; saving re-validates and returns it to proposed. */

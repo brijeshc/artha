@@ -4,6 +4,7 @@ import {
   type FactRow,
   type FlowStepRow,
   type PinRow,
+  type RefRow,
   type RelatedRow,
   type ScopeRow,
   type StateRow,
@@ -31,6 +32,8 @@ export interface ArthaIndex {
   readonly flowSteps: FlowStepRow[];
   /** `related` cross-links between entries. */
   readonly related: RelatedRow[];
+  /** Module→module import edges (T17b). Empty for pre-T17b indexes. */
+  readonly refs: RefRow[];
   /** Fact id → embedding vector (T14). Empty for pre-T14 / no-embedding indexes. */
   readonly embeddings: Map<string, Float32Array>;
   /** The model that produced the vectors, for query-side model matching; null if none. */
@@ -50,6 +53,7 @@ const EMPTY: ArthaIndex = {
   transitions: [],
   flowSteps: [],
   related: [],
+  refs: [],
   embeddings: new Map(),
   embeddingModel: null,
   empty: true,
@@ -77,6 +81,7 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
     const transitions = selectAll<TransitionRow>(db, 'artha_transitions');
     const flowSteps = selectAll<FlowStepRow>(db, 'artha_flow_steps');
     const related = selectAll<RelatedRow>(db, 'artha_related');
+    const refs = selectAll<RefRow>(db, 'artha_refs');
     const { embeddings, embeddingModel } = loadEmbeddings(db);
     const handle = db;
     return {
@@ -87,6 +92,7 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
       transitions,
       flowSteps,
       related,
+      refs,
       embeddings,
       embeddingModel,
       empty: facts.length === 0,

@@ -7,6 +7,8 @@ import {
   type ModuleDetail,
   type ModuleFact,
   type RankedModule,
+  type RefEdge,
+  type Suggestion,
   certify,
   getCatalog,
   getConcept,
@@ -14,6 +16,8 @@ import {
   getFlow,
   getMap,
   getModule,
+  getRefs,
+  getSuggest,
   linkPin,
   saveEntry,
 } from './api';
@@ -35,7 +39,7 @@ import {
   capabilityEntries,
   capabilityNames,
   kpis,
-  shortName,
+  neighborsOf,
 } from './derive';
 import { type Route, navigate, parseRoute, routeHref } from './router';
 
@@ -53,6 +57,7 @@ export function App(): JSX.Element {
   const [map, setMap] = useState<MapFeed | null>(null);
   const [zones, setZones] = useState<RankedModule[]>([]);
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
+  const [refs, setRefs] = useState<RefEdge[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [cmdkOpen, setCmdkOpen] = useState(false);
 
@@ -61,6 +66,7 @@ export function App(): JSX.Element {
   const [moduleDetails, setModuleDetails] = useState<Map<string, ModuleDetail | null>>(new Map());
   const [conceptDetail, setConceptDetail] = useState<ConceptDetail | null>(null);
   const [flowDetail, setFlowDetail] = useState<FlowDetail | null>(null);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,6 +85,11 @@ export function App(): JSX.Element {
     getCatalog()
       .then(setCatalog)
       .catch(() => setCatalog({ concepts: [], flows: [] }));
+    // The reference graph is code-structural - immutable under curation - so it's
+    // read once and reused for the atlas's neighbour outlines.
+    getRefs()
+      .then(setRefs)
+      .catch(() => setRefs([]));
   }, []);
 
   // ⌘K / Ctrl-K toggles the command bar; Esc closes it, else clears selection.
@@ -119,6 +130,7 @@ export function App(): JSX.Element {
   // biome-ignore lint/correctness/useExhaustiveDependencies: capabilityKey is the identity of capabilityRoute
   useEffect(() => {
     setDetailError(null);
+    setSuggestions([]);
     if (!capabilityRoute) return;
     if (capabilityRoute.kind === 'concept') {
       setConceptDetail(null);
@@ -131,6 +143,10 @@ export function App(): JSX.Element {
         .then(setFlowDetail)
         .catch((e: unknown) => setDetailError(errMsg(e)));
     }
+    // Machine-proposed pins for this capability (T17b) - ranked, each with a why.
+    getSuggest(capabilityRoute.id)
+      .then(setSuggestions)
+      .catch(() => setSuggestions([]));
   }, [capabilityKey]);
 
   const onGo = useCallback((r: Route) => {
@@ -150,6 +166,10 @@ export function App(): JSX.Element {
     const r = parseRoute(window.location.hash);
     if (r.view === 'concept') setConceptDetail(await getConcept(r.id).catch(() => null));
     if (r.view === 'flow') setFlowDetail(await getFlow(r.id).catch(() => null));
+    // A confirmed suggestion is now a pin - re-rank so it drops off the list.
+    if (r.view === 'concept' || r.view === 'flow') {
+      setSuggestions(await getSuggest(r.id).catch(() => []));
+    }
   }, []);
 
   const curation = useMemo<Curation>(
@@ -237,6 +257,7 @@ export function App(): JSX.Element {
             selectedArea={selectedArea}
             selectedModule={selectedModule}
             zones={zones}
+            neighbors={neighborsOf(refs, selectedModule)}
           />
         );
       case 'capabilities':
@@ -252,11 +273,25 @@ export function App(): JSX.Element {
       case 'concept':
         if (detailError) return <NotFound label={route.id} note={detailError} />;
         if (!conceptDetail) return <Loading />;
-        return <ConceptPage detail={conceptDetail} names={names} curation={curation} />;
+        return (
+          <ConceptPage
+            detail={conceptDetail}
+            names={names}
+            curation={curation}
+            suggestions={suggestions}
+          />
+        );
       case 'flow':
         if (detailError) return <NotFound label={route.id} note={detailError} />;
         if (!flowDetail) return <Loading />;
-        return <FlowPage detail={flowDetail} names={names} curation={curation} />;
+        return (
+          <FlowPage
+            detail={flowDetail}
+            names={names}
+            curation={curation}
+            suggestions={suggestions}
+          />
+        );
     }
   })();
 

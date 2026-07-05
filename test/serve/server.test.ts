@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { buildIndex } from '../../src/build/build';
 import { type IndexData, writeIndex } from '../../src/build/db';
 import { defaultConfig } from '../../src/config/config';
 import { type ServeHandle, serve } from '../../src/serve/server';
@@ -54,6 +55,7 @@ function indexWith(headings: string[]): IndexData {
     transitions: [],
     flowSteps: [],
     embeddings: [],
+    refs: [],
   };
 }
 
@@ -294,5 +296,47 @@ describe('artha serve — curation writes (T17)', () => {
     );
     expect(status.get('concept.a')).toBe('certified');
     expect(status.get('concept.b')).toBe('certified');
+  });
+
+  it('serves the module reference graph at /api/refs (T17b)', async () => {
+    mkdirSync(join(repo, 'src', 'checkout'), { recursive: true });
+    writeFileSync(join(repo, 'src', 'billing', 'Money.ts'), 'export class Money {}\n');
+    writeFileSync(
+      join(repo, 'src', 'checkout', 'cart.ts'),
+      "import { Money } from '../billing/Money';\nexport class Cart { m?: Money; }\n",
+    );
+    await buildIndex(repo, defaultConfig());
+    const url = await boot();
+
+    const refs = (await (await fetch(`${url}/api/refs`)).json()) as Array<Record<string, unknown>>;
+    expect(refs).toContainEqual({
+      from_module: 'src/checkout',
+      to_module: 'src/billing',
+      count: 1,
+    });
+  });
+
+  it('suggests a pin and confirms it with one POST /api/pin (no new write path)', async () => {
+    seedConcept('refund', proposed('concept.refund', 'Refund'));
+    writeFileSync(
+      join(repo, 'src', 'billing', 'refund.ts'),
+      'export function issueRefund() {\n  return true;\n}\n',
+    );
+    await buildIndex(repo, defaultConfig());
+    const url = await boot();
+
+    const suggestions = (await (
+      await fetch(`${url}/api/suggest?id=concept.refund`)
+    ).json()) as Array<{ ref: string; why: string }>;
+    const top = suggestions.find((s) => s.ref === 'src/billing/refund.ts#issueRefund');
+    expect(top?.why).toBe('name match');
+
+    // confirm the suggestion through the existing pin endpoint - nothing new writes
+    const res = await post(url, '/api/pin', { id: 'concept.refund', symbol: top?.ref });
+    expect(res.status).toBe(200);
+
+    const detail = await getJson(url, '/api/concept/concept.refund');
+    const pins = (detail.pins as Array<{ symbol: string }>).map((p) => p.symbol);
+    expect(pins).toContain('src/billing/refund.ts#issueRefund');
   });
 });

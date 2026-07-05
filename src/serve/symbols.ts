@@ -1,15 +1,15 @@
-import { readdirSync } from 'node:fs';
-import { extname, join, relative } from 'node:path';
+import { type FileGraph, fileImportGraph, listSourceFiles } from '../analytics/references';
 import type { ArthaConfig } from '../config/config';
 import { createTreeSitterResolver } from '../resolver/treeSitterResolver';
 
 /**
- * The link picker's data source (T17): a searchable catalog of every resolvable
- * symbol under the source roots, so linking code is **search-and-pick**, not
- * hand-typing `path#Symbol`. Built once with the built-in tree-sitter resolver
- * (so every ref is guaranteed to resolve as a pin) and cached per repo; fully
- * offline. A source-tree change during the session isn't picked up until the
- * server restarts - the catalog is about code that already exists to link to.
+ * The repo's **structural scan**: one offline tree-sitter pass over the source
+ * roots that yields both the link picker's symbol catalog (T17) and the file
+ * import graph (T17b). Built once per repo and cached, so the picker's per-
+ * keystroke search and the pin suggester's proximity signal share a single pass
+ * (no second resolver, no double walk). A source-tree change during the session
+ * isn't picked up until the server restarts - this is about code that already
+ * exists to link to.
  */
 
 export interface SymbolHit {
@@ -23,36 +23,31 @@ export interface SymbolHit {
   kind: string;
 }
 
-const SOURCE_EXT = new Set(['.ts', '.mts', '.cts', '.tsx', '.js', '.mjs', '.cjs', '.jsx']);
-const IGNORE_DIRS = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  'build',
-  'out',
-  'coverage',
-  '.artha',
-  '.next',
-  '.cache',
-  '.turbo',
-]);
-/** Guardrail against a pathological tree; a normal source root is far under this. */
-const MAX_FILES = 20000;
+/** Everything one structural scan produces: the symbol catalog + the file graph. */
+export interface RepoStructure {
+  catalog: SymbolHit[];
+  fileGraph: FileGraph;
+}
 
-const catalogs = new Map<string, Promise<SymbolHit[]>>();
+const structures = new Map<string, Promise<RepoStructure>>();
 
-/** Build (once per repo, cached) the symbol catalog. Concurrent callers share the
- * one in-flight build; a failed build is dropped so a later request can retry. */
-export function symbolCatalog(repoRoot: string, config: ArthaConfig): Promise<SymbolHit[]> {
-  let pending = catalogs.get(repoRoot);
+/** Build (once per repo, cached) the structural scan. Concurrent callers share
+ * the one in-flight build; a failed build is dropped so a later request retries. */
+export function repoStructure(repoRoot: string, config: ArthaConfig): Promise<RepoStructure> {
+  let pending = structures.get(repoRoot);
   if (!pending) {
-    pending = buildCatalog(repoRoot, config).catch((error) => {
-      catalogs.delete(repoRoot);
+    pending = buildStructure(repoRoot, config).catch((error) => {
+      structures.delete(repoRoot);
       throw error;
     });
-    catalogs.set(repoRoot, pending);
+    structures.set(repoRoot, pending);
   }
   return pending;
+}
+
+/** The link picker's symbol catalog (cached via {@link repoStructure}). */
+export async function symbolCatalog(repoRoot: string, config: ArthaConfig): Promise<SymbolHit[]> {
+  return (await repoStructure(repoRoot, config)).catalog;
 }
 
 /** Search the (cached) catalog for a query. Empty query → nothing (the picker
@@ -77,55 +72,39 @@ export function rankSymbols(catalog: SymbolHit[], query: string, limit = 25): Sy
 
   const scored: Array<{ hit: SymbolHit; score: number }> = [];
   for (const hit of catalog) {
-    const name = hit.name.toLowerCase();
-    let score: number;
-    if (name === q) score = 100;
-    else if (name.startsWith(q)) score = 80;
-    else if (name.includes(q)) score = 60;
-    else if (hit.path.toLowerCase().includes(q)) score = 30;
-    else continue;
-    score -= Math.min(name.length, 40) * 0.1; // prefer the tighter match
-    scored.push({ hit, score });
+    const score = lexicalScore(hit, q);
+    if (score > 0) scored.push({ hit, score });
   }
   scored.sort((a, b) => b.score - a.score || a.hit.ref.localeCompare(b.hit.ref));
   return scored.slice(0, limit).map((s) => s.hit);
 }
 
-async function buildCatalog(repoRoot: string, config: ArthaConfig): Promise<SymbolHit[]> {
-  const files = listSourceFiles(repoRoot, config.sourceRoots);
-  const resolver = await createTreeSitterResolver(repoRoot);
-  const hits: SymbolHit[] = [];
-  for (const rel of files) {
-    for (const decl of resolver.list(rel)) {
-      hits.push({ ref: `${rel}#${decl.name}`, name: decl.name, path: rel, kind: decl.kind });
-    }
-  }
-  return hits;
+/**
+ * One symbol's lexical affinity to a lowercased query term: exact name (100) >
+ * name-prefix (80) > name-substring (60) > path-substring (30), with shorter
+ * names nudged up. `0` means no match. Shared by the link picker's ranking and
+ * the pin suggester's lexical signal (T17b) so they agree on "name match".
+ */
+export function lexicalScore(hit: SymbolHit, term: string): number {
+  const name = hit.name.toLowerCase();
+  let score: number;
+  if (name === term) score = 100;
+  else if (name.startsWith(term)) score = 80;
+  else if (name.includes(term)) score = 60;
+  else if (hit.path.toLowerCase().includes(term)) score = 30;
+  else return 0;
+  return score - Math.min(name.length, 40) * 0.1; // prefer the tighter match
 }
 
-/** Repo-relative posix paths of every JS/TS source file under the source roots. */
-function listSourceFiles(repoRoot: string, sourceRoots: string[]): string[] {
-  const files: string[] = [];
-
-  const walk = (absDir: string): void => {
-    if (files.length >= MAX_FILES) return;
-    let entries: import('node:fs').Dirent[];
-    try {
-      entries = readdirSync(absDir, { withFileTypes: true });
-    } catch {
-      return; // unreadable dir → skip, never throw
+async function buildStructure(repoRoot: string, config: ArthaConfig): Promise<RepoStructure> {
+  const files = listSourceFiles(repoRoot, config.sourceRoots);
+  const resolver = await createTreeSitterResolver(repoRoot);
+  const catalog: SymbolHit[] = [];
+  for (const rel of files) {
+    for (const decl of resolver.list(rel)) {
+      catalog.push({ ref: `${rel}#${decl.name}`, name: decl.name, path: rel, kind: decl.kind });
     }
-    for (const entry of entries) {
-      if (files.length >= MAX_FILES) return;
-      const abs = join(absDir, entry.name);
-      if (entry.isDirectory()) {
-        if (!IGNORE_DIRS.has(entry.name)) walk(abs);
-      } else if (entry.isFile() && SOURCE_EXT.has(extname(entry.name).toLowerCase())) {
-        files.push(relative(repoRoot, abs).split('\\').join('/'));
-      }
-    }
-  };
-
-  for (const root of sourceRoots) walk(join(repoRoot, root));
-  return files;
+  }
+  const fileGraph = fileImportGraph(files, (rel) => resolver.imports(rel));
+  return { catalog, fileGraph };
 }

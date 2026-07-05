@@ -3,7 +3,7 @@
 // and the pages. The dashboard's whole job is turning these numbers into
 // pixels; keeping the math here keeps the components about layout.
 
-import type { Catalog, MapArea, MapFeed, MapModule } from './api';
+import type { Catalog, MapArea, MapFeed, MapModule, RefEdge } from './api';
 import { KPI } from './copy';
 import { type TreemapRect, treemap } from './treemap';
 
@@ -17,6 +17,21 @@ export interface CapabilityRef {
 export function modulesForCapability(catalog: Catalog, ref: CapabilityRef): string[] {
   const list = ref.kind === 'concept' ? catalog.concepts : catalog.flows;
   return list.find((c) => c.id === ref.id)?.modules ?? [];
+}
+
+/**
+ * A module's first-hop structural neighbours (T17b): every module it imports or
+ * is imported by. The atlas outlines these when a tile is selected, so you can
+ * see a module's blast radius without drawing a single line.
+ */
+export function neighborsOf(refs: RefEdge[], module: string | null): Set<string> {
+  const out = new Set<string>();
+  if (!module) return out;
+  for (const r of refs) {
+    if (r.from_module === module) out.add(r.to_module);
+    else if (r.to_module === module) out.add(r.from_module);
+  }
+  return out;
 }
 
 /** `src/billing` → `billing` - the place-name a map tile is labelled with. */

@@ -34,5 +34,6 @@ export async function buildCommand(): Promise<void> {
 
   const noun = report.emitted === 1 ? 'entry' : 'entries';
   const vectors = embedder ? ` · ${report.embedded} embedded` : '';
-  logger.success(`Built ${report.dbPath} — ${report.emitted} ${noun}${vectors}.`);
+  const refs = report.refs > 0 ? ` · ${report.refs} module refs` : '';
+  logger.success(`Built ${report.dbPath} — ${report.emitted} ${noun}${vectors}${refs}.`);
 }

@@ -1,8 +1,9 @@
 import { existsSync, globSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { listSourceFiles, referenceGraph } from '../analytics/references';
 import type { ArthaConfig } from '../config/config';
 import type { Embedder } from '../embed/embedder';
-import type { ResolvedSymbol } from '../resolver/SymbolResolver';
+import type { ResolvedSymbol, SymbolResolver } from '../resolver/SymbolResolver';
 import { createTreeSitterResolver } from '../resolver/treeSitterResolver';
 import { loadEntries, writeEntry } from '../schema/load';
 import type { ArthaEntry, Pin } from '../schema/types';
@@ -31,6 +32,8 @@ export interface BuildReport {
   emitted: number;
   /** Number of facts that got an embedding vector this build (T14). */
   embedded: number;
+  /** Number of module→module reference edges mined from imports (T17b). */
+  refs: number;
   dbPath: string;
 }
 
@@ -63,6 +66,7 @@ export async function buildIndex(
     staled: [],
     emitted: 0,
     embedded: 0,
+    refs: 0,
     dbPath,
   };
 
@@ -79,10 +83,17 @@ export async function buildIndex(
   // 4. Pin resolution (ERROR). Resolve everything first; any miss fails the
   // build before we write hashes or staleness back to disk. A flow's `entry`
   // and per-step `pin`s resolve through the same mechanism as base `pins`.
+  // One resolver serves both pin resolution and the reference graph (T17b), so
+  // we spin up tree-sitter when there are pins *or* any source to mine imports
+  // from - a truly empty repo pays nothing.
   const resolved = new Map<Pin, ResolvedSymbol>();
   const pinnedEntries = entries.filter((entry) => collectPins(entry).length > 0);
-  if (pinnedEntries.length > 0) {
-    const resolver = await createTreeSitterResolver(repoRoot);
+  const sourceFiles = listSourceFiles(repoRoot, config.sourceRoots);
+  const resolver: SymbolResolver | null =
+    pinnedEntries.length > 0 || sourceFiles.length > 0
+      ? await createTreeSitterResolver(repoRoot)
+      : null;
+  if (resolver) {
     for (const entry of pinnedEntries) {
       for (const pin of collectPins(entry)) {
         const hit = resolver.resolve(pin.symbol);
@@ -127,6 +138,14 @@ export async function buildIndex(
 
   // 6–8 + emit.
   const data = toIndexData(entries, resolved, config, repoRoot, report);
+
+  // T17b — the structural reference graph: module→module edges mined from
+  // imports alone. Fully automatic, deterministic, offline, no LLM (structure
+  // isn't meaning, so no human is in this loop).
+  data.refs = resolver
+    ? referenceGraph(sourceFiles, (file) => resolver.imports(file), config.sourceRoots)
+    : [];
+  report.refs = data.refs.length;
 
   // T14 — build-time embeddings (best-effort, offline-by-default). Read the
   // previous index's vectors first (reuse unchanged facts) before writeIndex
@@ -271,6 +290,7 @@ function toIndexData(
     transitions,
     flowSteps,
     embeddings: [],
+    refs: [],
   };
 }
 

@@ -7,6 +7,7 @@ import type {
   MapFeed,
   ModuleDetail,
   RankedModule,
+  Suggestion,
 } from '../../web/src/api';
 import { Atlas } from '../../web/src/components/Atlas';
 import { CapCard } from '../../web/src/components/CapCard';
@@ -314,6 +315,16 @@ describe('Atlas', () => {
     expect(html).toContain(`href="${routeHref({ view: 'module', id: 'src/billing' })}"`);
   });
 
+  it('outlines a selected tile’s first-hop structural neighbours (T17b)', () => {
+    const html = markup(
+      <Atlas {...base} selectedModule="src/billing" neighbors={new Set(['src/payments'])} />,
+    );
+    // the neighbour is outlined (not lit/glowing) and stays undimmed
+    expect(count(html, /class="[^"]*\bneighbor\b[^"]*"/g)).toBe(1);
+    // an unrelated tile still dims - the outline is not a global un-dim
+    expect(html).toContain('dimmed');
+  });
+
   it('cold start renders the funnel over the dark terrain, never a blank', () => {
     const coldFeed: MapFeed = {
       cold: true,
@@ -416,6 +427,8 @@ describe('Inspector', () => {
       },
     ],
     decisions: [],
+    dependsOn: [{ module: 'src/checkout', count: 2 }],
+    usedBy: [{ module: 'src/payments', count: 1 }],
   };
 
   it('quick-looks a module: standing, stats, capabilities, rules', () => {
@@ -445,6 +458,16 @@ describe('Inspector', () => {
     expect(html).toContain('100%');
     expect(html).toContain('Invoice');
     expect(html).toContain('src/payments');
+  });
+
+  it('shows the module’s structural neighbours (wired to, T17b)', () => {
+    const html = markup(
+      <Inspector
+        content={{ kind: 'module', module: 'src/billing', mapModule: feed.modules[0], detail }}
+      />,
+    );
+    expect(html).toContain('Wired to');
+    expect(html).toContain('checkout'); // a depends-on neighbour, by place-name
   });
 });
 
@@ -497,6 +520,8 @@ describe('ModulePage (engineer lens, 16c)', () => {
         viaScope: false,
       },
     ],
+    dependsOn: [{ module: 'src/payments', count: 3 }],
+    usedBy: [{ module: 'src/checkout', count: 1 }],
   };
   const capabilityOf = (f: { id: string }) =>
     capabilityEntries(catalog).find((e) => e.ref.id === f.id) ?? null;
@@ -534,6 +559,19 @@ describe('ModulePage (engineer lens, 16c)', () => {
     expect(html).toContain('dark zone');
     expect(html).toContain('#/queue');
     expect(html).toContain('#1'); // its queue position
+    // even a dark module shows how it's wired in code (structure survives no meaning)
+    expect(html).toContain('Wired to');
+  });
+
+  it('shows what the module is wired to, with links and coupling counts (T17b)', () => {
+    const html = markup(
+      <ModulePage detail={detail} capabilityOf={capabilityOf} curation={noopCuration} />,
+    );
+    expect(html).toContain('Wired to');
+    expect(html).toContain('Depends on');
+    expect(html).toContain('Used by');
+    expect(html).toContain(`href="${routeHref({ view: 'module', id: 'src/payments' })}"`);
+    expect(html).toContain('×3'); // src/payments is imported 3 times
   });
 });
 
@@ -737,12 +775,106 @@ describe('curation affordances (T17)', () => {
           viaScope: false,
         },
       ],
+      dependsOn: [],
+      usedBy: [],
     };
     const html = markup(
       <ModulePage detail={detail} capabilityOf={() => null} curation={noopCuration} />,
     );
     // one certify button: the proposed decision, not the certified invariant
     expect(count(html, /btn-certify/g)).toBe(1);
+  });
+});
+
+describe('suggested code (T17b)', () => {
+  const suggestions: Suggestion[] = [
+    {
+      ref: 'src/checkout/checkout.ts#finalize',
+      name: 'finalize',
+      path: 'src/checkout/checkout.ts',
+      kind: 'function',
+      why: 'referenced by pinned code',
+      score: 1000,
+    },
+    {
+      ref: 'src/billing/refund.ts#issueRefund',
+      name: 'issueRefund',
+      path: 'src/billing/refund.ts',
+      kind: 'function',
+      why: 'name match',
+      score: 6,
+    },
+  ];
+
+  const proposedConcept: ConceptDetail = {
+    id: 'concept.checkout',
+    kind: 'concept',
+    name: 'Checkout',
+    summary: 'Cart to a paid order.',
+    status: 'proposed',
+    certifiedBy: null,
+    certifiedAt: null,
+    states: [],
+    transitions: [],
+    pins: [],
+    related: [],
+    modules: [],
+  };
+
+  it('offers ranked, explainable one-click pins under the pins list', () => {
+    const html = markup(
+      <ConceptPage
+        detail={proposedConcept}
+        names={new Map()}
+        curation={noopCuration}
+        suggestions={suggestions}
+      />,
+    );
+    expect(html).toContain('Suggested code');
+    expect(html).toContain('issueRefund');
+    expect(html).toContain('finalize');
+    expect(html).toContain('near linked code'); // the "referenced by pinned code" label
+    expect(html).toContain('name match');
+    // one Link button per suggestion (confirm rides POST /api/pin)
+    expect(count(html, /suggest-link/g)).toBe(2);
+  });
+
+  it('a flow surfaces the fan-out of its entry point as suggestions', () => {
+    const flow: FlowDetail = {
+      id: 'flow.checkout',
+      kind: 'flow',
+      name: 'Checkout',
+      summary: 'Cart to a paid order.',
+      status: 'proposed',
+      certifiedBy: null,
+      certifiedAt: null,
+      entry: [],
+      steps: [],
+      related: [],
+      modules: [],
+    };
+    const html = markup(
+      <FlowPage
+        detail={flow}
+        names={new Map()}
+        curation={noopCuration}
+        suggestions={suggestions}
+      />,
+    );
+    expect(html).toContain('Suggested code');
+    expect(html).toContain('finalize');
+  });
+
+  it('renders no suggestion block when there are none', () => {
+    const html = markup(
+      <ConceptPage
+        detail={proposedConcept}
+        names={new Map()}
+        curation={noopCuration}
+        suggestions={[]}
+      />,
+    );
+    expect(html).not.toContain('Suggested code');
   });
 });
 

@@ -173,6 +173,31 @@ describe('buildIndex — emit', () => {
     expect(rows('SELECT count(*) AS n FROM artha_embeddings')[0]?.n).toBe(0);
   });
 
+  it('mines a module reference graph from imports, deterministically (T17b)', async () => {
+    // checkout imports billing → one structural edge, no .artha entries needed.
+    money(ORIGINAL_ADD); // src/billing/Money.ts
+    writeFileSync(
+      join(repo, 'src', 'checkout', 'checkout.ts'),
+      "import { Money } from '../billing/Money';\nexport function startCheckout(m: Money) {\n  return m;\n}\n",
+    );
+
+    const report = await run();
+    expect(report.errors).toEqual([]);
+    expect(report.refs).toBe(1);
+
+    const expected = [{ from_module: 'src/checkout', to_module: 'src/billing', count: 1 }];
+    expect(rows('SELECT from_module, to_module, count FROM artha_refs')).toEqual(expected);
+
+    // the read layer exposes the same edges
+    const idx = openArthaIndex(dbPath());
+    expect(idx.refs).toEqual(expected);
+    idx.close();
+
+    // rebuilding the same tree yields the identical graph (byte-deterministic rows)
+    await run();
+    expect(rows('SELECT from_module, to_module, count FROM artha_refs')).toEqual(expected);
+  });
+
   it('validates, resolves a pin, fills the hash, and emits a searchable index', async () => {
     money(ORIGINAL_ADD);
     writeEntryFile('decisions', 'money.yaml', certifiedDecisionYaml());

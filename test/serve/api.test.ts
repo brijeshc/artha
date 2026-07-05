@@ -10,6 +10,7 @@ import {
   flowDetail,
   mapFeed,
   moduleDetail,
+  refsFeed,
   search,
 } from '../../src/serve/api';
 import { fact, fakeIndex, pin } from '../helpers/fakeIndex';
@@ -292,6 +293,36 @@ describe('moduleDetail (engineer lens, 16c)', () => {
     // undeclared module keeps itself as its area
     const other = moduleDetail(repo, richIndex(), cfg, 'src/checkout');
     expect(other?.areas).toEqual(['src/checkout']);
+  });
+
+  it('reports depends-on / used-by from the reference graph, most-coupled first (T17b)', () => {
+    const index = fakeIndex({
+      facts: [fact('concept.invoice', 'certified', { heading: 'Invoice', body: 'A bill.' })],
+      pins: [pin('concept.invoice', 'src/billing/Invoice.ts#Invoice')],
+      refs: [
+        { from_module: 'src/billing', to_module: 'src/checkout', count: 2 },
+        { from_module: 'src/checkout', to_module: 'src/billing', count: 1 },
+        { from_module: 'src/ui', to_module: 'src/billing', count: 3 },
+      ],
+    });
+    const detail = moduleDetail(repo, index, config, 'src/billing');
+    expect(detail?.dependsOn).toEqual([{ module: 'src/checkout', count: 2 }]);
+    // used-by sorts by import count descending: ui (3) then checkout (1)
+    expect(detail?.usedBy).toEqual([
+      { module: 'src/ui', count: 3 },
+      { module: 'src/checkout', count: 1 },
+    ]);
+  });
+});
+
+describe('refsFeed', () => {
+  it('returns the whole module graph as stored', () => {
+    const refs = [
+      { from_module: 'src/billing', to_module: 'src/checkout', count: 2 },
+      { from_module: 'src/checkout', to_module: 'src/billing', count: 1 },
+    ];
+    expect(refsFeed(fakeIndex({ refs }))).toEqual(refs);
+    expect(refsFeed(fakeIndex({}))).toEqual([]);
   });
 });
 

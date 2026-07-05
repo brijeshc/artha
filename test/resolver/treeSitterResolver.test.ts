@@ -134,3 +134,49 @@ describe('treeSitterResolver — enumeration (list, for the link picker)', () =>
     expect(resolver.list('src/does-not-exist.ts')).toEqual([]);
   });
 });
+
+describe('treeSitterResolver — imports (for the reference graph)', () => {
+  let tmp: string;
+  let resolver: SymbolResolver;
+
+  beforeAll(async () => {
+    tmp = mkdtempSync(join(tmpdir(), 'artha-imports-'));
+    mkdirSync(join(tmp, 'src'), { recursive: true });
+    writeFileSync(
+      join(tmp, 'src', 'a.ts'),
+      [
+        "import { Money } from './money';",
+        "import type { Config } from '../config';",
+        "import Default from './default.js';",
+        "export { formatMoney } from './money';",
+        "export * from './rates';",
+        "const db = require('../db/client');",
+        "const lazy = () => import('./lazy');",
+        "import 'side-effect';", // bare, side-effect
+        'const dynamic = await import(`./${name}`);', // computed → skipped
+        'export const X = 1;', // export with no source → nothing
+      ].join('\n'),
+    );
+    resolver = await createTreeSitterResolver(tmp);
+  });
+
+  afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+
+  it('collects import/export-from/require/dynamic-import specifiers in source order', () => {
+    expect(resolver.imports('src/a.ts')).toEqual([
+      './money',
+      '../config',
+      './default.js',
+      './money',
+      './rates',
+      '../db/client',
+      './lazy',
+      'side-effect',
+    ]);
+  });
+
+  it('returns [] for a non-JS/TS or missing file (never throws)', () => {
+    expect(resolver.imports('src/data.json')).toEqual([]);
+    expect(resolver.imports('src/missing.ts')).toEqual([]);
+  });
+});

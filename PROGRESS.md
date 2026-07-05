@@ -18,6 +18,7 @@ Running log of task completion against [tasks/README.md](tasks/README.md) (v0.1)
 | 16c| Dashboard redesign Ph.3        | ✅ done  | engineer module view (`/api/module/:id`) + flow ladder + cold-start funnel — shipped inside the **atlas shell** rebuild ([Dashboard.md §11](design/Dashboard.md)) |
 | 16d| Dashboard v3 — the atlas shell | ✅ done  | page-of-sections → full-screen app shell: treemap Understanding Atlas, hash routes (deep-linkable selection), navigator/inspector, product-language everywhere; 30 web tests |
 | 17 | Write-back (link/certify/edit)| ✅ done  | `POST /api/certify·pin·entry` over `src/serve/write.ts`; YAML git diffs + transactional rebuild/rollback; certify "lights up" the atlas; edit un-certifies; +22 tests, live E2E |
+| 17b| Auto-map (refs + suggestions) | ✅ done  | `artha_refs` import graph (auto, offline) + ranked `/api/suggest` pins (proximity→lexical→embedding, each with a why); atlas neighbour-outline · module/inspector "Wired to" · capability "Suggested code" (1-click via `POST /api/pin`); +29 tests |
 | 18 | "Ask the human" loop          | ⬜ next  | unblocked (write/certify plumbing shipped; hooks into the curation seam) |
 | 19 | Contradiction preview panel   | ⬜       | §6.1 deterministic only |
 | 20 | v0.2 success test             | ⬜       | non-author reads the map |
@@ -44,6 +45,67 @@ Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 ## Log
 
 ### 2026-07-04
+
+- **T17b — Auto-map: reference graph + suggested pins** done. The map's two kinds of
+  edges are now both handled: **structural edges** (imports) are extracted **fully
+  automatically** - no human, no LLM - and **meaning edges** (pins) become **ranked,
+  explainable suggestions** a human confirms with one keystroke. Fully offline.
+  - **`resolver.imports()`** (`src/resolver/*`): the raw import/`export…from`/`require`/
+    dynamic-`import()` specifiers a file declares, in source order, via tree-sitter
+    (computed specifiers skipped, bare kept as-is). Mirrors T17's `list()`.
+  - **Reference graph** (`src/analytics/references.ts`, wired into `artha build`):
+    `resolveSpecifier` resolves relative specifiers to repo files (`./`, `../`, extension
+    inference, `index.*`, and the ESM `./x.js`→`./x.ts` rewrite; bare/out-of-tree → null);
+    `referenceGraph` rolls file→file edges up to **module altitude** (reuses T13/OQ5),
+    drops self-edges, keeps counts, and emits a **deterministic** order → the new
+    `artha_refs(from_module, to_module, count)` index table. Rebuilding is byte-identical.
+    `fileImportGraph` keeps the file-level adjacency for the suggester's proximity signal.
+  - **One structural scan** (`src/serve/symbols.ts` → `repoStructure`): the link-picker
+    symbol catalog **and** the file import graph now come from a single cached resolver
+    pass over the source roots (no second walk), shared by the picker and the suggester.
+  - **Read API** (`src/serve/api.ts`): `/api/module/:id` gains `dependsOn`/`usedBy`
+    (`{module, count}`, most-coupled first); `GET /api/refs` returns the whole module graph
+    for the atlas. Pure over the index, offline.
+  - **Suggested pins** (`src/serve/suggest.ts` + `GET /api/suggest?id=`): candidates are
+    the resolvable-symbol catalog (so **every suggestion resolves as a pin**, the picker's
+    guarantee), scored by **reference proximity** (a symbol in a file one hop from
+    already-pinned code — for a flow, the fan-out of its entry point) **> lexical overlap**
+    (entry name/summary vs symbol, reusing T17's `lexicalScore`) **> related meaning**
+    (symbols pinned by *other* facts whose vectors are embedding-similar — read from the
+    index's existing vectors, **all cache hits, no model load** on the read path). Each hit
+    carries a `why` (`referenced by pinned code` · `name match` · `related meaning`); weights
+    keep the tiers strict; suggestions are **top-level units**, not class-member noise
+    (the picker still offers members for precision).
+  - **UI** (atlas identity, hairline until asked for): module page + inspector grow a
+    **"Wired to"** section (depends-on / used-by as module links with ×N coupling); the
+    **atlas outlines a selected tile's first-hop neighbours** (dashed, undimmed — glow stays
+    reserved for certified coverage) so "blast radius" reads at a glance; capability pages
+    grow a **"Suggested code"** ledger under the pins list — each row is name·kind·path·why
+    with a **one-click "+ Link"** that rides the existing `POST /api/pin` (ignoring costs
+    nothing). App reads `/api/refs` once (structure is immutable under curation) and re-ranks
+    suggestions after each link.
+  - **v0.2 cut honoured**: this mines **structure, not meaning**, and **proposes** rather
+    than writes — no second auto-*miner*, no auto-certify, no write without an explicit click.
+  - **Verified**: typecheck (CLI+web) + Biome clean; **293 tests pass** (+29 — import
+    extraction, `resolveSpecifier`/`referenceGraph` unit + fixture roll-up, byte-deterministic
+    `artha_refs`, `dependsOn`/`usedBy` + `refsFeed`, suggestion ranking [proximity beats
+    lexical beats nothing · related-meaning via vectors · members excluded · every candidate
+    resolves · flow fan-out], booted-server `/api/refs` + suggestion→pin round trip, and web
+    render of wired-to/neighbour-outline/suggested-code). Bundle 61.2 KB gzip JS / 6.4 KB CSS;
+    `dist/cli.js` stays react-free (134 KB). **Live E2E** against the real `dist/cli.js serve`
+    on a seeded shop demo wired with cross-module imports: `artha build` mines 6 module refs;
+    `/api/refs`, `dependsOn`/`usedBy` (billing is the hub), and `/api/suggest` return live
+    data; headless-Edge visual pass on the atlas neighbour-outline (leaf-module selection dims
+    non-neighbours), the module/inspector "Wired to", and the capability "Suggested code";
+    and a **CDP click-to-link**: `+ Link` on a suggestion lands the pin, drops it from the
+    list, and the graph **re-ranks** (a newly-pinned file's importers surface next). All 6
+    acceptance criteria met.
+
+- **T17b spec'd — auto-map: reference graph + suggested pins** ([tasks-v0.2/17b](tasks-v0.2/17b-reference-graph.md)).
+  Design decision behind it: the map has two kinds of edges.
+  Structural edges (imports, module tree) claim nothing about meaning, so they are extracted fully automatically - no human in the loop.
+  Meaning edges (pins) are what agents trust over MCP, so they stay machine-proposed, human-confirmed - suggestions ranked by reference proximity, lexical overlap, and (when vectors exist) embeddings, each with a stated why, confirmed through the existing `POST /api/pin`.
+  Mines structure, not meaning, so v0.2's "no second auto-miner" cut stands.
 
 - **T17 polish — review + live preview pass.**
   Reviewed the T17 diff against a served demo repo (headless-Edge drive of the picker, edit form, and a real certify round-trip; YAML git diff verified) and landed four improvements.

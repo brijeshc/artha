@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { type RankedModule, darkZones, moduleCoverage } from '../analytics/coverage';
 import { moduleOf } from '../analytics/module';
+import type { RefRow } from '../build/db';
 import type { ArthaConfig } from '../config/config';
 import type { ArthaIndex } from '../mcp/query';
 import { rankFacts } from '../mcp/rank';
@@ -320,12 +321,19 @@ export interface ModuleFact {
   viaScope: boolean;
 }
 
+/** A structural link to another module (T17b), with how many imports back it. */
+export interface RefLink {
+  module: string;
+  count: number;
+}
+
 /**
  * The engineer lens (16c): everything certified/proposed that governs one code
  * module. `capabilities` are the concepts/flows built on it; `rules` the
- * invariants + conventions in scope; `decisions` the *why*. Stats echo the
- * dark-zone ranking so the view can say how dark the module is and where it
- * sits in the ask queue.
+ * invariants + conventions in scope; `decisions` the *why*. `dependsOn`/`usedBy`
+ * are the structural neighbours mined from imports (T17b - "what am I wired to").
+ * Stats echo the dark-zone ranking so the view can say how dark the module is
+ * and where it sits in the ask queue.
  */
 export interface ModuleDetail {
   module: string;
@@ -342,6 +350,10 @@ export interface ModuleDetail {
   flows: ModuleFact[];
   rules: ModuleFact[];
   decisions: ModuleFact[];
+  /** Modules this one imports from (most-coupled first). */
+  dependsOn: RefLink[];
+  /** Modules that import this one (most-coupled first). */
+  usedBy: RefLink[];
 }
 
 export function moduleDetail(
@@ -402,7 +414,28 @@ export function moduleDetail(
     flows: facts.filter((f) => f.kind === 'flow'),
     rules: facts.filter((f) => f.kind === 'invariant' || f.kind === 'convention'),
     decisions: facts.filter((f) => f.kind === 'decision'),
+    dependsOn: refLinks(index.refs, module, 'out'),
+    usedBy: refLinks(index.refs, module, 'in'),
   };
+}
+
+// ── /api/refs ─────────────────────────────────────────────────────────────────
+
+/**
+ * The whole module reference graph (T17b) for the atlas: every structural
+ * edge, already deterministically ordered. Pure over the index; the atlas reads
+ * it to outline a selected tile's first-hop neighbours.
+ */
+export function refsFeed(index: ArthaIndex): RefRow[] {
+  return index.refs;
+}
+
+/** A module's structural neighbours: `out` = modules it imports, `in` = importers. */
+function refLinks(refs: RefRow[], module: string, dir: 'in' | 'out'): RefLink[] {
+  return refs
+    .filter((r) => (dir === 'out' ? r.from_module : r.to_module) === module)
+    .map((r) => ({ module: dir === 'out' ? r.to_module : r.from_module, count: r.count }))
+    .sort((a, b) => b.count - a.count || a.module.localeCompare(b.module));
 }
 
 /** Certified first, then proposed, then stale - trust order for listing. */

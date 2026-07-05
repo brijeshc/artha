@@ -1,10 +1,11 @@
 import type { ModuleDetail, ModuleFact } from '../api';
-import { MODULE_PAGE } from '../copy';
+import { MODULE_PAGE, WIRED } from '../copy';
 import { type CapabilityEntry, shortName } from '../derive';
 import { routeHref } from '../router';
 import { CapCard } from './CapCard';
 import { CertifyButton, type Curation } from './Curate';
 import { KindTag, SectionHead, StatusBadge } from './Status';
+import { WiredTo } from './Wired';
 
 /**
  * The engineer lens (16c): "I'm about to touch this module - what governs it
@@ -33,6 +34,11 @@ export function ModulePage({
           ? 'partial'
           : 'understood';
   const empty = caps.length === 0 && detail.rules.length === 0 && detail.decisions.length === 0;
+  const meaningSections =
+    (caps.length > 0 ? 1 : 0) +
+    (detail.rules.length > 0 ? 1 : 0) +
+    (detail.decisions.length > 0 ? 1 : 0);
+  const hasWired = detail.dependsOn.length > 0 || detail.usedBy.length > 0;
 
   return (
     <div className="page module-page">
@@ -121,6 +127,17 @@ export function ModulePage({
             </section>
           )}
         </>
+      )}
+
+      {hasWired && (
+        <section className="module-section">
+          <SectionHead
+            n={String(meaningSections + 1).padStart(2, '0')}
+            title={WIRED.head}
+            gloss={WIRED.gloss}
+          />
+          <WiredTo dependsOn={detail.dependsOn} usedBy={detail.usedBy} />
+        </section>
       )}
     </div>
   );

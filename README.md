@@ -84,6 +84,19 @@ artha ok Wrote AGENTS.md — 1 certified entry.
 Represent money as integer cents everywhere; convert at the UI edge.
 ```
 
+## Demo dashboard (for development)
+
+To review the dashboard on realistic data while working on Artha itself:
+
+```bash
+npm run demo                 # build, seed a demo repo into .demo/, serve on http://127.0.0.1:4173
+npm run demo -- --fresh      # discard .demo/ and reseed before serving
+npm run demo -- --port 5000  # serve on another port
+```
+
+The seeded repo (`.demo/`, gitignored) is a tiny fake shop: five source modules with cross-module imports (so the reference graph and pin suggestions have real edges), six `.artha` entries covering certified / proposed / stale, and a git history that gives each module a different churn.
+Curation writes from the dashboard (link / certify / edit) land in `.demo/.artha/*.yaml` and persist between runs; use `--fresh` to reset them.
+
 ## Commands
 
 | Command | What it does | Offline? |

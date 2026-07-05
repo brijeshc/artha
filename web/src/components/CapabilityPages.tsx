@@ -1,8 +1,8 @@
-import type { ConceptDetail, FlowDetail, PinView } from '../api';
+import type { ConceptDetail, FlowDetail, PinView, Suggestion } from '../api';
 import { CURATE, DETAIL } from '../copy';
 import { moduleOfPath, shortName } from '../derive';
 import { routeHref } from '../router';
-import { CertifyButton, type Curation, EditFields, LinkCode } from './Curate';
+import { CertifyButton, type Curation, EditFields, LinkCode, SuggestedCode } from './Curate';
 import { StateMachine } from './StateMachine';
 import { KindTag, SectionHead, StatusBadge } from './Status';
 
@@ -18,10 +18,13 @@ export function ConceptPage({
   detail,
   names,
   curation,
+  suggestions = [],
 }: {
   detail: ConceptDetail;
   names: Map<string, string>;
   curation: Curation;
+  /** Machine-proposed pins for this concept (T17b). */
+  suggestions?: Suggestion[];
 }): JSX.Element {
   const hasStates = detail.states.length > 0;
   return (
@@ -66,7 +69,7 @@ export function ConceptPage({
         title={DETAIL.pinsHead}
         pins={detail.pins}
         modules={detail.modules}
-        linkTo={{ id: detail.id, curation }}
+        linkTo={{ id: detail.id, curation, suggestions }}
       />
       <RelatedSection n="03" related={detail.related} names={names} />
     </div>
@@ -77,10 +80,13 @@ export function FlowPage({
   detail,
   names,
   curation,
+  suggestions = [],
 }: {
   detail: FlowDetail;
   names: Map<string, string>;
   curation: Curation;
+  /** Machine-proposed pins for this flow (T17b) - the fan-out of its entry point. */
+  suggestions?: Suggestion[];
 }): JSX.Element {
   const linked = detail.steps.filter((s) => s.pin !== null).length;
   const total = detail.steps.length;
@@ -94,7 +100,7 @@ export function FlowPage({
         title={DETAIL.entryHead}
         pins={detail.entry}
         modules={detail.modules}
-        linkTo={{ id: detail.id, curation }}
+        linkTo={{ id: detail.id, curation, suggestions }}
       />
 
       <section className="cap-section">
@@ -202,8 +208,8 @@ function PinsSection({
   pins: PinView[];
   /** The modules this capability touches - lets each pin open its engineer lens. */
   modules: string[];
-  /** When present, render the "link a symbol" affordance under the list. */
-  linkTo?: { id: string; curation: Curation };
+  /** When present, render the link affordance + suggestions under the list. */
+  linkTo?: { id: string; curation: Curation; suggestions?: Suggestion[] };
 }): JSX.Element {
   return (
     <section className="cap-section">
@@ -219,7 +225,16 @@ function PinsSection({
           ))}
         </ul>
       )}
-      {linkTo && <LinkCode id={linkTo.id} curation={linkTo.curation} />}
+      {linkTo && (
+        <>
+          <SuggestedCode
+            id={linkTo.id}
+            suggestions={linkTo.suggestions ?? []}
+            curation={linkTo.curation}
+          />
+          <LinkCode id={linkTo.id} curation={linkTo.curation} />
+        </>
+      )}
     </section>
   );
 }

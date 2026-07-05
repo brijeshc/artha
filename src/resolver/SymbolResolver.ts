@@ -39,4 +39,13 @@ export interface SymbolResolver {
    * {@link resolve} (same rules), so a picked symbol always makes a valid pin.
    */
   list(relPath: string): SymbolDecl[];
+  /**
+   * The raw import/require/re-export specifiers a file declares, as written
+   * (`./money`, `../../db`, `react`), in source order. Static `import … from`,
+   * `export … from`, `require(...)`, and dynamic `import(...)` are all captured;
+   * dynamic/computed specifiers are skipped. Bare/npm specifiers are included
+   * as-is - the caller decides which to keep. A non-JS/TS or missing file
+   * yields `[]`. This is the raw material for the module reference graph (T17b).
+   */
+  imports(relPath: string): string[];
 }

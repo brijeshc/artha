@@ -23,10 +23,14 @@ export interface AtlasProps {
   selectedModule: string | null;
   /** Ranked dark zones - the cold-start funnel's "start here" list. */
   zones: RankedModule[];
+  /** First-hop structural neighbours of the selected module (T17b): outlined,
+   * not glowing - glow stays reserved for certified coverage. */
+  neighbors?: Set<string>;
 }
 
 export function Atlas(props: AtlasProps): JSX.Element {
   const { feed, width, height, selectedArea, selectedModule, zones } = props;
+  const neighbors = props.neighbors ?? new Set<string>();
   const provinces = atlasLayout(feed, width, height);
 
   const lit = new Set<string>();
@@ -75,6 +79,7 @@ export function Atlas(props: AtlasProps): JSX.Element {
           const bucket = coverageBucket(t.module);
           const isSelected = selectedModule === t.module.module;
           const isLit = lit.has(t.module.module);
+          const isNeighbor = neighbors.has(t.module.module);
           return (
             <ModuleTile
               key={t.module.module}
@@ -85,8 +90,9 @@ export function Atlas(props: AtlasProps): JSX.Element {
               certified={t.module.certifiedFacts}
               rect={t.rect}
               selected={isSelected}
-              dimmed={hasSelection && !isLit}
+              dimmed={hasSelection && !isLit && !isNeighbor}
               lit={isLit && !isSelected}
+              neighbor={isNeighbor && !isSelected}
             />
           );
         }),
@@ -108,8 +114,9 @@ function ModuleTile(props: {
   selected: boolean;
   dimmed: boolean;
   lit: boolean;
+  neighbor: boolean;
 }): JSX.Element {
-  const { module, bucket, stale, churn, certified, rect, selected, dimmed, lit } = props;
+  const { module, bucket, stale, churn, certified, rect, selected, dimmed, lit, neighbor } = props;
   const showName = rect.w >= 64 && rect.h >= 26;
   const showMeta = rect.w >= 116 && rect.h >= 54;
   const cls = [
@@ -119,11 +126,13 @@ function ModuleTile(props: {
     selected ? 'selected' : '',
     dimmed ? 'dimmed' : '',
     lit ? 'lit' : '',
+    neighbor ? 'neighbor' : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   const standing = bucket === 'dark' ? 'unexplained' : `${certified} certified`;
+  const wired = neighbor ? ' · wired to selection' : '';
   return (
     <a
       className={cls}
@@ -131,7 +140,7 @@ function ModuleTile(props: {
       href={
         selected ? routeHref({ view: 'module', id: module }) : routeHref({ view: 'atlas', module })
       }
-      title={`${module} - ${standing} · ${churn} commits in 90 days${selected ? ' · open module' : ''}`}
+      title={`${module} - ${standing} · ${churn} commits in 90 days${wired}${selected ? ' · open module' : ''}`}
       aria-current={selected ? 'true' : undefined}
     >
       {showName && <span className="tile-name">{shortName(module)}</span>}

@@ -58,6 +58,7 @@ function fakeResolver(known: string[]): SymbolResolver {
     resolve: (ref) => (known.includes(ref) ? hit(ref) : null),
     hash: () => 'h',
     list: () => [],
+    imports: () => [],
   };
 }
 

@@ -1,8 +1,9 @@
 import type { MapModule, ModuleDetail, ModuleFact } from '../api';
-import { INSPECTOR } from '../copy';
+import { INSPECTOR, WIRED } from '../copy';
 import { type AreaStat, type CapabilityEntry, coverageBucket, shortName } from '../derive';
 import { routeHref } from '../router';
 import { KindTag, StatusBadge } from './Status';
+import { WiredTo } from './Wired';
 
 /**
  * The chart margin: a quick-look at whatever is selected on the atlas, without
@@ -99,6 +100,12 @@ function ModuleLook({
                   </ul>
                 </section>
               ),
+          )}
+          {(detail.dependsOn.length > 0 || detail.usedBy.length > 0) && (
+            <section className="inspector-group">
+              <p className="inspector-group-head">{WIRED.head}</p>
+              <WiredTo dependsOn={detail.dependsOn} usedBy={detail.usedBy} compact />
+            </section>
           )}
         </div>
       )}

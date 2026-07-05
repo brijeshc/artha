@@ -82,6 +82,11 @@ CREATE TABLE artha_embeddings (
   dim      INTEGER NOT NULL,
   vector   BLOB NOT NULL
 );
+CREATE TABLE artha_refs (
+  from_module  TEXT NOT NULL,
+  to_module    TEXT NOT NULL,
+  count        INTEGER NOT NULL
+);
 CREATE VIRTUAL TABLE artha_fts USING fts5(id UNINDEXED, heading, body);
 `;
 
@@ -166,6 +171,14 @@ export interface EmbeddingRow {
   vector: Uint8Array;
 }
 
+/** One directed module→module import edge (T17b). `count` = how many imports
+ * back it. Structural (mined from code), never a claim about meaning. */
+export interface RefRow {
+  from_module: string;
+  to_module: string;
+  count: number;
+}
+
 export interface IndexData {
   facts: FactRow[];
   pins: PinRow[];
@@ -177,6 +190,7 @@ export interface IndexData {
   transitions: TransitionRow[];
   flowSteps: FlowStepRow[];
   embeddings: EmbeddingRow[];
+  refs: RefRow[];
 }
 
 /** Emit a fresh `.artha/index.db` from scratch (idempotent: same input → same rows). */
@@ -259,6 +273,11 @@ export function writeIndex(dbPath: string, data: IndexData): void {
       'INSERT INTO artha_embeddings (fact_id, model, dim, vector) VALUES (?, ?, ?, ?)',
     );
     for (const r of data.embeddings) embedding.run(r.fact_id, r.model, r.dim, r.vector);
+
+    const ref = db.prepare(
+      'INSERT INTO artha_refs (from_module, to_module, count) VALUES (?, ?, ?)',
+    );
+    for (const r of data.refs) ref.run(r.from_module, r.to_module, r.count);
 
     db.exec('COMMIT');
   } catch (error) {

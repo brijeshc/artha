@@ -28,6 +28,7 @@ ready.
 | 16b | [Dashboard redesign Ph.2 — catalog + connections + command-bar search](16b-catalog-connections.md) | 16a | capability cards, focused product↔code leader-lines, ⌘K search |
 | 16c | [Dashboard redesign Ph.3 — engineer module view + flow ladder + cold-start funnel](16c-engineer-lens-polish.md) | 16a, 16b | the third lens (enter from code), honest flow coverage, cold-start funnel |
 | 17 | [Write-back — link, certify, edit YAML](17-write-back.md) | 15, 16a | drag-to-pin, in-browser certify, dashboard edits as git diffs |
+| 17b | [Auto-map — reference graph + suggested pins](17b-reference-graph.md) | 12, 15, 17 | automatic module dependency graph (imports); ranked, explainable pin suggestions confirmed via `POST /api/pin` |
 | 18 | [The "ask the human" loop](18-ask-loop.md) | 13, 17, v0.1 T06 | confidence-scored drafts + LLM-guided interview + manual free-capture |
 | 19 | [Contradiction preview panel](19-contradiction-preview.md) | 12, 16 | read-only §6.1 deterministic conflicting-facts findings |
 | 20 | [v0.2 success test — non-author reads the map](20-success-test.md) | 16, 17, 18 | repeatable protocol + harness for the legibility proof |
@@ -64,6 +65,19 @@ legibility proof — **16a is the make-or-break demo**.
 > capability + module pages in the atlas identity (design contract
 > [Dashboard.md §11.5](../design/Dashboard.md)). **T18 ask-loop** now hooks into this same
 > curation seam (its interview produces the drafts these endpoints persist + certify).
+>
+> **17b added 2026-07-04** (post-spec addendum): manual one-by-one linking doesn't scale, so
+> structural edges (imports, module tree) become fully automatic and meaning edges become
+> machine-proposed, human-confirmed suggestions.
+> It mines structure, not meaning, so the "no second auto-miner" cut stands; it parallelizes
+> with T18 (whose interview can cite the reference graph as context).
+>
+> **17b is done (2026-07-04):** `artha build` mines an `artha_refs` import graph (auto,
+> offline, deterministic); `/api/module/:id` carries `dependsOn`/`usedBy`, `/api/refs` serves
+> the graph, and `/api/suggest?id=` returns ranked, explainable, guaranteed-resolvable pin
+> suggestions confirmed one-click through `POST /api/pin`. The dashboard grows a "Wired to"
+> section, an atlas neighbour-outline, and a "Suggested code" ledger. See
+> [17b](17b-reference-graph.md) §Status and [PROGRESS.md](../PROGRESS.md).
 
 ## Suggested source layout (shared contract across tasks)
 
@@ -80,10 +94,12 @@ src/
   analytics/
     churn.ts            # git churn per module                              (T13)
     coverage.ts         # coverage + dark-zone health score                 (T13)
+    references.ts       # import graph → module-level `artha_refs`          (T17b)
   serve/
     server.ts           # `artha serve` HTTP server                         (T15)
     api.ts              # read endpoints over index + churn                 (T15)
     write.ts            # YAML write-back (pin/certify/edit)                 (T17)
+    suggest.ts          # ranked, explainable pin suggestions                (T17b)
     web/                # dashboard frontend (map, detail, panels)          (T16,17,19)
   ask/
     interview.ts        # LLM-guided /ask-me refinement                     (T18)

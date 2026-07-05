@@ -32,6 +32,7 @@ function indexData(facts: FactRow[], embeddings: IndexData['embeddings']): Index
     transitions: [],
     flowSteps: [],
     embeddings,
+    refs: [],
   };
 }
 

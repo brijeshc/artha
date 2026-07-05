@@ -176,6 +176,69 @@ function enumerate(root: Parser.SyntaxNode): SymbolDecl[] {
   return out;
 }
 
+/**
+ * The literal value of a static string specifier (`'./x'`, `` `./x` ``), or
+ * `null` for a computed one (a template with `${…}` substitutions can't be
+ * resolved statically, so it's skipped rather than guessed at).
+ */
+function literalString(node: Parser.SyntaxNode): string | null {
+  if (node.type === 'string') {
+    const frag = node.namedChildren.find((c) => c.type === 'string_fragment');
+    if (frag) return frag.text;
+    // An empty string ('' / "") has no fragment child.
+    return node.text.length >= 2 ? node.text.slice(1, -1) : '';
+  }
+  if (node.type === 'template_string') {
+    if (node.namedChildren.some((c) => c.type === 'template_substitution')) return null;
+    const frag = node.namedChildren.find((c) => c.type === 'string_fragment');
+    return frag ? frag.text : '';
+  }
+  return null;
+}
+
+/** The specifier an `import …`/`export … from` statement targets, if static. */
+function statementSource(node: Parser.SyntaxNode): string | null {
+  const src = node.childForFieldName('source');
+  if (src) return literalString(src);
+  // Grammar-version fallback: the source is the sole trailing string child.
+  const str = node.namedChildren.find((c) => c.type === 'string' || c.type === 'template_string');
+  return str ? literalString(str) : null;
+}
+
+/** The specifier a `require(...)` / dynamic `import(...)` call targets, if static. */
+function callSource(node: Parser.SyntaxNode): string | null {
+  const fn = node.childForFieldName('function');
+  if (!fn) return null;
+  // `require(...)` is an identifier callee; dynamic `import(...)` is an `import` node.
+  if (!(fn.type === 'import' || (fn.type === 'identifier' && fn.text === 'require'))) return null;
+  const args = node.childForFieldName('arguments');
+  const first = args?.namedChildren[0];
+  return first ? literalString(first) : null;
+}
+
+/**
+ * Every module specifier a file declares, in source order. Walks the whole tree
+ * (require/dynamic-import can appear anywhere, not just at the top level) and
+ * collects static string targets of import/export-from statements and
+ * require/import() calls. Duplicates are kept - counts feed the graph's edge
+ * weights.
+ */
+function collectImports(root: Parser.SyntaxNode): string[] {
+  const out: string[] = [];
+  const visit = (node: Parser.SyntaxNode): void => {
+    if (node.type === 'import_statement' || node.type === 'export_statement') {
+      const spec = statementSource(node);
+      if (spec !== null) out.push(spec);
+    } else if (node.type === 'call_expression') {
+      const spec = callSource(node);
+      if (spec !== null) out.push(spec);
+    }
+    for (const child of node.namedChildren) visit(child);
+  };
+  visit(root);
+  return out;
+}
+
 interface ParsedFile {
   lines: string[];
   root: Parser.SyntaxNode;
@@ -262,5 +325,12 @@ export async function createTreeSitterResolver(repoRoot: string): Promise<Symbol
     return parsed ? enumerate(parsed.root) : [];
   }
 
-  return { resolve, hash, list };
+  function imports(relPath: string): string[] {
+    const lang = langForExt(extname(relPath));
+    if (lang === null) return [];
+    const parsed = parseFile(join(repoRoot, relPath), lang);
+    return parsed ? collectImports(parsed.root) : [];
+  }
+
+  return { resolve, hash, list, imports };
 }

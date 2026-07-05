@@ -87,6 +87,29 @@ export const MODULE_PAGE = {
   darkCta: 'See where it sits in the queue',
 } as const;
 
+/** Wired-to: the structural neighbours mined from imports (T17b). */
+export const WIRED = {
+  head: 'Wired to',
+  gloss: 'How this code connects, read from its imports - structure, not certified meaning.',
+  dependsOn: 'Depends on',
+  usedBy: 'Used by',
+  none: 'Not wired to any other module in the source tree.',
+} as const;
+
+/** Suggested code: machine-proposed, human-confirmed pins (T17b). */
+export const SUGGEST = {
+  head: 'Suggested code',
+  gloss:
+    'Ranked from the reference graph and names - one click links it, ignoring it costs nothing.',
+  link: 'Link',
+  linking: 'Linking…',
+  why: {
+    'referenced by pinned code': 'near linked code',
+    'name match': 'name match',
+    'related meaning': 'related meaning',
+  } as Record<string, string>,
+} as const;
+
 export const DETAIL = {
   conceptLede:
     'The diagram is this concept’s whole life: every state it can be in, and every event that moves it.',

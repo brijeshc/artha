@@ -12,6 +12,9 @@ coverage/
 *.sqlite
 *.sqlite3
 
+# seeded demo repo for dashboard development (npm run demo)
+/.demo/
+
 # secrets & local env
 .env
 .env.*

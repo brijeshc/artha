@@ -111,6 +111,19 @@ export interface ModuleFact {
   viaScope: boolean;
 }
 
+/** A structural link to another module (T17b), with how many imports back it. */
+export interface RefLink {
+  module: string;
+  count: number;
+}
+
+/** One directed module→module import edge (T17b). */
+export interface RefEdge {
+  from_module: string;
+  to_module: string;
+  count: number;
+}
+
 /** The engineer lens: everything that governs one code module. */
 export interface ModuleDetail {
   module: string;
@@ -125,6 +138,22 @@ export interface ModuleDetail {
   flows: ModuleFact[];
   rules: ModuleFact[];
   decisions: ModuleFact[];
+  /** Modules this one imports from (most-coupled first). */
+  dependsOn: RefLink[];
+  /** Modules that import this one (most-coupled first). */
+  usedBy: RefLink[];
+}
+
+/** A machine-proposed pin (T17b): a resolvable symbol, ranked, with a plain why. */
+export interface Suggestion {
+  /** The pin ref, guaranteed resolvable: `src/billing/Money.ts#Money`. */
+  ref: string;
+  name: string;
+  path: string;
+  kind: string;
+  /** referenced by pinned code · name match · related meaning. */
+  why: string;
+  score: number;
 }
 
 /** Ranked dark-zone (the ask-queue, T13). `score` lower = darker. */
@@ -166,6 +195,16 @@ export function getFlow(id: string): Promise<FlowDetail> {
 
 export function getModule(id: string): Promise<ModuleDetail> {
   return getJson<ModuleDetail>(`api/module/${encodeURIComponent(id)}`);
+}
+
+/** The whole module reference graph (T17b) - the atlas outlines a tile's neighbours from it. */
+export function getRefs(): Promise<RefEdge[]> {
+  return getJson<RefEdge[]>('api/refs');
+}
+
+/** Ranked, explainable pin suggestions for an entry (T17b); confirm one via linkPin. */
+export function getSuggest(id: string): Promise<Suggestion[]> {
+  return getJson<Suggestion[]>(`api/suggest?id=${encodeURIComponent(id)}`);
 }
 
 export function getSearch(query: string): Promise<SearchHit[]> {

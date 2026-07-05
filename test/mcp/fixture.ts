@@ -112,6 +112,7 @@ export const FIXTURE: IndexData = {
   transitions: [],
   flowSteps: [],
   embeddings: [],
+  refs: [],
 };
 
 export function writeFixtureIndex(dbPath: string): void {

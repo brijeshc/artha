@@ -13,8 +13,10 @@ import {
   flowDetail,
   mapFeed,
   moduleDetail,
+  refsFeed,
   search,
 } from './api';
+import { suggestPins } from './suggest';
 import { searchSymbols, symbolCatalog } from './symbols';
 import { addPin, certifyEntry, commitWrite, upsertEntry } from './write';
 
@@ -128,6 +130,15 @@ async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void>
     }
     if (path === '/api/catalog') {
       sendJson(res, 200, catalog(index, ctx.config));
+      return;
+    }
+    if (path === '/api/refs') {
+      sendJson(res, 200, refsFeed(index));
+      return;
+    }
+    if (path === '/api/suggest') {
+      const id = url.searchParams.get('id') ?? '';
+      sendJson(res, 200, await suggestPins(ctx.repoRoot, index, ctx.config, id));
       return;
     }
     if (path === '/api/search') {
