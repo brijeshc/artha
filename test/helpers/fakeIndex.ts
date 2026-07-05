@@ -1,6 +1,9 @@
 import type {
   FactRow,
   FlowStepRow,
+  InferredPinRow,
+  InferredRow,
+  InferredStateRow,
   PinRow,
   RefRow,
   RelatedRow,
@@ -42,6 +45,9 @@ export function fakeIndex(parts: {
   flowSteps?: FlowStepRow[];
   related?: RelatedRow[];
   refs?: RefRow[];
+  inferred?: InferredRow[];
+  inferredPins?: InferredPinRow[];
+  inferredStates?: InferredStateRow[];
   embeddings?: Map<string, Float32Array>;
   embeddingModel?: string | null;
   fts?: (q: string) => Map<string, number>;
@@ -57,6 +63,9 @@ export function fakeIndex(parts: {
     flowSteps: parts.flowSteps ?? [],
     related: parts.related ?? [],
     refs: parts.refs ?? [],
+    inferred: parts.inferred ?? [],
+    inferredPins: parts.inferredPins ?? [],
+    inferredStates: parts.inferredStates ?? [],
     embeddings,
     embeddingModel: parts.embeddingModel ?? (embeddings.size > 0 ? 'fake-model' : null),
     empty: facts.length === 0,

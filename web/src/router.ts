@@ -8,7 +8,8 @@ export type Route =
   | { view: 'queue' }
   | { view: 'module'; id: string }
   | { view: 'concept'; id: string }
-  | { view: 'flow'; id: string };
+  | { view: 'flow'; id: string }
+  | { view: 'inferred'; id: string };
 
 export const ATLAS: Route = { view: 'atlas' };
 
@@ -33,6 +34,7 @@ export function parseRoute(hash: string): Route {
     if (head === 'module') return { view: 'module', id };
     if (head === 'concept') return { view: 'concept', id };
     if (head === 'flow') return { view: 'flow', id };
+    if (head === 'inferred') return { view: 'inferred', id };
   }
   return { view: 'atlas' };
 }
@@ -54,6 +56,7 @@ export function routeHref(route: Route): string {
     case 'module':
     case 'concept':
     case 'flow':
+    case 'inferred':
       return `#/${route.view}/${encodeURIComponent(route.id)}`;
   }
 }

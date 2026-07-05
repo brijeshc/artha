@@ -174,12 +174,21 @@ Users are never asked to maintain machine text.
 - [ ] Vouching an inferred fact is one keystroke → a `.artha/` YAML git diff via the existing write path; editing materializes with `derived_from` provenance.
 - [ ] **Proof:** on a stranger repo, clone-to-lit-map in under 10 minutes with zero human input, and a non-author correctly describes a capability from inferred content alone (the T20 protocol, arm 1).
 
-## Open questions (do not silently resolve - lock with the developer)
+## Open questions
 
-- **OQ-A - inferred storage.** Index-only (regenerable, proposed here) vs committed YAML (reviewable diffs, but churny).
-  Recommendation: index-only + materialize-on-touch; optionally `artha export --inferred` for teams that want PR review of the machine layer.
-- **OQ-B - schema shape.** New `status: inferred` vs an `origin` column beside the existing status trio.
-  Recommendation: `origin` + confidence in the index; YAML keeps the human trio; MCP label derives from origin.
-- **OQ-C - synthesis engine + cost defaults.** Which models per tier, default cap, resume semantics (mirror T06's decisions).
-- **OQ-D - confidence tier thresholds** and their exact wording (D7).
-- **OQ-E - sequencing vs v0.2.** Recommendation: 21a lands **before** T18 so the interview is built inverted (D8); T20 then runs both arms (inferred-only, then vouched).
+**Locked with the developer 2026-07-05 (build of 21a underway):**
+
+- **OQ-A - inferred storage → LOCKED: index-only regenerable cache + materialize-on-touch.**
+  Inferred facts live only in `.artha/index.db`; nothing new is committed.
+  Vouching/editing one materializes it into `.artha/` YAML with `derived_from: inferred@<hash>` provenance, entering the normal human lifecycle.
+  (`artha export --inferred` for PR review of the machine layer stays a later option, not built now.)
+- **OQ-B - schema shape → LOCKED: `origin` + `confidence`, human `status` trio untouched.**
+  Implemented as **parallel `artha_inferred*` tables** in the same index (not a fourth `status` value), so existing v0.1/v0.2 queries are byte-unchanged when inferred facts are ignored (the 21a acceptance criterion, satisfied by construction).
+  MCP label derives from `origin`.
+- **OQ-D - confidence wording → LOCKED (D7 wording): `read from code` (deterministic 21a), `inferred` (synthesized+verified 21b), `uncertain` (survived with a downgrade).**
+  Stored as slug (`read-from-code`), rendered as words; 21a emits only `read-from-code`.
+- **OQ-E - sequencing → LOCKED: 21a lands before T18** so the interview is built inverted (D8); T20 then runs both arms (inferred-only, then vouched).
+
+**Still open (deferred to 21b):**
+
+- **OQ-C - synthesis engine + cost defaults.** Which models per tier, default cap, resume semantics (mirror T06's decisions). Resolved when 21b starts.

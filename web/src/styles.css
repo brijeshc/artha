@@ -40,6 +40,14 @@
   --cov-partial: rgba(67, 223, 193, 0.19);
   --cov-understood: rgba(67, 223, 193, 0.31);
 
+  /* the second light: machine-described meaning (21a). A cooler, dimmer light
+     than phosphor, so the map answers "described vs vouched" at a glance and
+     moonlight never masquerades as certified. */
+  --moon: #8fb2d8;
+  --moon-2: #5f83a8;
+  --moon-dim: rgba(143, 178, 216, 0.12);
+  --cov-moon: rgba(143, 178, 216, 0.16);
+
   --mono: "Cascadia Code", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
 
@@ -549,6 +557,20 @@ a.crumb:hover {
   box-shadow: 0 0 0 1px var(--night-0), 0 0 18px rgba(67, 223, 193, 0.16);
 }
 
+/* the second light: a module the machine has described but the team has not
+ * vouched (21a, D2). A cool, solid-bordered glow - lit enough to read, always
+ * dimmer than the phosphor of certified coverage. Higher specificity than
+ * `.cov-dark`, so it wins wherever a dark tile has an inferred layer. */
+.tile.cov-dark.moonlit {
+  background: var(--cov-moon);
+  border-color: rgba(143, 178, 216, 0.44);
+  border-style: solid;
+  box-shadow: 0 0 0 1px var(--night-0), 0 0 12px rgba(143, 178, 216, 0.09);
+}
+.tile.cov-dark.moonlit .tile-name {
+  color: var(--ink-2);
+}
+
 .tile:hover {
   filter: brightness(1.25);
 }
@@ -613,6 +635,13 @@ a.crumb:hover {
   color: var(--ink-3);
   font-family: var(--sans);
   letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 8.5px;
+}
+.tile-standing.moon-word {
+  color: var(--moon);
+  font-family: var(--sans);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   font-size: 8.5px;
 }
@@ -703,6 +732,20 @@ a.crumb:hover {
 .legend-swatch.cov-understood {
   background: var(--cov-understood);
   border: 1px solid rgba(67, 223, 193, 0.62);
+}
+.legend-swatch.moonlit {
+  background: var(--cov-moon);
+  border: 1px solid rgba(143, 178, 216, 0.34);
+}
+.legend-two-light {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.legend-two-light .legend-swatch {
+  flex: none;
+  position: relative;
+  top: 1px;
 }
 
 /* cold start - the funnel over the dark terrain */
@@ -2259,4 +2302,86 @@ a.fact-line:hover {
   * {
     transition: none !important;
   }
+}
+
+/* ── the inferred layer (21a): moonlight ─────────────────────────────────────
+ * Machine-described meaning, always rendered a step below the phosphor of
+ * vouched facts: a cooler light, a worded confidence, evidence one glance away,
+ * and a distinct band for the delta only a human can add. */
+
+/* worded confidence (D7) - a small moonlight chip, never a number */
+.confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--moon);
+}
+.confidence-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--moon);
+  background: transparent; /* hollow: described, not the filled dot of certified */
+  display: inline-block;
+}
+
+/* the moonlight capability card - a cooler sibling of .cap-card */
+.cap-card.inferred-card {
+  border-left-color: var(--moon-2);
+  background: linear-gradient(var(--night-1), var(--night-1)) padding-box, var(--moon-dim)
+    border-box;
+}
+.cap-card.inferred-card:hover {
+  background: var(--night-2);
+  border-color: var(--line-2);
+  border-left-color: var(--moon);
+}
+/* state names read from code render in moonlight, not the phosphor of vouched */
+.state-chain.moon-chain .chain-state {
+  color: var(--moon);
+}
+
+/* the moonlight lead prose on a module / inferred page */
+.moon-prose {
+  color: var(--ink);
+}
+.module-lead.moon-prose {
+  margin: 0 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--moon-2);
+  color: var(--ink-2);
+  max-width: 64ch;
+}
+
+.inferred-note {
+  color: var(--moon-2);
+  font-size: 11px;
+}
+
+.pin.evidence code {
+  color: var(--ink-2);
+}
+
+/* the catalog's machine-described section header gloss sits under the title */
+.inferred-area .gloss {
+  margin: -2px 0 10px;
+}
+
+/* the delta band (D6): human ink over machine print - visually its own slot,
+ * an invitation to add what the code cannot hold. */
+.delta-band {
+  border: 1px dashed var(--line-2);
+  border-radius: 3px;
+  padding: 14px 16px;
+  background: rgba(158, 196, 188, 0.03);
+}
+.delta-body {
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  max-width: 64ch;
 }

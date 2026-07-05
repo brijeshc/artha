@@ -3,6 +3,7 @@ import {
   type Catalog as CatalogData,
   type ConceptDetail,
   type FlowDetail,
+  type InferredFactView,
   type MapFeed,
   type ModuleDetail,
   type ModuleFact,
@@ -14,6 +15,7 @@ import {
   getConcept,
   getDarkZones,
   getFlow,
+  getInferred,
   getMap,
   getModule,
   getRefs,
@@ -26,6 +28,7 @@ import { ConceptPage, FlowPage } from './components/CapabilityPages';
 import { CatalogPage } from './components/CatalogPage';
 import { CommandBar } from './components/CommandBar';
 import type { Curation } from './components/Curate';
+import { InferredPage } from './components/Inferred';
 import { Inspector } from './components/Inspector';
 import { ModulePage } from './components/ModulePage';
 import { Navigator } from './components/Navigator';
@@ -66,6 +69,7 @@ export function App(): JSX.Element {
   const [moduleDetails, setModuleDetails] = useState<Map<string, ModuleDetail | null>>(new Map());
   const [conceptDetail, setConceptDetail] = useState<ConceptDetail | null>(null);
   const [flowDetail, setFlowDetail] = useState<FlowDetail | null>(null);
+  const [inferredDetail, setInferredDetail] = useState<InferredFactView | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
 
@@ -148,6 +152,18 @@ export function App(): JSX.Element {
       .then(setSuggestions)
       .catch(() => setSuggestions([]));
   }, [capabilityKey]);
+
+  // The machine-described (moonlight) detail - a module card or state-machine
+  // candidate. Loaded on its own so it never contends with the concept/flow cache.
+  const inferredId = route.view === 'inferred' ? route.id : null;
+  useEffect(() => {
+    if (!inferredId) return;
+    setInferredDetail(null);
+    setDetailError(null);
+    getInferred(inferredId)
+      .then(setInferredDetail)
+      .catch((e: unknown) => setDetailError(errMsg(e)));
+  }, [inferredId]);
 
   const onGo = useCallback((r: Route) => {
     setCmdkOpen(false);
@@ -292,6 +308,10 @@ export function App(): JSX.Element {
             suggestions={suggestions}
           />
         );
+      case 'inferred':
+        if (detailError) return <NotFound label={route.id} note={detailError} />;
+        if (!inferredDetail) return <Loading />;
+        return <InferredPage detail={inferredDetail} />;
     }
   })();
 
@@ -335,6 +355,11 @@ function crumbs(route: Route, names: Map<string, string>): Crumb[] {
       ];
     case 'concept':
     case 'flow':
+      return [
+        { label: NAV.capabilities, href: '#/capabilities' },
+        { label: names.get(route.id) ?? route.id },
+      ];
+    case 'inferred':
       return [
         { label: NAV.capabilities, href: '#/capabilities' },
         { label: names.get(route.id) ?? route.id },

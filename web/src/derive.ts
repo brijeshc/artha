@@ -82,6 +82,30 @@ export function coverageBucket(m: MapModule): CoverageBucket {
   return 'understood';
 }
 
+/**
+ * The two-light grammar (21a, D2): a module with no *vouched* meaning but with a
+ * machine-described layer glows **moonlight** rather than sitting truly dark.
+ * Phosphor (certified) always wins; moonlight fills the rest of the map so the
+ * first-run experience is a lit atlas, not a black homework queue.
+ */
+export function isMoonlit(m: MapModule): boolean {
+  return m.certifiedFacts <= 0 && (m.described ?? false);
+}
+
+/** Worded confidence (D7): tiers are named, never numbered. */
+export function confidenceLabel(slug: string): string {
+  switch (slug) {
+    case 'read-from-code':
+      return 'read from code';
+    case 'inferred':
+      return 'inferred';
+    case 'uncertain':
+      return 'uncertain';
+    default:
+      return slug;
+  }
+}
+
 /** The four header stats, derived entirely from the map feed (no extra fetch). */
 export function kpis(feed: MapFeed): Kpi[] {
   const mods = feed.modules;
@@ -324,11 +348,13 @@ export function capabilitiesByArea(
   return out;
 }
 
-/** id → display name for concepts/flows, so `related` lists read as product language. */
+/** id → display name for concepts/flows (and inferred concepts), so `related`
+ * lists and breadcrumbs read as product language rather than raw ids. */
 export function capabilityNames(catalog: Catalog): Map<string, string> {
   const names = new Map<string, string>();
   for (const c of catalog.concepts) names.set(c.id, c.name ?? c.id);
   for (const f of catalog.flows) names.set(f.id, f.name ?? f.id);
+  for (const c of catalog.inferredConcepts ?? []) names.set(c.id, c.name);
   return names;
 }
 

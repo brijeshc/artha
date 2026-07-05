@@ -56,6 +56,9 @@ function indexWith(headings: string[]): IndexData {
     flowSteps: [],
     embeddings: [],
     refs: [],
+    inferred: [],
+    inferredPins: [],
+    inferredStates: [],
   };
 }
 

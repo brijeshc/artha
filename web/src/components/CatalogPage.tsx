@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import type { Catalog, MapFeed } from '../api';
-import { CATALOG } from '../copy';
+import { CATALOG, INFERRED } from '../copy';
 import { capabilitiesByArea } from '../derive';
 import { CapCard } from './CapCard';
+import { InferredCard } from './Inferred';
 import { SectionHead } from './Status';
 
 /**
@@ -28,6 +29,11 @@ export function CatalogPage({ catalog, feed }: { catalog: Catalog; feed: MapFeed
     .filter((g) => g.entries.length > 0);
 
   const total = catalog.concepts.length + catalog.flows.length;
+  const inferred = catalog.inferredConcepts ?? [];
+  // The machine-described tier is concept-shaped and carries no human status, so
+  // it shows under the "all" filters, below everything a human has vouched (D2).
+  const showInferred = inferred.length > 0 && status === 'all' && kind !== 'flow';
+  const anyContent = total > 0 || inferred.length > 0;
 
   return (
     <div className="page catalog-page">
@@ -52,24 +58,40 @@ export function CatalogPage({ catalog, feed }: { catalog: Catalog; feed: MapFeed
         }
       />
 
-      {total === 0 ? (
+      {!anyContent ? (
         <p className="empty-note">{CATALOG.empty}</p>
-      ) : groups.length === 0 ? (
-        <p className="empty-note">{CATALOG.noMatch}</p>
       ) : (
-        groups.map((g) => (
-          <section className="catalog-area" key={g.area?.area ?? '·unplaced'}>
-            <h3 className="catalog-area-name">
-              {g.area ? g.area.area : CATALOG.unplaced}
-              <span className="catalog-area-count">{g.entries.length}</span>
-            </h3>
-            <div className="catalog-grid">
-              {g.entries.map((e) => (
-                <CapCard key={e.ref.id} entry={e} />
-              ))}
-            </div>
-          </section>
-        ))
+        <>
+          {groups.length === 0 && total > 0 && <p className="empty-note">{CATALOG.noMatch}</p>}
+          {groups.map((g) => (
+            <section className="catalog-area" key={g.area?.area ?? '·unplaced'}>
+              <h3 className="catalog-area-name">
+                {g.area ? g.area.area : CATALOG.unplaced}
+                <span className="catalog-area-count">{g.entries.length}</span>
+              </h3>
+              <div className="catalog-grid">
+                {g.entries.map((e) => (
+                  <CapCard key={e.ref.id} entry={e} />
+                ))}
+              </div>
+            </section>
+          ))}
+
+          {showInferred && (
+            <section className="catalog-area inferred-area">
+              <h3 className="catalog-area-name">
+                {INFERRED.inferredCapsHead}
+                <span className="catalog-area-count">{inferred.length}</span>
+              </h3>
+              <p className="gloss">{INFERRED.inferredCapsGloss}</p>
+              <div className="catalog-grid">
+                {inferred.map((c) => (
+                  <InferredCard key={c.id} concept={c} />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
   );

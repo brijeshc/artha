@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { MapFeed, RankedModule } from '../api';
 import { COLD, LEGEND } from '../copy';
-import { type CoverageBucket, atlasLayout, coverageBucket, shortName } from '../derive';
+import { type CoverageBucket, atlasLayout, coverageBucket, isMoonlit, shortName } from '../derive';
 import { type Route, routeHref } from '../router';
 
 /**
@@ -85,6 +85,8 @@ export function Atlas(props: AtlasProps): JSX.Element {
               key={t.module.module}
               module={t.module.module}
               bucket={bucket}
+              moonlit={isMoonlit(t.module)}
+              inferredConcepts={t.module.inferredConcepts ?? 0}
               stale={t.module.staleFacts > 0}
               churn={t.module.churn}
               certified={t.module.certifiedFacts}
@@ -107,6 +109,9 @@ export function Atlas(props: AtlasProps): JSX.Element {
 function ModuleTile(props: {
   module: string;
   bucket: CoverageBucket;
+  /** No certified meaning, but a machine-described layer exists → moonlight (D2). */
+  moonlit: boolean;
+  inferredConcepts: number;
   stale: boolean;
   churn: number;
   certified: number;
@@ -116,12 +121,14 @@ function ModuleTile(props: {
   lit: boolean;
   neighbor: boolean;
 }): JSX.Element {
-  const { module, bucket, stale, churn, certified, rect, selected, dimmed, lit, neighbor } = props;
+  const { module, bucket, moonlit, inferredConcepts, stale, churn, certified } = props;
+  const { rect, selected, dimmed, lit, neighbor } = props;
   const showName = rect.w >= 64 && rect.h >= 26;
   const showMeta = rect.w >= 116 && rect.h >= 54;
   const cls = [
     'tile',
     `cov-${bucket}`,
+    moonlit ? 'moonlit' : '',
     stale ? 'has-stale' : '',
     selected ? 'selected' : '',
     dimmed ? 'dimmed' : '',
@@ -131,7 +138,9 @@ function ModuleTile(props: {
     .filter(Boolean)
     .join(' ');
 
-  const standing = bucket === 'dark' ? 'unexplained' : `${certified} certified`;
+  // Standing word: vouched (phosphor) > described (moonlight) > unexplained (dark).
+  const standing =
+    bucket !== 'dark' ? `${certified} certified` : moonlit ? 'described' : 'unexplained';
   const wired = neighbor ? ' · wired to selection' : '';
   return (
     <a
@@ -146,10 +155,14 @@ function ModuleTile(props: {
       {showName && <span className="tile-name">{shortName(module)}</span>}
       {showMeta && (
         <span className="tile-meta">
-          {bucket === 'dark' ? (
-            <span className="tile-standing dark-word">unexplained</span>
-          ) : (
+          {bucket !== 'dark' ? (
             <span className="tile-standing">{certified} certified</span>
+          ) : moonlit ? (
+            <span className="tile-standing moon-word">
+              described{inferredConcepts > 0 ? ` · ${inferredConcepts}` : ''}
+            </span>
+          ) : (
+            <span className="tile-standing dark-word">unexplained</span>
           )}
           <span className="tile-churn">{churn}Δ</span>
         </span>
@@ -174,6 +187,10 @@ function Legend(): JSX.Element {
             </span>
           ))}
         </div>
+        <p className="legend-two-light">
+          <span className="legend-swatch moonlit" aria-hidden="true" />
+          {LEGEND.moon}
+        </p>
         <p>{LEGEND.dark}</p>
         <p>{LEGEND.stale}</p>
         <p>{LEGEND.select}</p>

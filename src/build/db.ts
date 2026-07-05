@@ -87,6 +87,28 @@ CREATE TABLE artha_refs (
   to_module    TEXT NOT NULL,
   count        INTEGER NOT NULL
 );
+CREATE TABLE artha_inferred (
+  id          TEXT PRIMARY KEY,
+  kind        TEXT NOT NULL,
+  module      TEXT,
+  heading     TEXT NOT NULL,
+  body        TEXT,
+  confidence  TEXT NOT NULL,
+  origin      TEXT NOT NULL DEFAULT 'inferred'
+);
+CREATE TABLE artha_inferred_pins (
+  inferred_id   TEXT NOT NULL,
+  symbol_ref    TEXT NOT NULL,
+  symbol_id     TEXT,
+  content_hash  TEXT,
+  role          TEXT,
+  ord           INTEGER NOT NULL
+);
+CREATE TABLE artha_inferred_states (
+  inferred_id  TEXT NOT NULL,
+  name         TEXT NOT NULL,
+  ord          INTEGER NOT NULL
+);
 CREATE VIRTUAL TABLE artha_fts USING fts5(id UNINDEXED, heading, body);
 `;
 
@@ -179,6 +201,48 @@ export interface RefRow {
   count: number;
 }
 
+/**
+ * One inferred fact (21a): a machine-described unit of code meaning that lights
+ * the map before any human input. `origin='inferred'` and `confidence` place it
+ * on the trust ladder *below* vouched facts; it is a regenerable cache (never
+ * committed) that re-derives on every build. `kind` is `module` (a module card)
+ * or `concept` (a state-machine candidate). Materializing on human touch (vouch/
+ * edit) turns it into a normal `.artha/` YAML fact - these rows never do.
+ */
+export interface InferredRow {
+  id: string;
+  kind: string;
+  /** The module this fact belongs to, for atlas grouping; null if repo-wide. */
+  module: string | null;
+  /** Readable, product-leaning name (deterministically humanized in 21a). */
+  heading: string;
+  /** A plain-language description; the FTS body. */
+  body: string | null;
+  /** Worded confidence tier slug: `read-from-code` (21a) · `inferred` · `uncertain`. */
+  confidence: string;
+  /** Trust-ladder marker; always `inferred` for these rows. */
+  origin: string;
+}
+
+/** Evidence pin backing an inferred fact (21a) - the code it was read from.
+ * `role` is the "why" (`export` · `evidence` · `entry`); every claim cites pins. */
+export interface InferredPinRow {
+  inferred_id: string;
+  symbol_ref: string;
+  symbol_id: string | null;
+  content_hash: string | null;
+  role: string | null;
+  ord: number;
+}
+
+/** One state read literally from code for an inferred state-machine candidate
+ * (21a). Effects/invariants/transitions are the human delta, never emitted here. */
+export interface InferredStateRow {
+  inferred_id: string;
+  name: string;
+  ord: number;
+}
+
 export interface IndexData {
   facts: FactRow[];
   pins: PinRow[];
@@ -191,6 +255,9 @@ export interface IndexData {
   flowSteps: FlowStepRow[];
   embeddings: EmbeddingRow[];
   refs: RefRow[];
+  inferred: InferredRow[];
+  inferredPins: InferredPinRow[];
+  inferredStates: InferredStateRow[];
 }
 
 /** Emit a fresh `.artha/index.db` from scratch (idempotent: same input → same rows). */
@@ -278,6 +345,27 @@ export function writeIndex(dbPath: string, data: IndexData): void {
       'INSERT INTO artha_refs (from_module, to_module, count) VALUES (?, ?, ?)',
     );
     for (const r of data.refs) ref.run(r.from_module, r.to_module, r.count);
+
+    const inferred = db.prepare(
+      `INSERT INTO artha_inferred (id, kind, module, heading, body, confidence, origin)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    for (const r of data.inferred) {
+      inferred.run(r.id, r.kind, r.module, r.heading, r.body, r.confidence, r.origin);
+    }
+
+    const inferredPin = db.prepare(
+      `INSERT INTO artha_inferred_pins (inferred_id, symbol_ref, symbol_id, content_hash, role, ord)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    for (const r of data.inferredPins) {
+      inferredPin.run(r.inferred_id, r.symbol_ref, r.symbol_id, r.content_hash, r.role, r.ord);
+    }
+
+    const inferredState = db.prepare(
+      'INSERT INTO artha_inferred_states (inferred_id, name, ord) VALUES (?, ?, ?)',
+    );
+    for (const r of data.inferredStates) inferredState.run(r.inferred_id, r.name, r.ord);
 
     db.exec('COMMIT');
   } catch (error) {

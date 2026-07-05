@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, extname, join } from 'node:path';
 import Parser from 'web-tree-sitter';
-import type { ResolvedSymbol, SymbolDecl, SymbolResolver } from './SymbolResolver';
+import type { EnumLike, ResolvedSymbol, SymbolDecl, SymbolResolver } from './SymbolResolver';
 import { contentHash } from './hash';
 
 const require = createRequire(import.meta.url);
@@ -151,25 +151,133 @@ function enumerate(root: Parser.SyntaxNode): SymbolDecl[] {
   for (const child of root.namedChildren) {
     const decl = unwrapExport(child);
     if (!decl) continue;
+    // `export class X {}` / `export const x` wrap the declaration; the members
+    // inherit the module's public surface, so `exported` follows the wrapper.
+    const exported = child.type === 'export_statement';
 
     if (NAMED_DECLARATIONS.has(decl.type)) {
       const name = nameOf(decl);
       if (!name) continue;
-      out.push({ name, kind: friendlyKind(decl.type) });
+      out.push({ name, kind: friendlyKind(decl.type), exported });
       if (CLASS_TYPES.has(decl.type)) {
         const body = decl.childForFieldName('body');
         for (const member of body?.namedChildren ?? []) {
           if (!MEMBER_TYPES.has(member.type)) continue;
           const memberName = nameOf(member);
           if (memberName)
-            out.push({ name: `${name}.${memberName}`, kind: friendlyKind(member.type) });
+            out.push({
+              name: `${name}.${memberName}`,
+              kind: friendlyKind(member.type),
+              exported,
+            });
         }
       }
     } else if (decl.type === 'lexical_declaration' || decl.type === 'variable_declaration') {
       for (const d of decl.namedChildren) {
         if (d.type !== 'variable_declarator') continue;
         const name = nameOf(d);
-        if (name) out.push({ name, kind: 'const' });
+        if (name) out.push({ name, kind: 'const', exported });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * The member names of a TS `enum` body (`enum X { A, B = 'b' }` → `[A, B]`),
+ * covering both bare `property_identifier` members and `enum_assignment`s.
+ */
+function enumMembers(decl: Parser.SyntaxNode): string[] {
+  const body =
+    decl.childForFieldName('body') ??
+    decl.namedChildren.find((c) => c.type === 'enum_body') ??
+    null;
+  if (!body) return [];
+  const members: string[] = [];
+  for (const m of body.namedChildren) {
+    if (m.type === 'property_identifier') members.push(m.text);
+    else if (m.type === 'enum_assignment') {
+      const nameNode = m.childForFieldName('name') ?? m.namedChildren[0];
+      if (nameNode) members.push(nameNode.text);
+    }
+  }
+  return members;
+}
+
+/**
+ * The string-literal members of a union type value, or `null` if it is not a
+ * *pure* string-literal union (`'a' | 'b'`). Tree-sitter nests a 3+ member union
+ * left-recursively (`union_type(union_type(a, b), c)`), so this flattens. A
+ * `null`/`undefined` member is tolerated and skipped (common in status unions);
+ * any other member (a type reference, `number`, a boolean literal) disqualifies
+ * the whole union, so we never mislabel a general union as a state set.
+ * Precision over recall - a wrong state machine is worse than a missing one.
+ */
+function stringUnionMembers(value: Parser.SyntaxNode): string[] | null {
+  if (value.type !== 'union_type') return null;
+  const members: string[] = [];
+  let pure = true;
+
+  const walk = (node: Parser.SyntaxNode): void => {
+    for (const child of node.namedChildren) {
+      if (!pure) return;
+      if (child.type === 'union_type') {
+        walk(child); // flatten the left-nested tail
+        continue;
+      }
+      if (child.type === 'literal_type') {
+        const lit = child.namedChildren[0];
+        if (lit?.type === 'string') {
+          const s = literalString(lit);
+          if (s !== null && s !== '') {
+            members.push(s);
+            continue;
+          }
+        }
+        // `'a' | null` parses the null as literal_type(null) - tolerate it.
+        if (lit && (lit.type === 'null' || lit.text === 'undefined')) continue;
+        pure = false; // a number/boolean literal → not a state set
+        return;
+      }
+      // A bare `null`/`undefined` type, if the grammar surfaces it that way.
+      if (
+        child.type === 'null' ||
+        (child.type === 'predefined_type' && child.text === 'undefined')
+      ) {
+        continue;
+      }
+      pure = false; // a type reference or anything else
+      return;
+    }
+  };
+  walk(value);
+
+  if (!pure) return null;
+  return members.length >= 2 ? members : null;
+}
+
+/**
+ * Every string-literal union and TS enum a file declares (≥2 members) - the
+ * deterministic seed for inferred state-machine candidates (21a). Mirrors
+ * {@link findTopLevel}'s notion of a top-level declaration so each result's
+ * `path#Name` is a valid pin target.
+ */
+function collectEnumLikes(root: Parser.SyntaxNode): EnumLike[] {
+  const out: EnumLike[] = [];
+  for (const child of root.namedChildren) {
+    const decl = unwrapExport(child);
+    if (!decl) continue;
+
+    if (decl.type === 'enum_declaration') {
+      const name = nameOf(decl);
+      const members = enumMembers(decl);
+      if (name && members.length >= 2) out.push({ name, kind: 'enum', members });
+    } else if (decl.type === 'type_alias_declaration') {
+      const name = nameOf(decl);
+      const value = decl.childForFieldName('value');
+      if (name && value) {
+        const members = stringUnionMembers(value);
+        if (members) out.push({ name, kind: 'union', members });
       }
     }
   }
@@ -332,5 +440,12 @@ export async function createTreeSitterResolver(repoRoot: string): Promise<Symbol
     return parsed ? collectImports(parsed.root) : [];
   }
 
-  return { resolve, hash, list, imports };
+  function enumLikes(relPath: string): EnumLike[] {
+    const lang = langForExt(extname(relPath));
+    if (lang === null) return [];
+    const parsed = parseFile(join(repoRoot, relPath), lang);
+    return parsed ? collectEnumLikes(parsed.root) : [];
+  }
+
+  return { resolve, hash, list, enumLikes, imports };
 }

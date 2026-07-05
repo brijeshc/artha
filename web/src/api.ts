@@ -9,6 +9,11 @@ export interface MapModule {
   certifiedFacts: number;
   staleFacts: number;
   score: number;
+  /** Machine-described meaning exists here (21a) → the tile glows moonlight even
+   * before anyone vouches. Optional so a pre-21a index still types. */
+  described?: boolean;
+  /** Inferred state-machine candidates in this module (21a). */
+  inferredConcepts?: number;
 }
 
 export interface MapArea {
@@ -94,9 +99,35 @@ export interface CatalogFlow {
   linked: number;
 }
 
+/** A machine-described state-machine candidate (21a) for the catalog. Carries a
+ * worded `confidence` in place of a status - described, not vouched. */
+export interface InferredCatalogConcept {
+  id: string;
+  name: string;
+  module: string | null;
+  states: string[];
+  confidence: string;
+}
+
 export interface Catalog {
   concepts: CatalogConcept[];
   flows: CatalogFlow[];
+  /** Machine-described capabilities (21a), rendered in moonlight. Optional for a pre-21a index. */
+  inferredConcepts?: InferredCatalogConcept[];
+}
+
+/** One inferred fact (21a) as the dashboard reads it: a module card or a
+ * state-machine candidate, its worded confidence, states read from code, and
+ * the evidence pins that back it. */
+export interface InferredFactView {
+  id: string;
+  kind: string;
+  module: string | null;
+  name: string;
+  summary: string | null;
+  confidence: string;
+  states: string[];
+  pins: PinView[];
 }
 
 /** One fact as it touches a module: what it is, its standing, and the join. */
@@ -142,6 +173,10 @@ export interface ModuleDetail {
   dependsOn: RefLink[];
   /** Modules that import this one (most-coupled first). */
   usedBy: RefLink[];
+  /** The module's machine-described card (21a) - the moonlight lead prose. */
+  card?: InferredFactView | null;
+  /** Inferred state-machine candidates whose evidence lands in this module (21a). */
+  inferredConcepts?: InferredFactView[];
 }
 
 /** A machine-proposed pin (T17b): a resolvable symbol, ranked, with a plain why. */
@@ -195,6 +230,11 @@ export function getFlow(id: string): Promise<FlowDetail> {
 
 export function getModule(id: string): Promise<ModuleDetail> {
   return getJson<ModuleDetail>(`api/module/${encodeURIComponent(id)}`);
+}
+
+/** One inferred fact (21a) - a module card or state-machine candidate - in moonlight. */
+export function getInferred(id: string): Promise<InferredFactView> {
+  return getJson<InferredFactView>(`api/inferred/${encodeURIComponent(id)}`);
 }
 
 /** The whole module reference graph (T17b) - the atlas outlines a tile's neighbours from it. */

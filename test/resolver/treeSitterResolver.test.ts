@@ -135,6 +135,78 @@ describe('treeSitterResolver — enumeration (list, for the link picker)', () =>
   });
 });
 
+describe('treeSitterResolver — enumLikes (for inferred state machines, 21a)', () => {
+  let tmp: string;
+  let resolver: SymbolResolver;
+
+  beforeAll(async () => {
+    tmp = mkdtempSync(join(tmpdir(), 'artha-enums-'));
+    mkdirSync(join(tmp, 'src'), { recursive: true });
+    writeFileSync(
+      join(tmp, 'src', 'states.ts'),
+      [
+        "export type SubscriptionStatus = 'active' | 'paused' | 'canceled';",
+        'export enum Color {',
+        '  Red,',
+        "  Green = 'green',",
+        '  Blue,',
+        '}',
+        "type Single = 'only';", // one member → not a machine
+        'type Id = string | number;', // not string literals → skipped
+        "type Nullable = 'a' | 'b' | null;", // null tolerated, still a machine
+        "export const NAME = 'x';",
+      ].join('\n'),
+    );
+    resolver = await createTreeSitterResolver(tmp);
+  });
+
+  afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+
+  it('extracts a string-literal union as an ordered state set', () => {
+    const found = resolver.enumLikes('src/states.ts');
+    const sub = found.find((e) => e.name === 'SubscriptionStatus');
+    expect(sub).toEqual({
+      name: 'SubscriptionStatus',
+      kind: 'union',
+      members: ['active', 'paused', 'canceled'],
+    });
+  });
+
+  it('extracts a TS enum (bare and assigned members)', () => {
+    const color = resolver.enumLikes('src/states.ts').find((e) => e.name === 'Color');
+    expect(color).toEqual({ name: 'Color', kind: 'enum', members: ['Red', 'Green', 'Blue'] });
+  });
+
+  it('tolerates a null member but keeps the string states', () => {
+    const nullable = resolver.enumLikes('src/states.ts').find((e) => e.name === 'Nullable');
+    expect(nullable?.members).toEqual(['a', 'b']);
+  });
+
+  it('skips single-member unions and non-string unions', () => {
+    const names = resolver.enumLikes('src/states.ts').map((e) => e.name);
+    expect(names).not.toContain('Single');
+    expect(names).not.toContain('Id');
+  });
+
+  it('every candidate resolves as a pin target (path#Name)', () => {
+    for (const e of resolver.enumLikes('src/states.ts')) {
+      expect(resolver.resolve(`src/states.ts#${e.name}`)).not.toBeNull();
+    }
+  });
+
+  it('returns [] for a non-JS/TS or missing file (never throws)', () => {
+    expect(resolver.enumLikes('src/data.json')).toEqual([]);
+    expect(resolver.enumLikes('src/missing.ts')).toEqual([]);
+  });
+
+  it('marks the module public surface via the exported flag', () => {
+    const decls = resolver.list('src/states.ts');
+    expect(decls.find((d) => d.name === 'SubscriptionStatus')?.exported).toBe(true);
+    expect(decls.find((d) => d.name === 'NAME')?.exported).toBe(true);
+    expect(decls.find((d) => d.name === 'Single')?.exported).toBe(false);
+  });
+});
+
 describe('treeSitterResolver — imports (for the reference graph)', () => {
   let tmp: string;
   let resolver: SymbolResolver;

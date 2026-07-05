@@ -24,6 +24,11 @@ export interface MapModule {
   staleFacts: number;
   /** Health score (T13); lower = darker. */
   score: number;
+  /** Machine-described meaning exists here (a module card / state machine) →
+   * the tile glows *moonlight* even before anyone vouches (21a, D2). */
+  described: boolean;
+  /** Inferred state-machine candidates in this module (21a) - moonlight detail. */
+  inferredConcepts: number;
 }
 
 export interface MapArea {
@@ -90,6 +95,16 @@ export function mapFeed(repoRoot: string, index: ArthaIndex, config: ArthaConfig
   const universe = moduleUniverse(repoRoot, index, config);
   for (const m of ranked.keys()) universe.add(m);
 
+  const inferredConcepts = new Map<string, number>();
+  const describedModules = new Set<string>();
+  for (const row of index.inferred) {
+    if (!row.module) continue;
+    describedModules.add(row.module);
+    if (row.kind === 'concept') {
+      inferredConcepts.set(row.module, (inferredConcepts.get(row.module) ?? 0) + 1);
+    }
+  }
+
   const modules: MapModule[] = [...universe].sort().map((module) => {
     const r = ranked.get(module);
     const certifiedFacts = r?.certifiedFacts ?? 0;
@@ -100,6 +115,8 @@ export function mapFeed(repoRoot: string, index: ArthaIndex, config: ArthaConfig
       certifiedFacts,
       staleFacts: r?.staleFacts ?? 0,
       score: r?.score ?? 0,
+      described: describedModules.has(module),
+      inferredConcepts: inferredConcepts.get(module) ?? 0,
     };
   });
   const darkByModule = new Map(modules.map((m) => [m.module, m.dark]));
@@ -225,6 +242,60 @@ export function flowDetail(index: ArthaIndex, id: string, config: ArthaConfig): 
   };
 }
 
+// ── /api/inferred/:id  (21a - the machine-described layer) ─────────────────────
+
+/**
+ * One inferred fact as the dashboard renders it in *moonlight*: a module card or
+ * a state-machine candidate, its worded confidence, the states read from code,
+ * and the evidence pins that back every claim (D5). Distinct from a `ConceptDetail`
+ * so the UI can tell "described" from "vouched" without a status field.
+ */
+export interface InferredFactView {
+  id: string;
+  /** `module` (a module card) or `concept` (a state-machine candidate). */
+  kind: string;
+  module: string | null;
+  name: string;
+  summary: string | null;
+  /** Worded confidence tier slug (D7): `read-from-code` for everything in 21a. */
+  confidence: string;
+  /** Ordered state names read from code (concept kind); empty for a module card. */
+  states: string[];
+  /** Evidence pins - the code each claim was read from. */
+  pins: PinView[];
+}
+
+/** An inferred fact by id (module card or state-machine candidate), or null. */
+export function inferredDetail(index: ArthaIndex, id: string): InferredFactView | null {
+  const row = index.inferred.find((r) => r.id === id);
+  return row ? inferredView(index, row) : null;
+}
+
+function inferredView(index: ArthaIndex, row: ArthaIndex['inferred'][number]): InferredFactView {
+  return {
+    id: row.id,
+    kind: row.kind,
+    module: row.module,
+    name: row.heading,
+    summary: row.body,
+    confidence: row.confidence,
+    states: index.inferredStates
+      .filter((s) => s.inferred_id === row.id)
+      .sort((a, b) => a.ord - b.ord)
+      .map((s) => s.name),
+    // Moonlight regenerates on drift, so inferred pins are never "stale" (D12).
+    pins: index.inferredPins
+      .filter((p) => p.inferred_id === row.id)
+      .sort((a, b) => a.ord - b.ord)
+      .map((p) => ({
+        symbol: p.symbol_ref,
+        symbolId: p.symbol_id,
+        contentHash: p.content_hash,
+        stale: false,
+      })),
+  };
+}
+
 // ── /api/catalog ──────────────────────────────────────────────────────────────
 
 /** A concept summarised for the catalog card - its state chain, not its full machine. */
@@ -248,9 +319,21 @@ export interface CatalogFlow {
   linked: number;
 }
 
+/** An inferred state-machine candidate summarised for the catalog (21a). Carries
+ * `confidence` in place of a status - it is described, not vouched (D2/D7). */
+export interface InferredCatalogConcept {
+  id: string;
+  name: string;
+  module: string | null;
+  states: string[];
+  confidence: string;
+}
+
 export interface Catalog {
   concepts: CatalogConcept[];
   flows: CatalogFlow[];
+  /** Machine-described capabilities (21a), rendered in moonlight below vouched ones. */
+  inferredConcepts: InferredCatalogConcept[];
 }
 
 /**
@@ -290,7 +373,21 @@ export function catalog(index: ArthaIndex, config: ArthaConfig): Catalog {
     })
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  return { concepts, flows };
+  const inferredConcepts: InferredCatalogConcept[] = index.inferred
+    .filter((r) => r.kind === 'concept')
+    .map((r) => ({
+      id: r.id,
+      name: r.heading,
+      module: r.module,
+      states: index.inferredStates
+        .filter((s) => s.inferred_id === r.id)
+        .sort((a, b) => a.ord - b.ord)
+        .map((s) => s.name),
+      confidence: r.confidence,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  return { concepts, flows, inferredConcepts };
 }
 
 // ── /api/dark-zones ───────────────────────────────────────────────────────────
@@ -354,6 +451,11 @@ export interface ModuleDetail {
   dependsOn: RefLink[];
   /** Modules that import this one (most-coupled first). */
   usedBy: RefLink[];
+  /** The module's machine-described card (21a) - the moonlight lead prose; null
+   * if the module has no inferred card (e.g. a pre-21a index). */
+  card: InferredFactView | null;
+  /** Inferred state-machine candidates whose evidence lands in this module (21a). */
+  inferredConcepts: InferredFactView[];
 }
 
 export function moduleDetail(
@@ -416,6 +518,14 @@ export function moduleDetail(
     decisions: facts.filter((f) => f.kind === 'decision'),
     dependsOn: refLinks(index.refs, module, 'out'),
     usedBy: refLinks(index.refs, module, 'in'),
+    card: (() => {
+      const row = index.inferred.find((r) => r.kind === 'module' && r.module === module);
+      return row ? inferredView(index, row) : null;
+    })(),
+    inferredConcepts: index.inferred
+      .filter((r) => r.kind === 'concept' && r.module === module)
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((r) => inferredView(index, r)),
   };
 }
 

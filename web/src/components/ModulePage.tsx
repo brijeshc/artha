@@ -1,9 +1,10 @@
 import type { ModuleDetail, ModuleFact } from '../api';
-import { MODULE_PAGE, WIRED } from '../copy';
+import { INFERRED, MODULE_PAGE, WIRED } from '../copy';
 import { type CapabilityEntry, shortName } from '../derive';
 import { routeHref } from '../router';
 import { CapCard } from './CapCard';
 import { CertifyButton, type Curation } from './Curate';
+import { InferredCard } from './Inferred';
 import { KindTag, SectionHead, StatusBadge } from './Status';
 import { WiredTo } from './Wired';
 
@@ -25,6 +26,8 @@ export function ModulePage({
   curation: Curation;
 }): JSX.Element {
   const caps = [...detail.concepts, ...detail.flows];
+  const card = detail.card ?? null;
+  const inferredConcepts = detail.inferredConcepts ?? [];
   const bucketWord =
     detail.certifiedFacts === 0
       ? 'dark zone'
@@ -33,12 +36,14 @@ export function ModulePage({
         : detail.certifiedFacts <= 3
           ? 'partial'
           : 'understood';
-  const empty = caps.length === 0 && detail.rules.length === 0 && detail.decisions.length === 0;
-  const meaningSections =
-    (caps.length > 0 ? 1 : 0) +
-    (detail.rules.length > 0 ? 1 : 0) +
-    (detail.decisions.length > 0 ? 1 : 0);
+  const hasCertified = caps.length > 0 || detail.rules.length > 0 || detail.decisions.length > 0;
+  const hasInferred = card !== null || inferredConcepts.length > 0;
   const hasWired = detail.dependsOn.length > 0 || detail.usedBy.length > 0;
+
+  // Section numbers run in render order across both certified and machine-
+  // described sections, so the reading index stays continuous whatever exists.
+  let section = 0;
+  const no = (): string => String(++section).padStart(2, '0');
 
   return (
     <div className="page module-page">
@@ -70,72 +75,79 @@ export function ModulePage({
         </dl>
       </header>
 
-      {empty ? (
+      {/* Moonlight lead: a machine-read description so the page is never blank,
+          even before a single fact is vouched (21a). */}
+      {card?.summary && (
+        <p className="module-lead moon-prose" aria-label={INFERRED.moduleCardHead}>
+          {card.summary}
+        </p>
+      )}
+
+      {!hasCertified && !hasInferred && (
         <div className="module-dark-empty">
           <p>{MODULE_PAGE.darkEmpty}</p>
           <a className="inspector-cta" href="#/queue">
             {MODULE_PAGE.darkCta} →
           </a>
         </div>
-      ) : (
-        <>
-          {caps.length > 0 && (
-            <section className="module-section">
-              <SectionHead
-                n="01"
-                title={MODULE_PAGE.capabilities}
-                gloss={MODULE_PAGE.capabilitiesGloss}
-              />
-              <div className="catalog-grid">
-                {caps.map((f) => {
-                  const entry = capabilityOf(f);
-                  return entry ? <CapCard key={f.id} entry={entry} /> : null;
-                })}
-              </div>
-            </section>
-          )}
+      )}
 
-          {detail.rules.length > 0 && (
-            <section className="module-section">
-              <SectionHead
-                n={String(1 + (caps.length > 0 ? 1 : 0)).padStart(2, '0')}
-                title={MODULE_PAGE.rules}
-                gloss={MODULE_PAGE.rulesGloss}
-              />
-              <ul className="rule-list">
-                {detail.rules.map((f) => (
-                  <RuleItem key={f.id} fact={f} curation={curation} />
-                ))}
-              </ul>
-            </section>
-          )}
+      {caps.length > 0 && (
+        <section className="module-section">
+          <SectionHead
+            n={no()}
+            title={MODULE_PAGE.capabilities}
+            gloss={MODULE_PAGE.capabilitiesGloss}
+          />
+          <div className="catalog-grid">
+            {caps.map((f) => {
+              const entry = capabilityOf(f);
+              return entry ? <CapCard key={f.id} entry={entry} /> : null;
+            })}
+          </div>
+        </section>
+      )}
 
-          {detail.decisions.length > 0 && (
-            <section className="module-section">
-              <SectionHead
-                n={String(
-                  1 + (caps.length > 0 ? 1 : 0) + (detail.rules.length > 0 ? 1 : 0),
-                ).padStart(2, '0')}
-                title={MODULE_PAGE.decisions}
-                gloss={MODULE_PAGE.decisionsGloss}
-              />
-              <ul className="rule-list">
-                {detail.decisions.map((f) => (
-                  <RuleItem key={f.id} fact={f} curation={curation} />
-                ))}
-              </ul>
-            </section>
-          )}
-        </>
+      {inferredConcepts.length > 0 && (
+        <section className="module-section">
+          <SectionHead
+            n={no()}
+            title={INFERRED.inferredCapsHead}
+            gloss={INFERRED.inferredCapsGloss}
+          />
+          <div className="catalog-grid">
+            {inferredConcepts.map((c) => (
+              <InferredCard key={c.id} concept={c} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {detail.rules.length > 0 && (
+        <section className="module-section">
+          <SectionHead n={no()} title={MODULE_PAGE.rules} gloss={MODULE_PAGE.rulesGloss} />
+          <ul className="rule-list">
+            {detail.rules.map((f) => (
+              <RuleItem key={f.id} fact={f} curation={curation} />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {detail.decisions.length > 0 && (
+        <section className="module-section">
+          <SectionHead n={no()} title={MODULE_PAGE.decisions} gloss={MODULE_PAGE.decisionsGloss} />
+          <ul className="rule-list">
+            {detail.decisions.map((f) => (
+              <RuleItem key={f.id} fact={f} curation={curation} />
+            ))}
+          </ul>
+        </section>
       )}
 
       {hasWired && (
         <section className="module-section">
-          <SectionHead
-            n={String(meaningSections + 1).padStart(2, '0')}
-            title={WIRED.head}
-            gloss={WIRED.gloss}
-          />
+          <SectionHead n={no()} title={WIRED.head} gloss={WIRED.gloss} />
           <WiredTo dependsOn={detail.dependsOn} usedBy={detail.usedBy} />
         </section>
       )}

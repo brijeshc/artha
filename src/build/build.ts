@@ -1,5 +1,6 @@
 import { existsSync, globSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { inferLayer } from '../analytics/inferred';
 import { listSourceFiles, referenceGraph } from '../analytics/references';
 import type { ArthaConfig } from '../config/config';
 import type { Embedder } from '../embed/embedder';
@@ -34,6 +35,8 @@ export interface BuildReport {
   embedded: number;
   /** Number of module→module reference edges mined from imports (T17b). */
   refs: number;
+  /** Number of inferred facts (module cards + state-machine candidates) emitted (21a). */
+  inferred: number;
   dbPath: string;
 }
 
@@ -67,6 +70,7 @@ export async function buildIndex(
     emitted: 0,
     embedded: 0,
     refs: 0,
+    inferred: 0,
     dbPath,
   };
 
@@ -146,6 +150,21 @@ export async function buildIndex(
     ? referenceGraph(sourceFiles, (file) => resolver.imports(file), config.sourceRoots)
     : [];
   report.refs = data.refs.length;
+
+  // 21a — the inferred layer: machine-described module cards + state-machine
+  // candidates, all evidence-pinned, so the map is never black. Offline,
+  // LLM-free, deterministic; a regenerable cache below vouched facts. Candidates
+  // over evidence a human already pins are suppressed (materialize-on-touch).
+  if (resolver) {
+    const humanPinnedRefs = new Set(
+      entries.flatMap((entry) => collectPins(entry).map((pin) => pin.symbol)),
+    );
+    const layer = inferLayer(sourceFiles, resolver, data.refs, humanPinnedRefs, config.sourceRoots);
+    data.inferred = layer.facts;
+    data.inferredPins = layer.pins;
+    data.inferredStates = layer.states;
+    report.inferred = layer.facts.length;
+  }
 
   // T14 — build-time embeddings (best-effort, offline-by-default). Read the
   // previous index's vectors first (reuse unchanged facts) before writeIndex
@@ -291,6 +310,9 @@ function toIndexData(
     flowSteps,
     embeddings: [],
     refs: [],
+    inferred: [],
+    inferredPins: [],
+    inferredStates: [],
   };
 }
 

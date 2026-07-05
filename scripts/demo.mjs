@@ -46,17 +46,25 @@ const SRC = {
     'export function validateRefund(id: string): boolean {\n  return true;\n}\n' +
     'export function issueRefund(id: string): void {\n' +
     '  new StripeGateway().charge(0);\n  sendEmail();\n}\n',
+  // A string-literal union - the inferred layer reads it into an "Order State"
+  // state-machine candidate (21a), with no human input.
+  'src/checkout/orderState.ts':
+    "export type OrderState = 'cart' | 'placed' | 'paid' | 'fulfilled' | 'cancelled';\n",
   'src/checkout/Checkout.ts':
     "import { Subscription } from '../billing/Subscription';\n" +
     "import { StripeGateway } from '../billing/gateway';\n" +
-    "import { sendEmail } from '../notifications/email';\n\n" +
+    "import { sendEmail } from '../notifications/email';\n" +
+    "import type { OrderState } from './orderState';\n\n" +
     'export class Checkout {\n' +
-    "  state: string = 'cart';\n" +
+    "  state: OrderState = 'cart';\n" +
     '  private gateway = new StripeGateway();\n' +
     '  private sub?: Subscription;\n' +
     '  pay(): void {\n    this.gateway.charge(0);\n    sendEmail();\n  }\n' +
     '}\n',
-  'src/notifications/email.ts': 'export function sendEmail() {}\n',
+  // A TS enum - inferred into a "Channel" state set (a second module lit purely
+  // by the machine layer, in a module with no certified concept).
+  'src/notifications/email.ts':
+    'export enum Channel {\n  Email,\n  Sms,\n  Push,\n}\n\n' + 'export function sendEmail() {}\n',
   'src/reports/monthly.ts':
     "import { issueRefund } from '../billing/refund';\n" +
     "import { Subscription } from '../billing/Subscription';\n" +

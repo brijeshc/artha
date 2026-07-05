@@ -14,6 +14,7 @@ import { CapCard } from '../../web/src/components/CapCard';
 import { ConceptPage, FlowPage } from '../../web/src/components/CapabilityPages';
 import { CatalogPage } from '../../web/src/components/CatalogPage';
 import { CommandBar } from '../../web/src/components/CommandBar';
+import { InferredPage } from '../../web/src/components/Inferred';
 import { Inspector } from '../../web/src/components/Inspector';
 import { ModulePage } from '../../web/src/components/ModulePage';
 import { Navigator } from '../../web/src/components/Navigator';
@@ -925,5 +926,154 @@ describe('CommandBar', () => {
     const html = markup(<CommandBar open feed={feed} onClose={noop} onGo={noop} />);
     expect(html).toContain('cmdk-input');
     expect(html).toContain('Find a capability, module, or rule…');
+  });
+});
+
+// ── the inferred layer / moonlight (21a) ─────────────────────────────────────
+
+describe('inferred layer (21a) - moonlight', () => {
+  const moonFeed: MapFeed = {
+    cold: false,
+    areas: [{ area: 'src/orders', modules: ['src/orders'], concepts: [], flows: [], dark: true }],
+    modules: [
+      {
+        module: 'src/orders',
+        dark: true,
+        churn: 12,
+        certifiedFacts: 0,
+        staleFacts: 0,
+        score: 0.2,
+        described: true,
+        inferredConcepts: 2,
+      },
+    ],
+  };
+
+  it('renders a described (dark, no-certified) module as a moonlit tile, not black', () => {
+    const html = markup(
+      <Atlas
+        feed={moonFeed}
+        width={800}
+        height={600}
+        selectedArea={null}
+        selectedModule={null}
+        zones={[]}
+      />,
+    );
+    // the tile carries the moonlight class and reads "described", not "unexplained"
+    expect(html).toContain('moonlit');
+    expect(html).toContain('moon-word');
+    expect(html).not.toContain('unexplained');
+  });
+
+  it('the legend explains the two lights (described vs vouched)', () => {
+    const html = markup(
+      <Atlas
+        feed={moonFeed}
+        width={800}
+        height={600}
+        selectedArea={null}
+        selectedModule={null}
+        zones={[]}
+      />,
+    );
+    expect(html).toContain('moonlight');
+    expect(html).toContain('not yet vouched by your team');
+  });
+
+  it('router round-trips the inferred route', () => {
+    const r = { view: 'inferred', id: 'inferred:concept:src/orders/types.ts#OrderStatus' } as const;
+    expect(parseRoute(routeHref(r))).toEqual(r);
+  });
+
+  const inferredConcept = {
+    id: 'inferred:concept:src/orders/types.ts#OrderStatus',
+    kind: 'concept',
+    module: 'src/orders',
+    name: 'Order Status',
+    summary:
+      '3 states read from the `OrderStatus` type. What each state means is not yet described.',
+    confidence: 'read-from-code',
+    states: ['pending', 'shipped', 'delivered'],
+    pins: [
+      {
+        symbol: 'src/orders/types.ts#OrderStatus',
+        symbolId: 'src/orders/types.ts#OrderStatus',
+        contentHash: 'abc123',
+        stale: false,
+      },
+    ],
+  };
+
+  it('the inferred page leads with prose, states, evidence, and the delta band', () => {
+    const html = markup(<InferredPage detail={inferredConcept} />);
+    expect(html).toContain('Order Status');
+    expect(html).toContain('read from code'); // worded confidence, never a number
+    expect(html).toContain('not yet vouched');
+    expect(html).toContain('pending'); // a state read from code
+    expect(html).toContain('src/orders/types.ts#OrderStatus'); // the evidence pin
+    expect(html).toContain('What the code can’t say'); // the delta band (D6)
+  });
+
+  it('the module page leads with the moonlight card and lists inferred capabilities', () => {
+    const detail: ModuleDetail = {
+      module: 'src/orders',
+      areas: ['src/orders'],
+      dark: true,
+      churn: 12,
+      score: 0.2,
+      certifiedFacts: 0,
+      staleFacts: 0,
+      queueRank: 3,
+      concepts: [],
+      flows: [],
+      rules: [],
+      decisions: [],
+      dependsOn: [],
+      usedBy: [],
+      card: {
+        id: 'inferred:module:src/orders',
+        kind: 'module',
+        module: 'src/orders',
+        name: 'Orders',
+        summary: 'Entry area that draws on Billing. Exposes placeOrder, OrderStatus and 2 more.',
+        confidence: 'read-from-code',
+        states: [],
+        pins: [],
+      },
+      inferredConcepts: [inferredConcept],
+    };
+    const html = markup(
+      <ModulePage detail={detail} capabilityOf={() => null} curation={noopCuration} />,
+    );
+    // the lead prose replaces the black dark-empty state
+    expect(html).toContain('Entry area that draws on Billing');
+    expect(html).not.toContain('No certified meaning touches this module');
+    // the machine-described capability surfaces and links to the inferred page
+    expect(html).toContain('Machine-described capabilities');
+    expect(html).toContain(
+      routeHref({ view: 'inferred', id: 'inferred:concept:src/orders/types.ts#OrderStatus' }),
+    );
+  });
+
+  it('the catalog shows a machine-described section below vouched capabilities', () => {
+    const withInferred: CatalogData = {
+      concepts: [],
+      flows: [],
+      inferredConcepts: [
+        {
+          id: inferredConcept.id,
+          name: 'Order Status',
+          module: 'src/orders',
+          states: ['pending', 'shipped', 'delivered'],
+          confidence: 'read-from-code',
+        },
+      ],
+    };
+    const html = markup(<CatalogPage catalog={withInferred} feed={moonFeed} />);
+    expect(html).toContain('Machine-described capabilities');
+    expect(html).toContain('Order Status');
+    // not the empty state - the catalog has inferred content even with no vouched facts
+    expect(html).not.toContain('No capabilities have been described yet');
   });
 });

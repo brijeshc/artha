@@ -33,6 +33,9 @@ function indexData(facts: FactRow[], embeddings: IndexData['embeddings']): Index
     flowSteps: [],
     embeddings,
     refs: [],
+    inferred: [],
+    inferredPins: [],
+    inferredStates: [],
   };
 }
 

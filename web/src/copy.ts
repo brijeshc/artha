@@ -35,11 +35,36 @@ export const LEGEND = {
   size: 'A tile is a code module. Its size is how much it changed in the last 90 days.',
   brightness:
     'Its brightness is how well it is understood - how much meaning a human has certified about it.',
-  dark: 'A dark tile is a dark zone: code that changes with no certified explanation.',
+  moon: 'A cool moonlight tile is described by the machine but not yet vouched by your team - readable, but below certified meaning.',
+  dark: 'A dark tile is a dark zone: code that changes with nothing said about it at all.',
   stale:
     'A hatched edge means some certified meaning went stale - the code moved after it was written.',
   select: 'Select a tile to inspect it; select it again to open the full module page.',
   ramp: ['dark zone', 'thin', 'partial', 'understood'] as const,
+} as const;
+
+/** The inferred layer (21a) - machine-described meaning, below vouched facts. */
+export const INFERRED = {
+  /** Worded confidence tiers (D7) - named, never numbered. */
+  confidence: {
+    'read-from-code': 'read from code',
+    inferred: 'inferred',
+    uncertain: 'uncertain',
+  } as Record<string, string>,
+  kindLabel: 'machine-described',
+  moduleCardHead: 'What this module is',
+  moduleCardGloss: 'Read from its code and imports - a starting description, not yet vouched.',
+  inferredCapsHead: 'Machine-described capabilities',
+  inferredCapsGloss:
+    'State machines found in the code. Their states are read verbatim; what they mean is yours to add.',
+  statesHead: 'States read from code',
+  evidenceHead: 'Read from',
+  evidenceGloss: 'The exact code each claim was read from - no unexplained assertions.',
+  deltaHead: 'What the code can’t say',
+  deltaBody:
+    'Transitions, the meaning of each state, and the why behind them are not in the code. That is the part only you can add.',
+  notVouched: 'Machine-described · not yet vouched by your team',
+  page: 'inferred',
 } as const;
 
 /** Cold start - the honest empty state that funnels into the queue. */

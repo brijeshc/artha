@@ -3,6 +3,9 @@ import type { DatabaseSync } from 'node:sqlite';
 import {
   type FactRow,
   type FlowStepRow,
+  type InferredPinRow,
+  type InferredRow,
+  type InferredStateRow,
   type PinRow,
   type RefRow,
   type RelatedRow,
@@ -34,6 +37,13 @@ export interface ArthaIndex {
   readonly related: RelatedRow[];
   /** Module→module import edges (T17b). Empty for pre-T17b indexes. */
   readonly refs: RefRow[];
+  /** Machine-described facts (21a) - module cards + state-machine candidates.
+   * Empty for pre-21a indexes. Below vouched facts on the trust ladder. */
+  readonly inferred: InferredRow[];
+  /** Evidence pins backing inferred facts (21a). */
+  readonly inferredPins: InferredPinRow[];
+  /** States read from code for inferred state-machine candidates (21a). */
+  readonly inferredStates: InferredStateRow[];
   /** Fact id → embedding vector (T14). Empty for pre-T14 / no-embedding indexes. */
   readonly embeddings: Map<string, Float32Array>;
   /** The model that produced the vectors, for query-side model matching; null if none. */
@@ -54,6 +64,9 @@ const EMPTY: ArthaIndex = {
   flowSteps: [],
   related: [],
   refs: [],
+  inferred: [],
+  inferredPins: [],
+  inferredStates: [],
   embeddings: new Map(),
   embeddingModel: null,
   empty: true,
@@ -82,6 +95,9 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
     const flowSteps = selectAll<FlowStepRow>(db, 'artha_flow_steps');
     const related = selectAll<RelatedRow>(db, 'artha_related');
     const refs = selectAll<RefRow>(db, 'artha_refs');
+    const inferred = selectAll<InferredRow>(db, 'artha_inferred');
+    const inferredPins = selectAll<InferredPinRow>(db, 'artha_inferred_pins');
+    const inferredStates = selectAll<InferredStateRow>(db, 'artha_inferred_states');
     const { embeddings, embeddingModel } = loadEmbeddings(db);
     const handle = db;
     return {
@@ -93,6 +109,9 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
       flowSteps,
       related,
       refs,
+      inferred,
+      inferredPins,
+      inferredStates,
       embeddings,
       embeddingModel,
       empty: facts.length === 0,

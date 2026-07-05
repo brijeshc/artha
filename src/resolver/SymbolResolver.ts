@@ -25,6 +25,24 @@ export interface SymbolDecl {
   name: string;
   /** Friendly kind: class · function · interface · type · enum · const · method · field. */
   kind: string;
+  /** True when the declaration is `export`ed - the module's public surface (21a). */
+  exported: boolean;
+}
+
+/**
+ * A finite set of named states a file declares literally - a string-literal
+ * union type (`type X = 'a' | 'b'`) or a TS `enum` - the raw material for
+ * inferred state-machine candidates (21a). Structural and deterministic: the
+ * members are read verbatim from the source, no meaning invented. A future
+ * CodeGraph-backed resolver may return `[]` until it implements this.
+ */
+export interface EnumLike {
+  /** The declared symbol name, e.g. `SubscriptionStatus`. */
+  name: string;
+  /** `'union'` (string-literal union type) or `'enum'` (TS enum). */
+  kind: 'union' | 'enum';
+  /** The member/variant names in source order (≥2). */
+  members: string[];
 }
 
 export interface SymbolResolver {
@@ -39,6 +57,13 @@ export interface SymbolResolver {
    * {@link resolve} (same rules), so a picked symbol always makes a valid pin.
    */
   list(relPath: string): SymbolDecl[];
+  /**
+   * The string-literal unions and TS enums a file declares (≥2 members each) -
+   * the deterministic seed for inferred state-machine candidates (21a). A
+   * non-JS/TS or missing file yields `[]`. Structural extraction only: members
+   * are read verbatim, transitions/effects are never guessed here.
+   */
+  enumLikes(relPath: string): EnumLike[];
   /**
    * The raw import/require/re-export specifiers a file declares, as written
    * (`./money`, `../../db`, `react`), in source order. Static `import … from`,

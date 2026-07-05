@@ -223,7 +223,11 @@ describe('catalog', () => {
   });
 
   it('is empty (not an error) for a cold index', () => {
-    expect(catalog(fakeIndex({}), config)).toEqual({ concepts: [], flows: [] });
+    expect(catalog(fakeIndex({}), config)).toEqual({
+      concepts: [],
+      flows: [],
+      inferredConcepts: [],
+    });
   });
 });
 

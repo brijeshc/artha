@@ -11,6 +11,7 @@ import {
   conceptDetail,
   darkZonesFeed,
   flowDetail,
+  inferredDetail,
   mapFeed,
   moduleDetail,
   refsFeed,
@@ -164,6 +165,14 @@ async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void>
     if (module) {
       const detail = moduleDetail(ctx.repoRoot, index, ctx.config, module);
       detail ? sendJson(res, 200, detail) : sendJson(res, 404, { error: `no module ${module}` });
+      return;
+    }
+    const inferred = matchInferred(path);
+    if (inferred) {
+      const detail = inferredDetail(index, inferred);
+      detail
+        ? sendJson(res, 200, detail)
+        : sendJson(res, 404, { error: `no inferred ${inferred}` });
       return;
     }
     sendJson(res, 404, { error: `no such endpoint: ${path}` });
@@ -352,6 +361,16 @@ function matchId(path: string, prefix: string): string | null {
  * matcher allows them while still rejecting empties and path escapes. */
 function matchModule(path: string): string | null {
   const prefix = '/api/module/';
+  if (!path.startsWith(prefix)) return null;
+  const id = decodeURIComponent(path.slice(prefix.length));
+  return id.length > 0 && !id.split('/').some((seg) => seg === '' || seg === '..') ? id : null;
+}
+
+/** Inferred ids look like `inferred:concept:src/x.ts#Y` / `inferred:module:src/z`
+ * - slashes and a `#` (encoded as %23), so this allows the path shape while
+ * rejecting empties and `..` escapes, same discipline as {@link matchModule}. */
+function matchInferred(path: string): string | null {
+  const prefix = '/api/inferred/';
   if (!path.startsWith(prefix)) return null;
   const id = decodeURIComponent(path.slice(prefix.length));
   return id.length > 0 && !id.split('/').some((seg) => seg === '' || seg === '..') ? id : null;

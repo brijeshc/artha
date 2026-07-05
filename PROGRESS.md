@@ -1,7 +1,22 @@
 # Artha — build progress log
 
-Running log of task completion against [tasks/README.md](tasks/README.md) (v0.1) and
-[tasks-v0.2/README.md](tasks-v0.2/README.md) (v0.2). Newest entries first.
+Running log of task completion against [tasks/README.md](tasks/README.md) (v0.1),
+[tasks-v0.2/README.md](tasks-v0.2/README.md) (v0.2), and
+[tasks-v0.3/README.md](tasks-v0.3/README.md) (v0.3). Newest entries first.
+
+## Status - v0.3
+
+| #    | Task                                | Status       | Notes |
+|------|-------------------------------------|--------------|-------|
+| 21a  | Inferred layer - deterministic      | 🟡 slice 1   | module cards + state-machine candidates (union/enum), evidence-pinned, `origin`/`confidence` in parallel index tables; the moonlight map. Flow skeletons + convention candidates are the remaining 21a slices |
+| 21b  | Inferred layer - LLM synthesis      | ⬜            | opt-in, spend-capped enrichment + verification gate |
+| 21c  | Inferred layer - dashboard reframe  | 🟡 partial   | two-light grammar, prose-first pages, delta band, worded confidence shipped in slice 1; vouch-by-reading + value-ranked queue + KPI reframe (D9-D11) remain |
+| 22   | Contradiction view                  | ⬜            | inferred vs certified |
+
+OQ locks (2026-07-05): index-only regenerable cache + materialize-on-touch (OQ-A);
+`origin`/`confidence` in parallel `artha_inferred*` tables, human `status` trio untouched (OQ-B);
+worded confidence `read from code` / `inferred` / `uncertain` (OQ-D); 21a before T18 (OQ-E).
+See [tasks-v0.3/21-inferred-layer.md](tasks-v0.3/21-inferred-layer.md).
 
 ## Status — v0.2
 
@@ -43,6 +58,19 @@ Critical path: 11 → 12 → 15 → 16/17 → 18 → 20. Tasks 13, 14, 19 parall
 Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 
 ## Log
+
+### 2026-07-05
+
+- **T21a slice 1 - the inferred layer (deterministic module cards + state machines)** done.
+  The map is no longer black on first open.
+  A fully offline, LLM-free extraction pass now describes every module and reads state machines straight out of the code, so a stranger's repo renders a lit, readable atlas with zero human input - the missing foundation the v0.3 re-centering exists to build (see [tasks-v0.3/21-inferred-layer.md](tasks-v0.3/21-inferred-layer.md) §Why).
+  - **Structural extraction** (`src/resolver/*`): the tree-sitter resolver gained `enumLikes(file)` - the string-literal unions (`type X = 'a' | 'b'`) and TS enums a file declares, members read verbatim (left-nested unions flattened; `null`/`undefined` tolerated; non-string unions rejected for precision) - and an `exported` flag on each `list()` declaration (the module's public surface). A future CodeGraph resolver can return `[]` until it implements `enumLikes`.
+  - **The extractor** (`src/analytics/inferred.ts`): two deterministic, evidence-pinned outputs. **Module cards** - one per module: a humanized name, a role read from the T17b import position (shared foundation / entry area / supporting), and its public surface. **State-machine candidates** - a concept draft per union/enum, states read from code, transitions and effects deliberately left blank (that is the human delta). A candidate whose evidence a human already pins is suppressed (materialize-on-touch). Byte-deterministic: identical inputs → identical, sorted output.
+  - **Index** (`src/build/db.ts`, `src/build/build.ts`): the layer lands in **parallel `artha_inferred` / `artha_inferred_pins` / `artha_inferred_states` tables** carrying `origin: inferred` + a worded `confidence` (`read-from-code`). Human `artha_facts` are byte-unchanged, so all v0.1/v0.2 behavior is identical when inferred facts are ignored (the acceptance criterion, satisfied by construction). `artha build` reports `· N inferred`.
+  - **Read API** (`src/serve/api.ts`, `server.ts`): `/api/inferred/:id` serves a module card / state-machine view (states + evidence pins + confidence); the map feed grows `described` + `inferredConcepts` per module; module detail grows `card` + `inferredConcepts`; the catalog grows `inferredConcepts`. `ArthaIndex` loads the new tables defensively (a pre-21a index yields `[]`).
+  - **The moonlight dashboard** (`web/`): the two-light grammar (D2) - vouched code keeps its **phosphor** glow, machine-described code reads in cooler **moonlight**, and no tile is black. Module and inferred pages lead with plain-language prose (D3), name capabilities in product language (D4), reveal the exact code every claim was read from (D5), and carry a distinct **"What the code can't say"** delta band inviting the human part (D6). Confidence is **worded, never numbered** (D7). A new `#/inferred/:id` route renders the full moonlight page.
+  - **Verified**: typecheck (CLI + web) + Biome clean; **313 tests pass** (+20: `enumLikes` union/enum/precision + `exported`; `inferLayer` module-card roles, state-machine extraction, human-pin suppression, determinism, `humanize`; moonlight atlas tile + legend, inferred page prose/states/evidence/delta-band, module-page lead + inferred section, catalog machine-described section, inferred route round-trip). **Live E2E** on the seeded shop demo (`npm run demo`): `artha build` emits **7 inferred facts** (5 module cards + Order State union + Channel enum); the atlas renders every module lit (billing phosphor, the rest moonlight, none black); the checkout module page leads with its read-from-code description and lists the Order State machine; the inferred page shows states, the evidence pin, and the delta band; the catalog groups a "Machine-described capabilities" section below vouched work. All 21a acceptance criteria for the offline layer met.
+  - **Locked with the developer**: index-only regenerable cache + materialize-on-touch (OQ-A); `origin`/`confidence` in parallel tables, not a fourth `status` (OQ-B); `read from code` / `inferred` / `uncertain` wording (OQ-D); 21a before T18 (OQ-E). Remaining 21a slices: flow skeletons + convention candidates. Then 21b (LLM synthesis + verification) and the rest of 21c (vouch-by-reading, value-ranked queue, KPI reframe D9-D11).
 
 ### 2026-07-04
 
