@@ -1,13 +1,12 @@
 # Artha v0.3 - task index (2026-07-05)
 
-**Status: re-centering locked; 21a slice 1 shipped.**
+**Status: re-centering locked; 21a shipped (the deterministic offline layer is complete).**
 Product.md §12 headlined v0.3 as "contradiction detection + trust".
 This re-centers v0.3 around **the inferred layer**: a machine-extracted, full-coverage description of code meaning that does the heavy lifting *before* any human is asked for anything.
 Rationale and evidence are in [21-inferred-layer.md](21-inferred-layer.md) §Why; the OQ locks are recorded there and in [../PROGRESS.md](../PROGRESS.md).
 Contradiction detection remains in v0.3, but as a near-byproduct: once inferred meaning exists, "inferred disagrees with certified" *is* the loophole view.
 
-**Progress:** 21a slice 1 (module cards + state-machine candidates → moonlight map) is done - the map is no longer black on first open.
-Remaining 21a slices: flow skeletons + convention candidates.
+**Progress:** 21a is done - all four offline extractors ship (module cards + state machines in slice 1; flow skeletons + naming conventions in slice 2), evidence-pinned and byte-deterministic, so a stranger's repo renders a complete moonlight map with zero human input.
 Then 21b (LLM synthesis + verification) and the rest of 21c (vouch-by-reading, value-ranked queue, honest KPIs).
 
 | #   | Task | Depends on | One-line summary |

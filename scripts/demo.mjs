@@ -61,6 +61,14 @@ const SRC = {
     '  private sub?: Subscription;\n' +
     '  pay(): void {\n    this.gateway.charge(0);\n    sendEmail();\n  }\n' +
     '}\n',
+  // An exported orchestration function - the inferred layer reads it as a "Place
+  // Order" flow skeleton (21a), its steps the areas it imports (Billing then
+  // Notifications), with the meaning/order left as the human delta.
+  'src/checkout/placeOrder.ts':
+    "import { StripeGateway } from '../billing/gateway';\n" +
+    "import { sendEmail } from '../notifications/email';\n\n" +
+    'export function placeOrder(): void {\n' +
+    '  new StripeGateway().charge(0);\n  sendEmail();\n}\n',
   // A TS enum - inferred into a "Channel" state set (a second module lit purely
   // by the machine layer, in a module with no certified concept).
   'src/notifications/email.ts':

@@ -29,11 +29,17 @@ export function CatalogPage({ catalog, feed }: { catalog: Catalog; feed: MapFeed
     .filter((g) => g.entries.length > 0);
 
   const total = catalog.concepts.length + catalog.flows.length;
-  const inferred = catalog.inferredConcepts ?? [];
-  // The machine-described tier is concept-shaped and carries no human status, so
-  // it shows under the "all" filters, below everything a human has vouched (D2).
-  const showInferred = inferred.length > 0 && status === 'all' && kind !== 'flow';
-  const anyContent = total > 0 || inferred.length > 0;
+  const inferredConcepts = catalog.inferredConcepts ?? [];
+  const inferredFlows = catalog.inferredFlows ?? [];
+  // The machine-described tier carries no human status, so it shows under the
+  // "all" status filter, below everything a human has vouched (D2). The kind
+  // filter still cuts it - concepts under "concept", flows under "flow".
+  const inferredCaps = [
+    ...(kind !== 'flow' ? inferredConcepts : []),
+    ...(kind !== 'concept' ? inferredFlows : []),
+  ];
+  const showInferred = inferredCaps.length > 0 && status === 'all';
+  const anyContent = total > 0 || inferredConcepts.length + inferredFlows.length > 0;
 
   return (
     <div className="page catalog-page">
@@ -81,12 +87,12 @@ export function CatalogPage({ catalog, feed }: { catalog: Catalog; feed: MapFeed
             <section className="catalog-area inferred-area">
               <h3 className="catalog-area-name">
                 {INFERRED.inferredCapsHead}
-                <span className="catalog-area-count">{inferred.length}</span>
+                <span className="catalog-area-count">{inferredCaps.length}</span>
               </h3>
               <p className="gloss">{INFERRED.inferredCapsGloss}</p>
               <div className="catalog-grid">
-                {inferred.map((c) => (
-                  <InferredCard key={c.id} concept={c} />
+                {inferredCaps.map((c) => (
+                  <InferredCard key={c.id} item={c} />
                 ))}
               </div>
             </section>

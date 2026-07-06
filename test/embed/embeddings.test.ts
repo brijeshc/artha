@@ -36,6 +36,7 @@ function indexData(facts: FactRow[], embeddings: IndexData['embeddings']): Index
     inferred: [],
     inferredPins: [],
     inferredStates: [],
+    inferredSteps: [],
   };
 }
 

@@ -355,6 +355,7 @@ export function capabilityNames(catalog: Catalog): Map<string, string> {
   for (const c of catalog.concepts) names.set(c.id, c.name ?? c.id);
   for (const f of catalog.flows) names.set(f.id, f.name ?? f.id);
   for (const c of catalog.inferredConcepts ?? []) names.set(c.id, c.name);
+  for (const f of catalog.inferredFlows ?? []) names.set(f.id, f.name);
   return names;
 }
 

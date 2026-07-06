@@ -56,13 +56,36 @@ export const INFERRED = {
   moduleCardGloss: 'Read from its code and imports - a starting description, not yet vouched.',
   inferredCapsHead: 'Machine-described capabilities',
   inferredCapsGloss:
-    'State machines found in the code. Their states are read verbatim; what they mean is yours to add.',
+    'Concepts and flows found in the code. States and steps are read verbatim; what they mean is yours to add.',
+  conventionsHead: 'Machine-noticed conventions',
+  conventionsGloss: 'Naming patterns the code repeats. What each one requires is yours to define.',
   statesHead: 'States read from code',
+  stepsHead: 'Reaches',
+  stepsGloss:
+    'The areas this operation touches, read from its imports - not the order it runs them.',
+  membersHead: 'Symbols that match',
+  membersGloss: 'The exported names this pattern is read from - no unexplained assertions.',
   evidenceHead: 'Read from',
   evidenceGloss: 'The exact code each claim was read from - no unexplained assertions.',
   deltaHead: 'What the code can’t say',
-  deltaBody:
-    'Transitions, the meaning of each state, and the why behind them are not in the code. That is the part only you can add.',
+  /** Per-kind delta prose (D6): what the code cannot hold, invited not assumed. */
+  delta: {
+    concept:
+      'Transitions, the meaning of each state, and the why behind them are not in the code. That is the part only you can add.',
+    flow: 'The order these steps run, what each one does, and why are not in the code. That is the part only you can add.',
+    convention:
+      'What this convention requires - and why it exists - is not in the code. That is the part only you can add.',
+    module:
+      'What this module is for, and the rules that govern changing it, are not in the code. That is the part only you can add.',
+  } as Record<string, string>,
+  deltaFallback:
+    'The meaning and the why behind this are not in the code. That is the part only you can add.',
+  /** Card preview fallbacks when there is nothing structured to chain. */
+  cardEmpty: {
+    concept: 'a state set read from code',
+    flow: 'an operation read from code',
+    convention: 'a naming pattern read from code',
+  } as Record<string, string>,
   notVouched: 'Machine-described · not yet vouched by your team',
   page: 'inferred',
 } as const;

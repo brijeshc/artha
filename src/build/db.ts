@@ -109,6 +109,12 @@ CREATE TABLE artha_inferred_states (
   name         TEXT NOT NULL,
   ord          INTEGER NOT NULL
 );
+CREATE TABLE artha_inferred_steps (
+  inferred_id  TEXT NOT NULL,
+  label        TEXT NOT NULL,
+  to_module    TEXT,
+  ord          INTEGER NOT NULL
+);
 CREATE VIRTUAL TABLE artha_fts USING fts5(id UNINDEXED, heading, body);
 `;
 
@@ -243,6 +249,17 @@ export interface InferredStateRow {
   ord: number;
 }
 
+/** One step of an inferred flow skeleton (21a): a downstream area the entry
+ * point fans out to, read from its file's imports (file-level; symbol-level call
+ * order stays out of scope). `to_module` links the step to its module tile; the
+ * event/action prose is the human delta (D6), never emitted here. */
+export interface InferredStepRow {
+  inferred_id: string;
+  label: string;
+  to_module: string | null;
+  ord: number;
+}
+
 export interface IndexData {
   facts: FactRow[];
   pins: PinRow[];
@@ -258,6 +275,7 @@ export interface IndexData {
   inferred: InferredRow[];
   inferredPins: InferredPinRow[];
   inferredStates: InferredStateRow[];
+  inferredSteps: InferredStepRow[];
 }
 
 /** Emit a fresh `.artha/index.db` from scratch (idempotent: same input → same rows). */
@@ -366,6 +384,13 @@ export function writeIndex(dbPath: string, data: IndexData): void {
       'INSERT INTO artha_inferred_states (inferred_id, name, ord) VALUES (?, ?, ?)',
     );
     for (const r of data.inferredStates) inferredState.run(r.inferred_id, r.name, r.ord);
+
+    const inferredStep = db.prepare(
+      'INSERT INTO artha_inferred_steps (inferred_id, label, to_module, ord) VALUES (?, ?, ?, ?)',
+    );
+    for (const r of data.inferredSteps) {
+      inferredStep.run(r.inferred_id, r.label, r.to_module, r.ord);
+    }
 
     db.exec('COMMIT');
   } catch (error) {

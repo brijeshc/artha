@@ -252,17 +252,26 @@ export function flowDetail(index: ArthaIndex, id: string, config: ArthaConfig): 
  */
 export interface InferredFactView {
   id: string;
-  /** `module` (a module card) or `concept` (a state-machine candidate). */
+  /** `module` card · `concept` (state machine) · `flow` (skeleton) · `convention`. */
   kind: string;
   module: string | null;
   name: string;
   summary: string | null;
   /** Worded confidence tier slug (D7): `read-from-code` for everything in 21a. */
   confidence: string;
-  /** Ordered state names read from code (concept kind); empty for a module card. */
+  /** Ordered state names read from code (concept kind); empty otherwise. */
   states: string[];
+  /** Ordered fan-out steps read from imports (flow kind); empty otherwise. */
+  steps: InferredStepView[];
   /** Evidence pins - the code each claim was read from. */
   pins: PinView[];
+}
+
+/** One step of an inferred flow skeleton (21a): a downstream area, linking to its
+ * module tile. The order/meaning of the step itself is the human delta. */
+export interface InferredStepView {
+  label: string;
+  module: string | null;
 }
 
 /** An inferred fact by id (module card or state-machine candidate), or null. */
@@ -283,6 +292,10 @@ function inferredView(index: ArthaIndex, row: ArthaIndex['inferred'][number]): I
       .filter((s) => s.inferred_id === row.id)
       .sort((a, b) => a.ord - b.ord)
       .map((s) => s.name),
+    steps: index.inferredSteps
+      .filter((s) => s.inferred_id === row.id)
+      .sort((a, b) => a.ord - b.ord)
+      .map((s) => ({ label: s.label, module: s.to_module })),
     // Moonlight regenerates on drift, so inferred pins are never "stale" (D12).
     pins: index.inferredPins
       .filter((p) => p.inferred_id === row.id)
@@ -329,11 +342,24 @@ export interface InferredCatalogConcept {
   confidence: string;
 }
 
+/** An inferred flow skeleton summarised for the catalog (21a): its fan-out
+ * preview and worded confidence, described not vouched. */
+export interface InferredCatalogFlow {
+  id: string;
+  name: string;
+  module: string | null;
+  /** Ordered fan-out step labels - the card's preview. */
+  steps: string[];
+  confidence: string;
+}
+
 export interface Catalog {
   concepts: CatalogConcept[];
   flows: CatalogFlow[];
-  /** Machine-described capabilities (21a), rendered in moonlight below vouched ones. */
+  /** Machine-described concepts (21a), rendered in moonlight below vouched ones. */
   inferredConcepts: InferredCatalogConcept[];
+  /** Machine-described flow skeletons (21a), moonlight below vouched flows. */
+  inferredFlows: InferredCatalogFlow[];
 }
 
 /**
@@ -387,7 +413,21 @@ export function catalog(index: ArthaIndex, config: ArthaConfig): Catalog {
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  return { concepts, flows, inferredConcepts };
+  const inferredFlows: InferredCatalogFlow[] = index.inferred
+    .filter((r) => r.kind === 'flow')
+    .map((r) => ({
+      id: r.id,
+      name: r.heading,
+      module: r.module,
+      steps: index.inferredSteps
+        .filter((s) => s.inferred_id === r.id)
+        .sort((a, b) => a.ord - b.ord)
+        .map((s) => s.label),
+      confidence: r.confidence,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  return { concepts, flows, inferredConcepts, inferredFlows };
 }
 
 // ── /api/dark-zones ───────────────────────────────────────────────────────────
@@ -456,6 +496,10 @@ export interface ModuleDetail {
   card: InferredFactView | null;
   /** Inferred state-machine candidates whose evidence lands in this module (21a). */
   inferredConcepts: InferredFactView[];
+  /** Inferred flow skeletons entered from this module (21a). */
+  inferredFlows: InferredFactView[];
+  /** Inferred naming conventions this module repeats (21a). */
+  inferredConventions: InferredFactView[];
 }
 
 export function moduleDetail(
@@ -524,6 +568,14 @@ export function moduleDetail(
     })(),
     inferredConcepts: index.inferred
       .filter((r) => r.kind === 'concept' && r.module === module)
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((r) => inferredView(index, r)),
+    inferredFlows: index.inferred
+      .filter((r) => r.kind === 'flow' && r.module === module)
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((r) => inferredView(index, r)),
+    inferredConventions: index.inferred
+      .filter((r) => r.kind === 'convention' && r.module === module)
       .sort((a, b) => a.id.localeCompare(b.id))
       .map((r) => inferredView(index, r)),
   };

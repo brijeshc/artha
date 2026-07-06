@@ -2,7 +2,7 @@
  * The **inferred layer** (21a): a deterministic, offline, LLM-free extraction of
  * code *meaning* that lights the map before any human is asked for anything.
  *
- * Two extractors, both structural - they only ever *describe* what the code
+ * Four extractors, all structural - they only ever *describe* what the code
  * literally contains, never invent intent (that stays the human delta):
  *
  * - **Module cards** - one readable card per module: a product-leaning name, a
@@ -11,6 +11,14 @@
  * - **State-machine candidates** - a concept draft per string-literal union / TS
  *   enum a module declares, with its states read verbatim. Effects, transitions,
  *   and "why" are deliberately left blank: those are the human delta (D6/D8).
+ * - **Flow skeletons** - an ordered fan-out per exported operation (an action-
+ *   verb function) whose file reaches across modules: the areas it touches, read
+ *   from the file's imports. What each step does and the order it runs in are the
+ *   human delta - only the reachable areas are read from code (file-level; no
+ *   symbol-level call graph, per the v0.2 cut).
+ * - **Convention candidates** - a naming regularity a module repeats (`*Repo`,
+ *   `use*`): ≥3 exported symbols sharing an affix, pinned to the symbols that
+ *   embody it. What the convention *requires* is left for the human to say.
  *
  * Everything is evidence-pinned, `origin: inferred`, confidence `read-from-code`,
  * and re-derives on every build (a regenerable cache, not stored knowledge). A
@@ -18,10 +26,10 @@
  * it once they've touched it (materialize-on-touch).
  */
 
-import type { InferredPinRow, InferredRow, InferredStateRow } from '../build/db';
+import type { InferredPinRow, InferredRow, InferredStateRow, InferredStepRow } from '../build/db';
 import type { EnumLike, SymbolResolver } from '../resolver/SymbolResolver';
 import { moduleOf } from './module';
-import type { RefEdge } from './references';
+import { type RefEdge, resolveSpecifier } from './references';
 
 /** The deterministic confidence tier for everything 21a emits (D7 wording). */
 export const READ_FROM_CODE = 'read-from-code';
@@ -30,14 +38,65 @@ export interface InferredLayer {
   facts: InferredRow[];
   pins: InferredPinRow[];
   states: InferredStateRow[];
+  steps: InferredStepRow[];
 }
 
-const EMPTY: InferredLayer = { facts: [], pins: [], states: [] };
+const EMPTY: InferredLayer = { facts: [], pins: [], states: [], steps: [] };
 
-/** How many public symbols a module card names before "and N more". */
+/** How many public symbols a module card / convention names before "and N more". */
 const CARD_SYMBOL_CAP = 8;
 /** How many state names a state-machine body inlines before "…". */
 const STATE_INLINE_CAP = 4;
+/** How many times a naming affix must repeat in a module to read as a convention
+ * (2 is coincidence; 3 is a pattern). */
+const CONVENTION_MIN = 3;
+/** Shortest affix word that can anchor a convention - drops `Id`, `V2`, `of`. */
+const AFFIX_MIN_LEN = 3;
+
+/**
+ * First words that mark an exported function as a process/operation worth reading
+ * as a flow - not a getter, predicate, or accessor. Precision-first: the
+ * cross-module fan-out requirement (a real flow orchestrates across areas) does
+ * most of the filtering, and this list keeps a utility that merely imports across
+ * modules (a `session()` accessor, a `validate()` predicate) from being mislabelled
+ * a flow. Matched against the first humanized word, so `handleCheckout` → `handle`.
+ */
+const FLOW_VERBS = new Set([
+  'handle',
+  'process',
+  'run',
+  'execute',
+  'perform',
+  'submit',
+  'place',
+  'checkout',
+  'purchase',
+  'pay',
+  'charge',
+  'refund',
+  'cancel',
+  'approve',
+  'reject',
+  'send',
+  'dispatch',
+  'publish',
+  'sync',
+  'migrate',
+  'deploy',
+  'register',
+  'signup',
+  'login',
+  'logout',
+  'authenticate',
+  'authorize',
+  'onboard',
+  'provision',
+  'schedule',
+  'enqueue',
+  'start',
+  'create',
+  'generate',
+]);
 
 /**
  * Build the inferred layer for a repo from the structural scan already done for
@@ -59,6 +118,11 @@ export function inferLayer(
   const facts: InferredRow[] = [];
   const pins: InferredPinRow[] = [];
   const states: InferredStateRow[] = [];
+  const steps: InferredStepRow[] = [];
+  const sorted = [...files].sort();
+  // The known-file set for resolving import specifiers to in-tree files (T17b's
+  // resolver, reused here for flow fan-out) - deterministic, no fs, offline.
+  const known = new Set(files.map(toPosix));
 
   // Fill each pin's content hash + canonical id from the resolver (all cache
   // hits - these files were just parsed for the structural scan).
@@ -90,7 +154,7 @@ export function inferLayer(
   }
 
   // ── State-machine candidates ─────────────────────────────────────────────
-  for (const file of [...files].sort()) {
+  for (const file of sorted) {
     const module = moduleOf(file, sourceRoots);
     for (const found of resolver.enumLikes(file)) {
       const ref = `${file}#${found.name}`;
@@ -110,8 +174,57 @@ export function inferLayer(
     }
   }
 
+  // ── Flow skeletons ───────────────────────────────────────────────────────
+  // An exported action-verb function whose file reaches across modules is an
+  // entry point; its steps are the areas that file imports (file-level fan-out,
+  // in source order). Steps' meaning/order are the human delta - only the
+  // reachable areas are read from code.
+  for (const file of sorted) {
+    const module = moduleOf(file, sourceRoots);
+    if (!module) continue;
+    for (const decl of resolver.list(file)) {
+      if (decl.kind !== 'function' || !decl.exported || decl.name.includes('.')) continue;
+      if (!isFlowVerb(decl.name)) continue;
+      const ref = `${file}#${decl.name}`;
+      if (humanPinnedRefs.has(ref)) continue; // the human owns this evidence
+      const fan = fanOut(file, module, resolver, known, sourceRoots);
+      if (fan.length === 0) continue; // no downstream area → not a flow skeleton
+      const id = `inferred:flow:${ref}`;
+      facts.push({
+        id,
+        kind: 'flow',
+        module,
+        heading: humanize(decl.name),
+        body: flowBody(module, fan),
+        confidence: READ_FROM_CODE,
+        origin: 'inferred',
+      });
+      fan.forEach((s, ord) =>
+        steps.push({ inferred_id: id, label: s.label, to_module: s.module, ord }),
+      );
+      pins.push(resolvePin(id, ref, 'entry', 0));
+    }
+  }
+
+  // ── Convention candidates ────────────────────────────────────────────────
+  // Naming regularities a module repeats (≥3 exported symbols sharing an affix).
+  // Like module cards, these are aggregate structural context, not a single-
+  // evidence claim, so they are not suppressed by human pins.
+  for (const cand of conventions(sorted, resolver, sourceRoots)) {
+    facts.push({
+      id: cand.id,
+      kind: 'convention',
+      module: cand.module,
+      heading: cand.heading,
+      body: cand.body,
+      confidence: READ_FROM_CODE,
+      origin: 'inferred',
+    });
+    cand.memberRefs.forEach((ref, ord) => pins.push(resolvePin(cand.id, ref, 'member', ord)));
+  }
+
   facts.sort((a, b) => a.id.localeCompare(b.id));
-  return { facts, pins, states };
+  return { facts, pins, states, steps };
 }
 
 interface ModuleCard {
@@ -217,7 +330,155 @@ function stateMachineBody(found: EnumLike): string {
   return `${found.members.length} states read from the \`${found.name}\` ${noun} (${states}). ${tail}`;
 }
 
+// ── Flow skeletons ──────────────────────────────────────────────────────────
+
+/** One downstream area a flow reaches: the module and its readable label. */
+interface FanStep {
+  module: string;
+  label: string;
+}
+
+/** True when a function name reads as an operation (its first word is an action
+ * verb), so it is a plausible flow entry point rather than a getter/accessor. */
+function isFlowVerb(name: string): boolean {
+  const first = words(name)[0];
+  return first !== undefined && FLOW_VERBS.has(first.toLowerCase());
+}
+
+/**
+ * The in-tree modules a file imports, rolled to module altitude, deduped, in
+ * source order - the file-level fan-out that seeds a flow's step candidates. The
+ * entry's own module is excluded (a flow describes what it reaches *out* to).
+ */
+function fanOut(
+  file: string,
+  ownModule: string,
+  resolver: SymbolResolver,
+  known: Set<string>,
+  sourceRoots: string[],
+): FanStep[] {
+  const seen = new Set<string>();
+  const out: FanStep[] = [];
+  for (const spec of resolver.imports(file)) {
+    const target = resolveSpecifier(toPosix(file), spec, (p) => known.has(p));
+    if (!target) continue;
+    const module = moduleOf(target, sourceRoots);
+    if (!module || module === ownModule || seen.has(module)) continue;
+    seen.add(module);
+    out.push({ module, label: humanize(basename(module)) });
+  }
+  return out;
+}
+
+/** A flow skeleton's prose: where it starts, the areas it reaches, and an honest
+ * flag that the steps themselves are still the human's to describe. */
+function flowBody(module: string, fan: FanStep[]): string {
+  const here = humanize(basename(module));
+  const reaches = formatList(fan.map((s) => s.label));
+  const tail = 'What happens at each step, and in what order, is not yet described.';
+  return `An operation in ${here} that reaches ${reaches} (read from its imports). ${tail}`;
+}
+
+// ── Convention candidates ───────────────────────────────────────────────────
+
+/** One exported symbol considered for a module's naming conventions. */
+interface NamedSymbol {
+  name: string;
+  ref: string;
+}
+
+/** A convention candidate ready to become an inferred fact + evidence pins. */
+interface ConventionCand {
+  id: string;
+  module: string;
+  heading: string;
+  body: string;
+  /** Member symbol refs to pin as evidence (capped, deterministic order). */
+  memberRefs: string[];
+}
+
+/**
+ * The naming conventions each module repeats: ≥3 exported top-level symbols
+ * sharing a first word (`use*`) or last word (`*Repo`). Deterministic - modules,
+ * symbols, and affixes are all processed in sorted order.
+ */
+function conventions(
+  sortedFiles: string[],
+  resolver: SymbolResolver,
+  sourceRoots: string[],
+): ConventionCand[] {
+  const byModule = new Map<string, NamedSymbol[]>();
+  for (const file of sortedFiles) {
+    const module = moduleOf(file, sourceRoots);
+    if (!module) continue;
+    for (const decl of resolver.list(file)) {
+      if (!decl.exported || decl.name.includes('.')) continue; // public top-level only
+      const bucket = byModule.get(module) ?? [];
+      bucket.push({ name: decl.name, ref: `${file}#${decl.name}` });
+      byModule.set(module, bucket);
+    }
+  }
+
+  const cands: ConventionCand[] = [];
+  for (const [module, symbols] of [...byModule.entries()].sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  )) {
+    for (const where of ['suffix', 'prefix'] as const) {
+      for (const [affix, members] of affixGroups(symbols, where)) {
+        if (members.length < CONVENTION_MIN) continue;
+        const glob = where === 'suffix' ? `*${affix}` : `${affix}*`;
+        cands.push({
+          id: `inferred:convention:${module}:${where}:${affix}`,
+          module,
+          heading: glob,
+          body: conventionBody(glob, members),
+          memberRefs: members.map((m) => m.ref).slice(0, CARD_SYMBOL_CAP),
+        });
+      }
+    }
+  }
+  return cands;
+}
+
+/** A convention candidate's prose: how many names match, a sample, and an honest
+ * flag that what the convention *requires* is still the human's to say. */
+function conventionBody(glob: string, members: NamedSymbol[]): string {
+  const sample = formatList(members.map((m) => m.name));
+  const tail =
+    'A naming convention read from the code; what it requires of them is not yet described.';
+  return `${members.length} exported names here match \`${glob}\` (${sample}). ${tail}`;
+}
+
+/**
+ * Group a module's symbols by their leading (`prefix`) or trailing (`suffix`)
+ * word, keeping only words long enough to be meaningful. Members within a group
+ * are sorted by name for a byte-stable pin order; groups iterate in affix order.
+ */
+function affixGroups(
+  symbols: NamedSymbol[],
+  where: 'prefix' | 'suffix',
+): Map<string, NamedSymbol[]> {
+  const groups = new Map<string, NamedSymbol[]>();
+  for (const sym of symbols) {
+    const parts = words(sym.name);
+    const affix = where === 'suffix' ? parts[parts.length - 1] : parts[0];
+    if (!affix || affix.length < AFFIX_MIN_LEN) continue;
+    const bucket = groups.get(affix) ?? [];
+    bucket.push(sym);
+    groups.set(affix, bucket);
+  }
+  for (const bucket of groups.values()) {
+    bucket.sort((a, b) => a.name.localeCompare(b.name) || a.ref.localeCompare(b.ref));
+  }
+  return new Map([...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+}
+
 // ── small deterministic string helpers ─────────────────────────────────────
+
+/** Repo-relative path with forward slashes, for `resolveSpecifier` + the known set. */
+function toPosix(path: string): string {
+  return path.split('\\').join('/');
+}
 
 /** Group files by their module (top-level folder), skipping out-of-tree files.
  * Returns a map iterated in sorted module order for deterministic output. */
@@ -244,20 +505,26 @@ function symbolName(ref: string): string {
   return ref.slice(ref.indexOf('#') + 1);
 }
 
+/** Split a code identifier into its words, original case preserved:
+ * `SubscriptionStatus` → ['Subscription', 'Status']; `use-auth` → ['use', 'auth']. */
+function words(identifier: string): string[] {
+  return identifier
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2') // camelCase boundary
+    .replace(/[_\-.]+/g, ' ') // separators
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
 /**
  * Turn a code identifier into readable words: split camelCase and separators,
  * title-case each word. `SubscriptionStatus` → "Subscription Status";
  * `user-auth` → "User Auth"; `billing` → "Billing".
  */
 export function humanize(identifier: string): string {
-  const words = identifier
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2') // camelCase boundary
-    .replace(/[_\-.]+/g, ' ') // separators
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  if (words.length === 0) return identifier;
-  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const parts = words(identifier);
+  if (parts.length === 0) return identifier;
+  return parts.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
 /** Join names as prose: "a", "a and b", "a, b and c" (capped at 3 + "N more"). */

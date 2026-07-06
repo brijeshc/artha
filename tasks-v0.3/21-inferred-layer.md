@@ -160,9 +160,9 @@ Users are never asked to maintain machine text.
 
 ## Acceptance criteria (per phase)
 
-21a:
-- [ ] On a repo with **zero** `.artha/` entries, `artha build` emits inferred module cards + state-machine/flow/convention candidates, all evidence-pinned; the dashboard renders a lit (moonlight) map - never black.
-- [ ] Fully offline, no LLM; rebuild byte-deterministic; existing v0.1/v0.2 behavior unchanged when inferred facts are ignored.
+21a: **done (2026-07-07).**
+- [x] On a repo with **zero** `.artha/` entries, `artha build` emits inferred module cards + state-machine/flow/convention candidates, all evidence-pinned; the dashboard renders a lit (moonlight) map - never black.
+- [x] Fully offline, no LLM; rebuild byte-deterministic; existing v0.1/v0.2 behavior unchanged when inferred facts are ignored.
 
 21b:
 - [ ] `artha infer` is opt-in, spend-capped, incremental (unchanged subtree → zero spend), engine-pluggable; a failed/absent engine leaves 21a output intact.

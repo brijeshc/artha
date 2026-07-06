@@ -6,6 +6,7 @@ import {
   type InferredPinRow,
   type InferredRow,
   type InferredStateRow,
+  type InferredStepRow,
   type PinRow,
   type RefRow,
   type RelatedRow,
@@ -44,6 +45,8 @@ export interface ArthaIndex {
   readonly inferredPins: InferredPinRow[];
   /** States read from code for inferred state-machine candidates (21a). */
   readonly inferredStates: InferredStateRow[];
+  /** Ordered fan-out steps for inferred flow skeletons (21a). */
+  readonly inferredSteps: InferredStepRow[];
   /** Fact id → embedding vector (T14). Empty for pre-T14 / no-embedding indexes. */
   readonly embeddings: Map<string, Float32Array>;
   /** The model that produced the vectors, for query-side model matching; null if none. */
@@ -67,6 +70,7 @@ const EMPTY: ArthaIndex = {
   inferred: [],
   inferredPins: [],
   inferredStates: [],
+  inferredSteps: [],
   embeddings: new Map(),
   embeddingModel: null,
   empty: true,
@@ -98,6 +102,7 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
     const inferred = selectAll<InferredRow>(db, 'artha_inferred');
     const inferredPins = selectAll<InferredPinRow>(db, 'artha_inferred_pins');
     const inferredStates = selectAll<InferredStateRow>(db, 'artha_inferred_states');
+    const inferredSteps = selectAll<InferredStepRow>(db, 'artha_inferred_steps');
     const { embeddings, embeddingModel } = loadEmbeddings(db);
     const handle = db;
     return {
@@ -112,6 +117,7 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
       inferred,
       inferredPins,
       inferredStates,
+      inferredSteps,
       embeddings,
       embeddingModel,
       empty: facts.length === 0,

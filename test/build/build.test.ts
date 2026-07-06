@@ -198,6 +198,71 @@ describe('buildIndex — emit', () => {
     expect(rows('SELECT from_module, to_module, count FROM artha_refs')).toEqual(expected);
   });
 
+  it('emits inferred flow skeletons + convention candidates, deterministically (21a)', async () => {
+    // A cross-module flow entry, and a `*Repo` naming cluster - no .artha entries,
+    // so this is the pure machine layer that lights a stranger's map.
+    writeFileSync(join(repo, 'src', 'billing', 'pay.ts'), 'export function charge() {}\n');
+    writeFileSync(
+      join(repo, 'src', 'billing', 'repos.ts'),
+      'export class UserRepo {}\nexport class OrderRepo {}\nexport class InvoiceRepo {}\n',
+    );
+    writeFileSync(
+      join(repo, 'src', 'checkout', 'checkout.ts'),
+      "import { charge } from '../billing/pay';\nexport function placeOrder() {\n  charge();\n}\n",
+    );
+
+    const report = await run();
+    expect(report.errors).toEqual([]);
+    // 2 module cards + 1 flow + 1 convention; no human facts leaked into artha_facts
+    expect(report.inferred).toBe(4);
+    expect(rows('SELECT count(*) AS n FROM artha_facts')[0]?.n).toBe(0);
+
+    // the flow skeleton, its fan-out steps, and its entry-point evidence pin
+    const flow = rows("SELECT * FROM artha_inferred WHERE kind = 'flow'");
+    expect(flow).toHaveLength(1);
+    expect(flow[0]).toMatchObject({
+      id: 'inferred:flow:src/checkout/checkout.ts#placeOrder',
+      module: 'src/checkout',
+      heading: 'Place Order',
+      confidence: 'read-from-code',
+      origin: 'inferred',
+    });
+    const steps = rows('SELECT label, to_module, ord FROM artha_inferred_steps ORDER BY ord');
+    expect(steps).toEqual([{ label: 'Billing', to_module: 'src/billing', ord: 0 }]);
+    const entry = rows("SELECT * FROM artha_inferred_pins WHERE role = 'entry'");
+    expect(entry[0]?.symbol_ref).toBe('src/checkout/checkout.ts#placeOrder');
+    expect(entry[0]?.content_hash).toMatch(/^[0-9a-f]{6}$/);
+
+    // the naming convention, pinned to the symbols that embody it
+    const conv = rows("SELECT * FROM artha_inferred WHERE kind = 'convention'");
+    expect(conv).toHaveLength(1);
+    expect(conv[0]).toMatchObject({
+      id: 'inferred:convention:src/billing:suffix:Repo',
+      module: 'src/billing',
+      heading: '*Repo',
+    });
+    const members = rows(
+      "SELECT symbol_ref FROM artha_inferred_pins WHERE role = 'member' ORDER BY ord",
+    );
+    expect(members.map((m) => m.symbol_ref)).toEqual([
+      'src/billing/repos.ts#InvoiceRepo',
+      'src/billing/repos.ts#OrderRepo',
+      'src/billing/repos.ts#UserRepo',
+    ]);
+
+    // the read layer exposes the new tables (defensively, for the dashboard)
+    const idx = openArthaIndex(dbPath());
+    expect(idx.inferredSteps).toHaveLength(1);
+    expect(idx.inferred.some((r) => r.kind === 'flow')).toBe(true);
+    expect(idx.inferred.some((r) => r.kind === 'convention')).toBe(true);
+    idx.close();
+
+    // rebuilding the same tree is byte-identical (a regenerable cache)
+    const before = rows('SELECT * FROM artha_inferred_steps');
+    await run();
+    expect(rows('SELECT * FROM artha_inferred_steps')).toEqual(before);
+  });
+
   it('validates, resolves a pin, fills the hash, and emits a searchable index', async () => {
     money(ORIGINAL_ADD);
     writeEntryFile('decisions', 'money.yaml', certifiedDecisionYaml());

@@ -109,16 +109,33 @@ export interface InferredCatalogConcept {
   confidence: string;
 }
 
+/** A machine-described flow skeleton (21a) for the catalog - its fan-out preview. */
+export interface InferredCatalogFlow {
+  id: string;
+  name: string;
+  module: string | null;
+  steps: string[];
+  confidence: string;
+}
+
 export interface Catalog {
   concepts: CatalogConcept[];
   flows: CatalogFlow[];
-  /** Machine-described capabilities (21a), rendered in moonlight. Optional for a pre-21a index. */
+  /** Machine-described concepts (21a), rendered in moonlight. Optional for a pre-21a index. */
   inferredConcepts?: InferredCatalogConcept[];
+  /** Machine-described flow skeletons (21a), moonlight. Optional for a pre-21a index. */
+  inferredFlows?: InferredCatalogFlow[];
 }
 
-/** One inferred fact (21a) as the dashboard reads it: a module card or a
- * state-machine candidate, its worded confidence, states read from code, and
- * the evidence pins that back it. */
+/** One step of an inferred flow skeleton (21a): a downstream area, linking to its module. */
+export interface InferredStepView {
+  label: string;
+  module: string | null;
+}
+
+/** One inferred fact (21a) as the dashboard reads it: a module card, a
+ * state-machine candidate, a flow skeleton, or a naming convention - its worded
+ * confidence, what was read from code, and the evidence pins that back it. */
 export interface InferredFactView {
   id: string;
   kind: string;
@@ -127,6 +144,8 @@ export interface InferredFactView {
   summary: string | null;
   confidence: string;
   states: string[];
+  /** Ordered fan-out steps (flow kind); empty otherwise. Optional for a pre-slice-2 index. */
+  steps?: InferredStepView[];
   pins: PinView[];
 }
 
@@ -177,6 +196,10 @@ export interface ModuleDetail {
   card?: InferredFactView | null;
   /** Inferred state-machine candidates whose evidence lands in this module (21a). */
   inferredConcepts?: InferredFactView[];
+  /** Inferred flow skeletons entered from this module (21a). */
+  inferredFlows?: InferredFactView[];
+  /** Inferred naming conventions this module repeats (21a). */
+  inferredConventions?: InferredFactView[];
 }
 
 /** A machine-proposed pin (T17b): a resolvable symbol, ranked, with a plain why. */

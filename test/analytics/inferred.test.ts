@@ -119,6 +119,42 @@ describe('inferLayer — the deterministic inferred layer (21a)', () => {
     expect(withHuman.facts.some((f) => f.kind === 'module')).toBe(true);
   });
 
+  it('emits a flow skeleton for an exported operation that reaches across modules', () => {
+    const id = 'inferred:flow:src/checkout/flow.ts#handleCheckout';
+    const flow = layer.facts.find((f) => f.id === id);
+    expect(flow?.kind).toBe('flow');
+    expect(flow?.module).toBe('src/checkout');
+    expect(flow?.heading).toBe('Handle Checkout');
+    expect(flow?.confidence).toBe('read-from-code');
+    // steps are the areas the entry file imports - read from imports, at module altitude
+    const steps = layer.steps.filter((s) => s.inferred_id === id).sort((a, b) => a.ord - b.ord);
+    expect(steps.map((s) => s.to_module)).toEqual(['src/billing']);
+    expect(steps.map((s) => s.label)).toEqual(['Billing']);
+    // the body honestly flags the human delta (the order/meaning of steps)
+    expect(flow?.body).toMatch(/not yet described/);
+    // the entry point is the single evidence pin, resolved
+    const pins = layer.pins.filter((p) => p.inferred_id === id);
+    expect(pins).toHaveLength(1);
+    expect(pins[0]?.role).toBe('entry');
+    expect(pins[0]?.symbol_ref).toBe('src/checkout/flow.ts#handleCheckout');
+    expect(pins[0]?.content_hash).toMatch(/^[0-9a-f]{6}$/);
+  });
+
+  it('does not emit a flow for a non-operation name or a leaf with no fan-out', () => {
+    const flowIds = layer.facts.filter((f) => f.kind === 'flow').map((f) => f.id);
+    // `monthly` is not an action verb → not read as a flow (precision over recall)
+    expect(flowIds).not.toContain('inferred:flow:src/reports/report.ts#monthly');
+    // `send` is an action verb, but its file imports nothing in-tree → no fan-out, no flow
+    expect(flowIds).not.toContain('inferred:flow:src/notifications/notify.ts#send');
+  });
+
+  it('suppresses a flow whose entry point a human already pins (materialize-on-touch)', () => {
+    const withHuman = run(new Set(['src/checkout/flow.ts#handleCheckout']));
+    expect(
+      withHuman.facts.some((f) => f.id === 'inferred:flow:src/checkout/flow.ts#handleCheckout'),
+    ).toBe(false);
+  });
+
   it('is deterministic: identical inputs → identical output', () => {
     expect(run()).toEqual(layer);
   });
@@ -128,7 +164,90 @@ describe('inferLayer — the deterministic inferred layer (21a)', () => {
       facts: [],
       pins: [],
       states: [],
+      steps: [],
     });
+  });
+});
+
+/**
+ * A repo built to exercise the convention extractor: one module with a `*Repo`
+ * suffix cluster (and a below-threshold `load*` prefix), one with a `use*` prefix
+ * cluster, and one with no regularity at all.
+ */
+const CONV_FILES: Record<string, string> = {
+  'src/data/repos.ts': [
+    'export class UserRepo {}',
+    'export class OrderRepo {}',
+    'export class InvoiceRepo {}',
+    'export function loadUser() {}',
+    'export function loadOrder() {}',
+  ].join('\n'),
+  'src/hooks/hooks.ts': [
+    'export function useAuth() {}',
+    'export function useCart() {}',
+    'export function useOrders() {}',
+  ].join('\n'),
+  'src/solo/one.ts': ['export class Widget {}', 'export class Gadget {}'].join('\n'),
+};
+
+describe('inferLayer — convention candidates (21a)', () => {
+  let tmp: string;
+  let layer: InferredLayer;
+
+  beforeAll(async () => {
+    tmp = mkdtempSync(join(tmpdir(), 'artha-conv-'));
+    for (const [rel, content] of Object.entries(CONV_FILES)) {
+      mkdirSync(join(tmp, rel, '..'), { recursive: true });
+      writeFileSync(join(tmp, rel), content);
+    }
+    const resolver = await createTreeSitterResolver(tmp);
+    const files = listSourceFiles(tmp, ROOTS);
+    const refs = referenceGraph(files, (rel) => resolver.imports(rel), ROOTS);
+    layer = inferLayer(files, resolver, refs, new Set(), ROOTS);
+  });
+
+  afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+
+  const conv = (id: string) => layer.facts.find((f) => f.id === id);
+  const members = (id: string) =>
+    layer.pins
+      .filter((p) => p.inferred_id === id)
+      .sort((a, b) => a.ord - b.ord)
+      .map((p) => p.symbol_ref);
+
+  it('emits a suffix convention when ≥3 exported names share a trailing word', () => {
+    const id = 'inferred:convention:src/data:suffix:Repo';
+    expect(conv(id)?.kind).toBe('convention');
+    expect(conv(id)?.heading).toBe('*Repo');
+    expect(conv(id)?.module).toBe('src/data');
+    expect(conv(id)?.confidence).toBe('read-from-code');
+    expect(conv(id)?.body).toMatch(/3 exported names/);
+    expect(members(id)).toEqual([
+      'src/data/repos.ts#InvoiceRepo',
+      'src/data/repos.ts#OrderRepo',
+      'src/data/repos.ts#UserRepo',
+    ]);
+    // every evidence pin is a member of the pattern
+    expect(layer.pins.filter((p) => p.inferred_id === id).every((p) => p.role === 'member')).toBe(
+      true,
+    );
+  });
+
+  it('emits a prefix convention (`use*`) from repeated leading words', () => {
+    const id = 'inferred:convention:src/hooks:prefix:use';
+    expect(conv(id)?.heading).toBe('use*');
+    expect(members(id)).toEqual([
+      'src/hooks/hooks.ts#useAuth',
+      'src/hooks/hooks.ts#useCart',
+      'src/hooks/hooks.ts#useOrders',
+    ]);
+  });
+
+  it('does not emit a convention below the repetition threshold', () => {
+    // `load*` appears only twice in src/data → coincidence, not a convention
+    expect(conv('inferred:convention:src/data:prefix:load')).toBeUndefined();
+    // src/solo's two names share no affix → nothing at all
+    expect(layer.facts.some((f) => f.kind === 'convention' && f.module === 'src/solo')).toBe(false);
   });
 });
 

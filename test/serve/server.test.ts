@@ -59,6 +59,7 @@ function indexWith(headings: string[]): IndexData {
     inferred: [],
     inferredPins: [],
     inferredStates: [],
+    inferredSteps: [],
   };
 }
 

@@ -4,6 +4,7 @@ import type {
   Catalog as CatalogData,
   ConceptDetail,
   FlowDetail,
+  InferredFactView,
   MapFeed,
   ModuleDetail,
   RankedModule,
@@ -1074,6 +1075,126 @@ describe('inferred layer (21a) - moonlight', () => {
     expect(html).toContain('Machine-described capabilities');
     expect(html).toContain('Order Status');
     // not the empty state - the catalog has inferred content even with no vouched facts
+    expect(html).not.toContain('No capabilities have been described yet');
+  });
+
+  // ── flow skeletons + convention candidates (21a slice 2) ───────────────────
+
+  const inferredFlow: InferredFactView = {
+    id: 'inferred:flow:src/checkout/checkout.ts#placeOrder',
+    kind: 'flow',
+    module: 'src/checkout',
+    name: 'Place Order',
+    summary:
+      'An operation in Checkout that reaches Billing and Notifications (read from its imports). What happens at each step, and in what order, is not yet described.',
+    confidence: 'read-from-code',
+    states: [],
+    steps: [
+      { label: 'Billing', module: 'src/billing' },
+      { label: 'Notifications', module: 'src/notifications' },
+    ],
+    pins: [
+      {
+        symbol: 'src/checkout/checkout.ts#placeOrder',
+        symbolId: 'src/checkout/checkout.ts#placeOrder',
+        contentHash: 'abc123',
+        stale: false,
+      },
+    ],
+  };
+
+  const inferredConvention: InferredFactView = {
+    id: 'inferred:convention:src/data:suffix:Repo',
+    kind: 'convention',
+    module: 'src/data',
+    name: '*Repo',
+    summary:
+      '3 exported names here match `*Repo` (InvoiceRepo, OrderRepo, UserRepo). A naming convention read from the code; what it requires of them is not yet described.',
+    confidence: 'read-from-code',
+    states: [],
+    steps: [],
+    pins: ['UserRepo', 'OrderRepo', 'InvoiceRepo'].map((n) => ({
+      symbol: `src/data/repos.ts#${n}`,
+      symbolId: `src/data/repos.ts#${n}`,
+      contentHash: 'abc123',
+      stale: false,
+    })),
+  };
+
+  it('the inferred page renders a flow skeleton: the areas it reaches + the flow delta', () => {
+    const html = markup(<InferredPage detail={inferredFlow} />);
+    expect(html).toContain('Place Order');
+    expect(html).toContain('Reaches'); // the fan-out section head
+    expect(html).toContain('Billing');
+    expect(html).toContain('Notifications');
+    // each step links to its module tile
+    expect(html).toContain(routeHref({ view: 'module', id: 'src/billing' }));
+    // the delta is flow-specific, not the state-machine wording
+    expect(html).toContain('The order these steps run');
+    expect(html).not.toContain('the meaning of each state');
+  });
+
+  it('the inferred page renders a convention: the symbols that match + the convention delta', () => {
+    const html = markup(<InferredPage detail={inferredConvention} />);
+    expect(html).toContain('*Repo');
+    expect(html).toContain('Symbols that match'); // conventions relabel the evidence head
+    expect(html).toContain('src/data/repos.ts#UserRepo'); // a member, shown as evidence
+    expect(html).toContain('What this convention requires'); // convention-specific delta
+  });
+
+  it('the module page lists inferred flows and machine-noticed conventions', () => {
+    const detail: ModuleDetail = {
+      module: 'src/data',
+      areas: ['src/data'],
+      dark: true,
+      churn: 3,
+      score: 0.2,
+      certifiedFacts: 0,
+      staleFacts: 0,
+      queueRank: null,
+      concepts: [],
+      flows: [],
+      rules: [],
+      decisions: [],
+      dependsOn: [],
+      usedBy: [],
+      card: null,
+      inferredConcepts: [],
+      inferredFlows: [inferredFlow],
+      inferredConventions: [inferredConvention],
+    };
+    const html = markup(
+      <ModulePage detail={detail} capabilityOf={() => null} curation={noopCuration} />,
+    );
+    // flows render under the capabilities section, conventions under their own
+    expect(html).toContain('Machine-described capabilities');
+    expect(html).toContain('Place Order');
+    expect(html).toContain('Machine-noticed conventions');
+    expect(html).toContain('*Repo');
+    expect(html).toContain(routeHref({ view: 'inferred', id: inferredFlow.id }));
+    expect(html).toContain(routeHref({ view: 'inferred', id: inferredConvention.id }));
+    // a module with only inferred content is not the black dark-empty state
+    expect(html).not.toContain('No certified meaning touches this module');
+  });
+
+  it('the catalog shows machine-described flows alongside concepts', () => {
+    const withFlows: CatalogData = {
+      concepts: [],
+      flows: [],
+      inferredConcepts: [],
+      inferredFlows: [
+        {
+          id: inferredFlow.id,
+          name: 'Place Order',
+          module: 'src/checkout',
+          steps: ['Billing', 'Notifications'],
+          confidence: 'read-from-code',
+        },
+      ],
+    };
+    const html = markup(<CatalogPage catalog={withFlows} feed={moonFeed} />);
+    expect(html).toContain('Machine-described capabilities');
+    expect(html).toContain('Place Order');
     expect(html).not.toContain('No capabilities have been described yet');
   });
 });

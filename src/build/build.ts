@@ -163,6 +163,7 @@ export async function buildIndex(
     data.inferred = layer.facts;
     data.inferredPins = layer.pins;
     data.inferredStates = layer.states;
+    data.inferredSteps = layer.steps;
     report.inferred = layer.facts.length;
   }
 
@@ -313,6 +314,7 @@ function toIndexData(
     inferred: [],
     inferredPins: [],
     inferredStates: [],
+    inferredSteps: [],
   };
 }
 

@@ -27,7 +27,9 @@ export function ModulePage({
 }): JSX.Element {
   const caps = [...detail.concepts, ...detail.flows];
   const card = detail.card ?? null;
-  const inferredConcepts = detail.inferredConcepts ?? [];
+  // Concepts + flows are both moonlight *capabilities*; conventions are rules.
+  const inferredCaps = [...(detail.inferredConcepts ?? []), ...(detail.inferredFlows ?? [])];
+  const inferredConventions = detail.inferredConventions ?? [];
   const bucketWord =
     detail.certifiedFacts === 0
       ? 'dark zone'
@@ -37,7 +39,7 @@ export function ModulePage({
           ? 'partial'
           : 'understood';
   const hasCertified = caps.length > 0 || detail.rules.length > 0 || detail.decisions.length > 0;
-  const hasInferred = card !== null || inferredConcepts.length > 0;
+  const hasInferred = card !== null || inferredCaps.length > 0 || inferredConventions.length > 0;
   const hasWired = detail.dependsOn.length > 0 || detail.usedBy.length > 0;
 
   // Section numbers run in render order across both certified and machine-
@@ -108,7 +110,7 @@ export function ModulePage({
         </section>
       )}
 
-      {inferredConcepts.length > 0 && (
+      {inferredCaps.length > 0 && (
         <section className="module-section">
           <SectionHead
             n={no()}
@@ -116,8 +118,23 @@ export function ModulePage({
             gloss={INFERRED.inferredCapsGloss}
           />
           <div className="catalog-grid">
-            {inferredConcepts.map((c) => (
-              <InferredCard key={c.id} concept={c} />
+            {inferredCaps.map((c) => (
+              <InferredCard key={c.id} item={c} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {inferredConventions.length > 0 && (
+        <section className="module-section">
+          <SectionHead
+            n={no()}
+            title={INFERRED.conventionsHead}
+            gloss={INFERRED.conventionsGloss}
+          />
+          <div className="catalog-grid">
+            {inferredConventions.map((c) => (
+              <InferredCard key={c.id} item={c} />
             ))}
           </div>
         </section>

@@ -8,9 +8,9 @@ Running log of task completion against [tasks/README.md](tasks/README.md) (v0.1)
 
 | #    | Task                                | Status       | Notes |
 |------|-------------------------------------|--------------|-------|
-| 21a  | Inferred layer - deterministic      | 🟡 slice 1   | module cards + state-machine candidates (union/enum), evidence-pinned, `origin`/`confidence` in parallel index tables; the moonlight map. Flow skeletons + convention candidates are the remaining 21a slices |
+| 21a  | Inferred layer - deterministic      | ✅ done      | all four offline extractors, evidence-pinned, `origin`/`confidence` in parallel index tables (+ `artha_inferred_steps`): module cards + state machines (slice 1), flow skeletons + naming conventions (slice 2). Byte-deterministic; the moonlight map is complete |
 | 21b  | Inferred layer - LLM synthesis      | ⬜            | opt-in, spend-capped enrichment + verification gate |
-| 21c  | Inferred layer - dashboard reframe  | 🟡 partial   | two-light grammar, prose-first pages, delta band, worded confidence shipped in slice 1; vouch-by-reading + value-ranked queue + KPI reframe (D9-D11) remain |
+| 21c  | Inferred layer - dashboard reframe  | 🟡 partial   | two-light grammar, prose-first pages, delta band, worded confidence shipped; flow (Reaches) + convention (Symbols that match) moonlight pages + module/catalog sections shipped in slice 2; vouch-by-reading + value-ranked queue + KPI reframe (D9-D11) remain |
 | 22   | Contradiction view                  | ⬜            | inferred vs certified |
 
 OQ locks (2026-07-05): index-only regenerable cache + materialize-on-touch (OQ-A);
@@ -58,6 +58,19 @@ Critical path: 11 → 12 → 15 → 16/17 → 18 → 20. Tasks 13, 14, 19 parall
 Critical path: 01 → 02 → 04 → 05 → 08 → 10.
 
 ## Log
+
+### 2026-07-07
+
+- **T21a slice 2 - the inferred layer (flow skeletons + naming conventions)** done - the deterministic, offline 21a layer is now complete (all four extractors), so a stranger's repo renders module cards, state machines, **flows, and conventions** in moonlight with zero human input.
+  - **The extractor** (`src/analytics/inferred.ts`): two new deterministic, evidence-pinned outputs alongside the slice-1 pair.
+    **Flow skeletons** - an exported **action-verb function** (`FLOW_VERBS`, matched on the first humanized word) whose file **reaches across modules** is read as a flow entry point; its steps are that file's import fan-out rolled to module altitude (source order, deduped, own module excluded). The entry point is the single resolvable evidence pin (`role: entry`); the step *order and meaning* are deliberately left as the human delta (D6). Precision-first: the cross-module-fan-out requirement filters utilities, and the verb list keeps a `session()` accessor / `validate()` predicate from being mislabelled a flow. A flow whose entry a human already pins is suppressed (materialize-on-touch), as with state machines.
+    **Convention candidates** - a naming regularity a module repeats: ≥3 exported top-level symbols sharing a first word (`use*`) or last word (`*Repo`), pinned to the symbols that embody it. Aggregate structural context like module cards (not a single-evidence claim), so **not** suppressed by human pins. A shared word `<3` chars or appearing `<3` times never anchors a convention.
+    New helpers: a shared `words()` splitter (humanize now builds on it), `isFlowVerb`/`fanOut`/`flowBody`, `conventions`/`affixGroups`/`conventionBody`.
+  - **Index** (`src/build/db.ts`): flow/convention facts land in the same parallel `artha_inferred`/`_pins` tables with new `kind` values `flow` + `convention`; a new **`artha_inferred_steps(inferred_id, label, to_module, ord)`** table carries the fan-out (mirrors `artha_flow_steps`, room for 21b's on/do prose). `artha build` still reports `· N inferred` (the demo now emits **9**: 5 cards + 2 state machines + 1 flow + 1 convention). Loaded defensively in `ArthaIndex` (a pre-slice-2 index yields `[]`).
+  - **Read API** (`src/serve/api.ts`): `InferredFactView` grows `steps` (label + module link); `/api/inferred/:id` serves flow steps + convention members; `moduleDetail` grows `inferredFlows` + `inferredConventions`; the catalog grows `inferredFlows`. Byte-unchanged for the human `artha_facts` path.
+  - **The moonlight dashboard** (`web/`): the two-light grammar (D2) now spans all four kinds. Flow pages lead with prose, then a **"Reaches"** fan-out of module-linked chips (honestly *not* a numbered sequence - the order is the delta), then evidence, then a flow-specific delta band ("The order these steps run… is not in the code"). Convention pages relabel evidence as **"Symbols that match"** and carry a convention-specific delta. `InferredCard` adapts its preview per kind (state `·` chain / flow `→` chain / convention member list); module pages gain a **"Machine-noticed conventions"** section beside "Machine-described capabilities"; the catalog groups inferred flows with concepts; the inferred breadcrumb falls back to the fact's own heading so a convention reads `*Refund`, never its raw id.
+  - **Verified**: typecheck (CLI + web) + Biome clean; **324 tests pass** (+11: flow entry detection / action-verb + cross-module gate / step order / entry-pin suppression; convention suffix+prefix / below-threshold / member pins; the build pipeline round-trips flows + conventions + the steps table byte-deterministically; four web render tests for the flow page "Reaches", convention page "Symbols that match", module flow/convention sections, catalog inferred flows). **Live E2E** on the seeded shop (`npm run demo`, enriched with a `placeOrder` orchestrator): the checkout page shows a **Place Order** flow (`Billing → Notifications`) beside the Order State machine; billing shows a **`*Refund`** machine-noticed convention (`issueRefund, startRefund, validateRefund`) distinct from the human `*Repo` rule; the catalog groups all three inferred capabilities in moonlight; the flow and convention detail pages render prose → structure → evidence → the honest delta band. All 21a offline acceptance criteria met.
+  - **Remaining**: 21b (LLM synthesis + verification) and the rest of 21c (vouch-by-reading, value-ranked queue, KPI reframe D9-D11), then 22 (contradiction view).
 
 ### 2026-07-05
 

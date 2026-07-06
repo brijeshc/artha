@@ -4,6 +4,7 @@ import type {
   InferredPinRow,
   InferredRow,
   InferredStateRow,
+  InferredStepRow,
   PinRow,
   RefRow,
   RelatedRow,
@@ -48,6 +49,7 @@ export function fakeIndex(parts: {
   inferred?: InferredRow[];
   inferredPins?: InferredPinRow[];
   inferredStates?: InferredStateRow[];
+  inferredSteps?: InferredStepRow[];
   embeddings?: Map<string, Float32Array>;
   embeddingModel?: string | null;
   fts?: (q: string) => Map<string, number>;
@@ -66,6 +68,7 @@ export function fakeIndex(parts: {
     inferred: parts.inferred ?? [],
     inferredPins: parts.inferredPins ?? [],
     inferredStates: parts.inferredStates ?? [],
+    inferredSteps: parts.inferredSteps ?? [],
     embeddings,
     embeddingModel: parts.embeddingModel ?? (embeddings.size > 0 ? 'fake-model' : null),
     empty: facts.length === 0,

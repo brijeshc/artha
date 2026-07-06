@@ -116,6 +116,7 @@ export const FIXTURE: IndexData = {
   inferred: [],
   inferredPins: [],
   inferredStates: [],
+  inferredSteps: [],
 };
 
 export function writeFixtureIndex(dbPath: string): void {

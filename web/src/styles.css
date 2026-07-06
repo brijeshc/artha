@@ -2385,3 +2385,37 @@ a.fact-line:hover {
   color: var(--ink-2);
   max-width: 64ch;
 }
+
+/* an inferred flow skeleton's fan-out: the areas it reaches, read from imports.
+ * Rendered as a set of moonlight chips - not a numbered ladder - because the
+ * *order* the steps run in is the human delta, never claimed by the machine. */
+.moon-steps {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.moon-step {
+  padding: 3px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 3px;
+  background: var(--night-2);
+  font-size: 12px;
+  color: var(--moon);
+}
+.moon-step a.pin-link {
+  color: var(--moon);
+  text-decoration: none;
+}
+.moon-step a.pin-link:hover {
+  color: var(--phosphor);
+}
+
+/* a convention card's preview: the exported symbols it repeats, in code voice */
+.member-preview {
+  font-size: 11px;
+  color: var(--moon-2);
+  overflow-wrap: anywhere;
+}

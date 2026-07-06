@@ -227,6 +227,7 @@ describe('catalog', () => {
       concepts: [],
       flows: [],
       inferredConcepts: [],
+      inferredFlows: [],
     });
   });
 });

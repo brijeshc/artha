@@ -317,7 +317,11 @@ export function App(): JSX.Element {
 
   return (
     <div className="shell">
-      <TopBar crumbs={crumbs(route, names)} kpis={kpis(map)} onOpenCmdk={() => setCmdkOpen(true)} />
+      <TopBar
+        crumbs={crumbs(route, names, route.view === 'inferred' ? inferredDetail?.name : undefined)}
+        kpis={kpis(map)}
+        onOpenCmdk={() => setCmdkOpen(true)}
+      />
       <div className="shell-body">
         <Navigator
           route={route}
@@ -334,7 +338,7 @@ export function App(): JSX.Element {
   );
 }
 
-function crumbs(route: Route, names: Map<string, string>): Crumb[] {
+function crumbs(route: Route, names: Map<string, string>, inferredName?: string | null): Crumb[] {
   switch (route.view) {
     case 'atlas': {
       const out: Crumb[] = [
@@ -362,7 +366,9 @@ function crumbs(route: Route, names: Map<string, string>): Crumb[] {
     case 'inferred':
       return [
         { label: NAV.capabilities, href: '#/capabilities' },
-        { label: names.get(route.id) ?? route.id },
+        // Concepts/flows resolve from the catalog; a convention (not a catalog
+        // capability) falls back to the loaded fact's own heading (e.g. `*Repo`).
+        { label: names.get(route.id) ?? inferredName ?? route.id },
       ];
   }
 }
