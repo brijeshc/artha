@@ -13,12 +13,13 @@ import {
   flowDetail,
   inferredDetail,
   mapFeed,
+  moduleBoard,
   moduleDetail,
   refsFeed,
   search,
 } from './api';
 import { suggestPins } from './suggest';
-import { searchSymbols, symbolCatalog } from './symbols';
+import { repoStructure, searchSymbols, symbolCatalog } from './symbols';
 import { addPin, certifyEntry, commitWrite, upsertEntry } from './write';
 
 export interface ServeOptions {
@@ -135,6 +136,14 @@ async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void>
     }
     if (path === '/api/refs') {
       sendJson(res, 200, refsFeed(index));
+      return;
+    }
+    const boardModule = matchModuleBoard(path);
+    if (boardModule) {
+      // The inner board reads the repo's structural scan (cached) for its file
+      // graph, like the pin suggester - so it stays offline, off the hot path.
+      const { files, fileGraph } = await repoStructure(ctx.repoRoot, ctx.config);
+      sendJson(res, 200, moduleBoard(index, ctx.config, boardModule, files, fileGraph));
       return;
     }
     if (path === '/api/suggest') {
@@ -361,6 +370,16 @@ function matchId(path: string, prefix: string): string | null {
  * matcher allows them while still rejecting empties and path escapes. */
 function matchModule(path: string): string | null {
   const prefix = '/api/module/';
+  if (!path.startsWith(prefix)) return null;
+  const id = decodeURIComponent(path.slice(prefix.length));
+  return id.length > 0 && !id.split('/').some((seg) => seg === '' || seg === '..') ? id : null;
+}
+
+/** The inner board (23b) - `/api/module-board/src%2Fbilling`. Same slash-tolerant,
+ * escape-rejecting shape as {@link matchModule}; distinct prefix so it never
+ * shadows `/api/module/`. */
+function matchModuleBoard(path: string): string | null {
+  const prefix = '/api/module-board/';
   if (!path.startsWith(prefix)) return null;
   const id = decodeURIComponent(path.slice(prefix.length));
   return id.length > 0 && !id.split('/').some((seg) => seg === '' || seg === '..') ? id : null;

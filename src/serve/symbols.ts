@@ -23,10 +23,12 @@ export interface SymbolHit {
   kind: string;
 }
 
-/** Everything one structural scan produces: the symbol catalog + the file graph. */
+/** Everything one structural scan produces: the symbol catalog + the file graph
+ * + the repo-relative source-file list (the inner board, 23b, boxes these). */
 export interface RepoStructure {
   catalog: SymbolHit[];
   fileGraph: FileGraph;
+  files: string[];
 }
 
 const structures = new Map<string, Promise<RepoStructure>>();
@@ -106,5 +108,5 @@ async function buildStructure(repoRoot: string, config: ArthaConfig): Promise<Re
     }
   }
   const fileGraph = fileImportGraph(files, (rel) => resolver.imports(rel));
-  return { catalog, fileGraph };
+  return { catalog, fileGraph, files };
 }

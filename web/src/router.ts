@@ -7,7 +7,9 @@ export type Route =
   | { view: 'atlas'; area?: string; module?: string; flow?: string; lens?: 'terrain' }
   | { view: 'capabilities' }
   | { view: 'queue' }
-  | { view: 'module'; id: string }
+  // `file` selects a box on the module's inner board (23b) - deep-linkable, like
+  // the atlas selection, so back always retraces which file you were reading.
+  | { view: 'module'; id: string; file?: string }
   | { view: 'concept'; id: string }
   | { view: 'flow'; id: string }
   | { view: 'inferred'; id: string };
@@ -40,7 +42,10 @@ export function parseRoute(hash: string): Route {
   const [head, ...rest] = path.split('/');
   const id = decodeURIComponent(rest.join('/'));
   if (id.length > 0) {
-    if (head === 'module') return { view: 'module', id };
+    if (head === 'module') {
+      const file = params.get('file') ?? undefined;
+      return { view: 'module', id, ...(file ? { file } : {}) };
+    }
     if (head === 'concept') return { view: 'concept', id };
     if (head === 'flow') return { view: 'flow', id };
     if (head === 'inferred') return { view: 'inferred', id };
@@ -64,7 +69,10 @@ export function routeHref(route: Route): string {
       return '#/capabilities';
     case 'queue':
       return '#/queue';
-    case 'module':
+    case 'module': {
+      const base = `#/module/${encodeURIComponent(route.id)}`;
+      return route.file ? `${base}?file=${encodeURIComponent(route.file)}` : base;
+    }
     case 'concept':
     case 'flow':
     case 'inferred':

@@ -6,12 +6,13 @@ import type {
   FlowDetail,
   InferredFactView,
   MapFeed,
+  ModuleBoardData,
   ModuleDetail,
   RankedModule,
   RefEdge,
   Suggestion,
 } from '../../web/src/api';
-import { GAP_Y, boardLayout } from '../../web/src/board';
+import { GAP_Y, boardLayout, fileBoardLayout } from '../../web/src/board';
 import { Atlas } from '../../web/src/components/Atlas';
 import { Board, RouteCard } from '../../web/src/components/Board';
 import { CapCard } from '../../web/src/components/CapCard';
@@ -20,6 +21,7 @@ import { CatalogPage } from '../../web/src/components/CatalogPage';
 import { CommandBar } from '../../web/src/components/CommandBar';
 import { InferredPage } from '../../web/src/components/Inferred';
 import { Inspector } from '../../web/src/components/Inspector';
+import { FileCard, ModuleBoard } from '../../web/src/components/ModuleBoard';
 import { ModulePage } from '../../web/src/components/ModulePage';
 import { Navigator } from '../../web/src/components/Navigator';
 import { QueuePage } from '../../web/src/components/QueuePage';
@@ -165,6 +167,8 @@ describe('router', () => {
       { view: 'capabilities' },
       { view: 'queue' },
       { view: 'module', id: 'src/billing' },
+      // the inner-board file selection (23b) is in the URL, so it deep-links
+      { view: 'module', id: 'src/billing', file: 'src/billing/refund.ts' },
       { view: 'concept', id: 'concept.invoice' },
       { view: 'flow', id: 'flow.refund' },
     ] as const;
@@ -662,6 +666,120 @@ describe('flow routes on the board', () => {
   });
 });
 
+// ── the inner board (23b - a module's files as its own blackboard) ────────────
+
+const innerBoard: ModuleBoardData = {
+  module: 'src/billing',
+  files: [
+    {
+      path: 'src/billing/Subscription.ts',
+      name: 'Subscription.ts',
+      facts: [{ id: 'concept.sub', kind: 'concept', name: 'Subscription', status: 'certified' }],
+    },
+    {
+      path: 'src/billing/gateway.ts',
+      name: 'gateway.ts',
+      facts: [
+        { id: 'decision.stripe', kind: 'decision', name: 'Use Stripe', status: 'certified' },
+        { id: 'flow.refund', kind: 'flow', name: 'Refund a purchase', status: 'proposed' },
+        { id: 'concept.checkout', kind: 'concept', name: 'Checkout', status: 'stale' },
+      ],
+    },
+    { path: 'src/billing/refund.ts', name: 'refund.ts', facts: [] },
+  ],
+  edges: [{ from: 'src/billing/refund.ts', to: 'src/billing/gateway.ts' }],
+};
+
+describe('fileBoardLayout', () => {
+  it('layers files by their intra-module imports and never overlaps two boxes', () => {
+    const layout = fileBoardLayout(
+      ['a.ts', 'b.ts', 'c.ts'],
+      [
+        { from: 'a.ts', to: 'b.ts' },
+        { from: 'b.ts', to: 'c.ts' },
+      ],
+    );
+    const byFile = new Map(layout.nodes.map((n) => [n.file, n]));
+    expect(byFile.get('a.ts')?.layer).toBe(0);
+    expect(byFile.get('b.ts')?.layer).toBe(1);
+    expect(byFile.get('c.ts')?.layer).toBe(2);
+    for (let i = 0; i < layout.nodes.length; i++)
+      for (let j = i + 1; j < layout.nodes.length; j++) {
+        const a = layout.nodes[i];
+        const b = layout.nodes[j];
+        const apart = a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+        expect(apart).toBe(true);
+      }
+  });
+
+  it('is deterministic under input reordering', () => {
+    const edges = [{ from: 'a.ts', to: 'b.ts' }];
+    expect(fileBoardLayout(['a.ts', 'b.ts'], edges)).toEqual(
+      fileBoardLayout(['b.ts', 'a.ts'], edges),
+    );
+  });
+});
+
+describe('ModuleBoard', () => {
+  it('draws a chalk box per file, lit by its strongest pinned fact', () => {
+    const html = markup(<ModuleBoard data={innerBoard} />);
+    expect(count(html, /class="fnode /g)).toBe(3);
+    expect(html).toContain('bnode-frame'); // the chalk frame, same register as the outer board
+    expect(html).toContain('fnode-vouched'); // Subscription.ts carries a certified concept
+    expect(html).toContain('fnode-plain'); // refund.ts has nothing pinned yet
+    expect(html).toContain('Subscription.ts');
+    expect(html).toContain('nothing pinned yet'); // the honest empty box label
+  });
+
+  it('shows two pinned facts and counts the rest honestly', () => {
+    const html = markup(<ModuleBoard data={innerBoard} />);
+    // gateway.ts carries three facts - two shown, one counted
+    expect(html).toContain('Use Stripe');
+    expect(html).toContain('+1');
+    expect(html).toContain('standing-certified');
+    expect(html).toContain('standing-proposed');
+  });
+
+  it('draws one arrow per intra-module import, reading "imports"', () => {
+    const html = markup(<ModuleBoard data={innerBoard} />);
+    expect(count(html, /class="bedge"/g)).toBe(1);
+    expect(html).toContain('refund.ts imports gateway.ts');
+  });
+
+  it('a selected file lights its box and its imports, fading + dimming the rest', () => {
+    const html = markup(<ModuleBoard data={innerBoard} selectedFile="src/billing/gateway.ts" />);
+    expect(html).toContain('class="fnode fnode-vouched selected"');
+    expect(html).toContain('class="bedge hot"'); // the edge touching gateway.ts runs hot
+    expect(html).toContain('dimmed'); // the unselected boxes recede
+    // the box is a plain anchor - selecting is deep-linkable, keyboard-native; a
+    // second click on the selected box clears the selection
+    expect(html).toContain(`href="${routeHref({ view: 'module', id: 'src/billing' })}"`);
+  });
+
+  it('an unselected box deep-links to selecting that file', () => {
+    const html = markup(<ModuleBoard data={innerBoard} />);
+    expect(html).toContain(
+      `href="${routeHref({ view: 'module', id: 'src/billing', file: 'src/billing/refund.ts' })}"`,
+    );
+  });
+});
+
+describe('FileCard', () => {
+  it('lists the selected file’s meaning, linking concepts/flows to their pages', () => {
+    const file = innerBoard.files[1]; // gateway.ts, three facts
+    const html = markup(<FileCard file={file} clearHref="#/module/src%2Fbilling" />);
+    expect(html).toContain('gateway.ts');
+    expect(html).toContain(`href="${routeHref({ view: 'flow', id: 'flow.refund' })}"`);
+    expect(html).toContain('decision'); // a decision has no page - shown as text, not a link
+    expect(html).toContain('Use Stripe');
+  });
+
+  it('an empty file says so honestly', () => {
+    const html = markup(<FileCard file={innerBoard.files[2]} clearHref="#/module/src%2Fbilling" />);
+    expect(html).toContain('No meaning is pinned to this file yet.');
+  });
+});
+
 // ── shell chrome ─────────────────────────────────────────────────────────────
 
 describe('TopBar', () => {
@@ -899,6 +1017,34 @@ describe('ModulePage (engineer lens, 16c)', () => {
     expect(html).toContain('Used by');
     expect(html).toContain(`href="${routeHref({ view: 'module', id: 'src/payments' })}"`);
     expect(html).toContain('×3'); // src/payments is imported 3 times
+  });
+
+  it('leads with the inner board (23b) when the module has files', () => {
+    const html = markup(
+      <ModulePage
+        detail={detail}
+        board={innerBoard}
+        capabilityOf={capabilityOf}
+        curation={noopCuration}
+      />,
+    );
+    expect(html).toContain('Inside this module'); // the inner-board section head
+    expect(html).toContain('class="fboard"'); // the file blackboard is drawn
+    expect(html).toContain('Subscription.ts');
+    // and it precedes the text sections (the descent, not a wall of text)
+    expect(html.indexOf('Inside this module')).toBeLessThan(html.indexOf('Built on this module'));
+  });
+
+  it('omits the inner board when the module has no files (no empty panel)', () => {
+    const html = markup(
+      <ModulePage
+        detail={detail}
+        board={{ module: 'src/billing', files: [], edges: [] }}
+        capabilityOf={capabilityOf}
+        curation={noopCuration}
+      />,
+    );
+    expect(html).not.toContain('Inside this module');
   });
 });
 

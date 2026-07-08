@@ -1,10 +1,11 @@
-import type { ModuleDetail, ModuleFact } from '../api';
-import { INFERRED, MODULE_PAGE, WIRED } from '../copy';
+import type { ModuleBoardData, ModuleDetail, ModuleFact } from '../api';
+import { INFERRED, MODULE_BOARD, MODULE_PAGE, WIRED } from '../copy';
 import { type CapabilityEntry, shortName } from '../derive';
 import { routeHref } from '../router';
 import { CapCard } from './CapCard';
 import { CertifyButton, type Curation } from './Curate';
 import { InferredCard } from './Inferred';
+import { ModuleBoardViewport } from './ModuleBoard';
 import { KindTag, SectionHead, StatusBadge } from './Status';
 import { WiredTo } from './Wired';
 
@@ -17,10 +18,16 @@ import { WiredTo } from './Wired';
  */
 export function ModulePage({
   detail,
+  board,
+  selectedFile = null,
   capabilityOf,
   curation,
 }: {
   detail: ModuleDetail;
+  /** The module's inner board (23b) - its files + imports; null until loaded. */
+  board?: ModuleBoardData | null;
+  /** The file selected on the inner board (from the URL), or null. */
+  selectedFile?: string | null;
   /** Resolve a concept/flow ModuleFact into a card entry (from the catalog). */
   capabilityOf: (fact: ModuleFact) => CapabilityEntry | null;
   curation: Curation;
@@ -83,6 +90,15 @@ export function ModulePage({
         <p className="module-lead moon-prose" aria-label={INFERRED.moduleCardHead}>
           {card.summary}
         </p>
+      )}
+
+      {/* The descent: the module drawn as its own blackboard of files, so a
+          newcomer reads the structure before any wall of text (23b). */}
+      {board && board.files.length > 0 && (
+        <section className="module-section">
+          <SectionHead n={no()} title={MODULE_BOARD.head} gloss={MODULE_BOARD.gloss} />
+          <ModuleBoardViewport data={board} selectedFile={selectedFile} />
+        </section>
       )}
 
       {!hasCertified && !hasInferred && (

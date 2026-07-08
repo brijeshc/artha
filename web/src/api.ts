@@ -205,6 +205,34 @@ export interface ModuleDetail {
   inferredConventions?: InferredFactView[];
 }
 
+/** A fact pinned into one source file - the meaning that lights its inner-board box. */
+export interface ModuleBoardFileFact {
+  id: string;
+  kind: string;
+  name: string | null;
+  status: string;
+}
+
+/** One source file on a module's inner board (23b): a chalk box lit by its pins. */
+export interface ModuleBoardFile {
+  path: string;
+  name: string;
+  facts: ModuleBoardFileFact[];
+}
+
+/** A file→file import that stays inside the module (both endpoints local). */
+export interface ModuleBoardEdge {
+  from: string;
+  to: string;
+}
+
+/** The inner board of one module (23b): its files as boxes, imports as arrows. */
+export interface ModuleBoardData {
+  module: string;
+  files: ModuleBoardFile[];
+  edges: ModuleBoardEdge[];
+}
+
 /** A machine-proposed pin (T17b): a resolvable symbol, ranked, with a plain why. */
 export interface Suggestion {
   /** The pin ref, guaranteed resolvable: `src/billing/Money.ts#Money`. */
@@ -256,6 +284,11 @@ export function getFlow(id: string): Promise<FlowDetail> {
 
 export function getModule(id: string): Promise<ModuleDetail> {
   return getJson<ModuleDetail>(`api/module/${encodeURIComponent(id)}`);
+}
+
+/** A module's inner board (23b) - its files, their imports, and what pins light them. */
+export function getModuleBoard(id: string): Promise<ModuleBoardData> {
+  return getJson<ModuleBoardData>(`api/module-board/${encodeURIComponent(id)}`);
 }
 
 /** One inferred fact (21a) - a module card or state-machine candidate - in moonlight. */

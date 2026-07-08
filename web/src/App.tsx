@@ -5,6 +5,7 @@ import {
   type FlowDetail,
   type InferredFactView,
   type MapFeed,
+  type ModuleBoardData,
   type ModuleDetail,
   type ModuleFact,
   type RankedModule,
@@ -18,6 +19,7 @@ import {
   getInferred,
   getMap,
   getModule,
+  getModuleBoard,
   getRefs,
   getSuggest,
   linkPin,
@@ -72,6 +74,7 @@ export function App(): JSX.Element {
   // Per-id detail caches - a local server answers in ~1ms, but caching keeps
   // back/forward instant and avoids refetch loops on selection changes.
   const [moduleDetails, setModuleDetails] = useState<Map<string, ModuleDetail | null>>(new Map());
+  const [moduleBoards, setModuleBoards] = useState<Map<string, ModuleBoardData | null>>(new Map());
   const [conceptDetail, setConceptDetail] = useState<ConceptDetail | null>(null);
   const [flowDetail, setFlowDetail] = useState<FlowDetail | null>(null);
   // The flow being traced as a route on the atlas (`#/?f=…`) - cached apart
@@ -158,6 +161,8 @@ export function App(): JSX.Element {
             // but keeps how you are looking (the lens is a mode, not a focus).
             if (r.view === 'atlas' && (r.area || r.module || r.flow))
               navigate({ view: 'atlas', ...(r.lens ? { lens: r.lens } : {}) });
+            // On a module page, Esc lets go of the selected inner-board file.
+            else if (r.view === 'module' && r.file) navigate({ view: 'module', id: r.id });
             return f;
           });
           return false;
@@ -178,6 +183,16 @@ export function App(): JSX.Element {
       .then((d) => setModuleDetails((prev) => new Map(prev).set(neededModule, d)))
       .catch(() => setModuleDetails((prev) => new Map(prev).set(neededModule, null)));
   }, [neededModule, moduleDetails]);
+
+  // The inner board (23b) is the module *page's* hero; an atlas selection only
+  // needs the lighter detail, so fetch it just for the full module view.
+  const boardModule = route.view === 'module' ? route.id : null;
+  useEffect(() => {
+    if (!boardModule || moduleBoards.has(boardModule)) return;
+    getModuleBoard(boardModule)
+      .then((b) => setModuleBoards((prev) => new Map(prev).set(boardModule, b)))
+      .catch(() => setModuleBoards((prev) => new Map(prev).set(boardModule, null)));
+  }, [boardModule, moduleBoards]);
 
   const capabilityRoute =
     route.view === 'concept' || route.view === 'flow' ? { kind: route.view, id: route.id } : null;
@@ -240,6 +255,7 @@ export function App(): JSX.Element {
     if (c.status === 'fulfilled') setCatalog(c.value);
     if (z.status === 'fulfilled') setZones(z.value);
     setModuleDetails(new Map());
+    setModuleBoards(new Map());
     const r = parseRoute(window.location.hash);
     if (r.view === 'concept') setConceptDetail(await getConcept(r.id).catch(() => null));
     if (r.view === 'flow') setFlowDetail(await getFlow(r.id).catch(() => null));
@@ -367,7 +383,15 @@ export function App(): JSX.Element {
         const detail = moduleDetails.get(route.id);
         if (detail === null) return <NotFound label={route.id} />;
         if (!detail) return <Loading />;
-        return <ModulePage detail={detail} capabilityOf={capabilityOf} curation={curation} />;
+        return (
+          <ModulePage
+            detail={detail}
+            board={moduleBoards.get(route.id) ?? null}
+            selectedFile={route.file ?? null}
+            capabilityOf={capabilityOf}
+            curation={curation}
+          />
+        );
       }
       case 'concept':
         if (detailError) return <NotFound label={route.id} note={detailError} />;

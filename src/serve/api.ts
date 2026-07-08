@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { type RankedModule, darkZones, moduleCoverage } from '../analytics/coverage';
 import { moduleOf } from '../analytics/module';
+import type { FileGraph } from '../analytics/references';
 import type { RefRow } from '../build/db';
 import type { ArthaConfig } from '../config/config';
 import type { ArthaIndex } from '../mcp/query';
@@ -586,6 +587,96 @@ export function moduleDetail(
       .sort((a, b) => a.id.localeCompare(b.id))
       .map((r) => inferredView(index, r)),
   };
+}
+
+// ── /api/module-board/:id  (23b - the inner board) ─────────────────────────────
+
+/** A fact pinned into one source file - the meaning that lights its box. */
+export interface ModuleBoardFileFact {
+  id: string;
+  kind: string;
+  name: string | null;
+  status: string;
+}
+
+/**
+ * One source file as the inner board draws it: a chalk box lit by the facts
+ * pinned into it. This is the code↔meaning linkage at *file* altitude - the
+ * descent a newcomer takes from the module board down toward the code.
+ */
+export interface ModuleBoardFile {
+  /** Repo-relative posix path (`src/billing/refund.ts`). */
+  path: string;
+  /** Basename for the chalk label (`refund.ts`). */
+  name: string;
+  /** Facts pinned to symbols in this file, strongest standing first. */
+  facts: ModuleBoardFileFact[];
+}
+
+/** A file→file import that stays inside the module (both endpoints local). */
+export interface ModuleBoardEdge {
+  from: string;
+  to: string;
+}
+
+/** The inner board of one module: its files as boxes, their imports as arrows. */
+export interface ModuleBoardData {
+  module: string;
+  files: ModuleBoardFile[];
+  edges: ModuleBoardEdge[];
+}
+
+/**
+ * The inner board (23b): a module drilled down to its own files. The files come
+ * from the repo's structural scan (deterministic); the intra-module import edges
+ * are that scan's file graph kept inside the module (a cross-module import is
+ * already drawn on the outer board, so it is left off here); each file is lit by
+ * the facts pinned into it. Pure over the index + the structural scan (which the
+ * server passes in from the cached {@link RepoStructure}), so it stays offline
+ * and unit-testable. A module with no source files yields an empty board, never
+ * an error - additive to the module page, which handles the 404.
+ */
+export function moduleBoard(
+  index: ArthaIndex,
+  config: ArthaConfig,
+  module: string,
+  files: string[],
+  fileGraph: FileGraph,
+): ModuleBoardData {
+  const roots = config.sourceRoots;
+  const inModule = files.filter((f) => moduleOf(f, roots) === module).sort();
+  const local = new Set(inModule);
+
+  // file → the facts pinned into it (a pin's ref is `path#Symbol`), deduped.
+  const factById = new Map(index.facts.map((f) => [f.id, f]));
+  const factsByFile = new Map<string, Map<string, ModuleBoardFileFact>>();
+  for (const p of index.pins) {
+    const file = p.symbol_ref.split('#')[0] ?? '';
+    if (!local.has(file)) continue;
+    const fact = factById.get(p.fact_id);
+    if (!fact) continue;
+    const bucket = factsByFile.get(file) ?? new Map<string, ModuleBoardFileFact>();
+    bucket.set(fact.id, { id: fact.id, kind: fact.kind, name: fact.heading, status: fact.status });
+    factsByFile.set(file, bucket);
+  }
+
+  const boardFiles: ModuleBoardFile[] = inModule.map((path) => ({
+    path,
+    name: path.split('/').pop() ?? path,
+    facts: [...(factsByFile.get(path)?.values() ?? [])].sort(
+      (a, b) => statusWeight(b.status) - statusWeight(a.status) || a.id.localeCompare(b.id),
+    ),
+  }));
+
+  const edges: ModuleBoardEdge[] = [];
+  for (const from of inModule) {
+    for (const to of fileGraph.importsOf.get(from) ?? []) {
+      if (from !== to && local.has(to)) edges.push({ from, to });
+    }
+  }
+  edges.sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+
+  return { module, files: boardFiles, edges };
 }
 
 // ── /api/refs ─────────────────────────────────────────────────────────────────

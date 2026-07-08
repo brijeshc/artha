@@ -999,6 +999,113 @@ a.crumb:hover {
 .route-clear:hover {
   color: var(--ink-2);
 }
+/* the file card's clear is a button, not a link - strip the chrome */
+button.route-clear {
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+/* ── the inner board (23b - a module's files as its own blackboard) ─────────── */
+
+/* Same chalk register as the module board, one altitude down and bounded to a
+ * panel on the module page: files are boxes, intra-module imports are arrows,
+ * and a box is lit by the meaning pinned into it. */
+.module-board {
+  position: relative;
+  height: 440px;
+  margin: 6px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.fboard {
+  display: block;
+  min-width: 100%;
+  min-height: 100%;
+  user-select: none;
+}
+
+/* file boxes: chalk frames lit by their strongest pinned fact (the two-light
+ * grammar at file altitude); a plain box is honestly unexplained */
+.fnode {
+  cursor: pointer;
+}
+.fnode-vouched .bnode-frame {
+  stroke: var(--phosphor);
+}
+.fnode-proposed .bnode-frame {
+  stroke: var(--amber);
+}
+.fnode-stale .bnode-frame {
+  stroke: var(--ember);
+}
+.fnode-plain .bnode-frame {
+  stroke: var(--ink-3);
+  opacity: 0.5;
+}
+.fnode:hover .bnode-frame {
+  opacity: 1;
+}
+.fnode.selected .bnode-frame {
+  stroke-width: 2.7;
+  opacity: 1;
+}
+.fnode.dimmed {
+  opacity: 0.3;
+}
+.fnode-name {
+  font-family: var(--chalk);
+  font-size: 14px;
+  fill: var(--ink);
+}
+.fnode-empty {
+  font-family: var(--sans);
+  font-style: italic;
+  font-size: 10px;
+  fill: var(--ink-3);
+  opacity: 0.7;
+}
+
+/* the file card: the selected file's meaning, mirroring the route card */
+.file-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.file-card-facts {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.file-card-fact {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+}
+.file-card-fact-kind {
+  flex: none;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.file-card-fact a {
+  color: var(--ink);
+}
+.file-card-fact a:hover {
+  color: var(--phosphor);
+}
+.file-card-fact-name {
+  color: var(--ink-2);
+}
 
 /* the legend - one quiet corner popover */
 .legend {

@@ -52,6 +52,23 @@ export const BOARD = {
   more: 'more',
 } as const;
 
+/** The inner board (23b) - a module drilled down to its own files, on its page. */
+export const MODULE_BOARD = {
+  head: 'Inside this module',
+  gloss:
+    'The files here and how they import each other. A lit box carries meaning a human has vouched for or proposed; select one to read it.',
+  aria: 'The inner board - this module’s files and their imports',
+  hint: 'Drag a file to arrange it. An arrow reads "imports"; select a lit file to read its meaning.',
+  tidy: 'Tidy the files',
+  tidyHint: 'Re-lay every file automatically and forget the hand-placed positions.',
+  imports: 'imports',
+  fileKind: 'file',
+  plain: 'nothing pinned yet',
+  noFacts: 'No meaning is pinned to this file yet.',
+  clear: 'Close',
+  empty: 'No source files were found in this module.',
+} as const;
+
 /** Fullscreen focus - the canvas without the chrome, in any view. */
 export const FOCUS = {
   enter: 'Fullscreen',

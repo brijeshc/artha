@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { FileGraph } from '../../src/analytics/references';
 import { defaultConfig } from '../../src/config/config';
 import {
   areasOf,
@@ -9,6 +10,7 @@ import {
   conceptDetail,
   flowDetail,
   mapFeed,
+  moduleBoard,
   moduleDetail,
   refsFeed,
   search,
@@ -340,6 +342,70 @@ describe('moduleDetail (engineer lens, 16c)', () => {
       { module: 'src/ui', count: 3 },
       { module: 'src/checkout', count: 1 },
     ]);
+  });
+});
+
+describe('moduleBoard (23b - the inner board)', () => {
+  // billing has three files; refund imports gateway (intra-module) and email in
+  // another module (cross-module, drawn on the outer board); checkout is a
+  // different module and must not appear on billing's inner board.
+  const files = [
+    'src/billing/gateway.ts',
+    'src/billing/refund.ts',
+    'src/billing/Subscription.ts',
+    'src/checkout/Checkout.ts',
+  ];
+  const fileGraph: FileGraph = {
+    importsOf: new Map([
+      ['src/billing/refund.ts', new Set(['src/billing/gateway.ts', 'src/notifications/email.ts'])],
+      ['src/checkout/Checkout.ts', new Set(['src/billing/Subscription.ts'])],
+    ]),
+    importedBy: new Map(),
+  };
+  const index = fakeIndex({
+    facts: [
+      fact('decision.stripe', 'certified', { heading: 'Use Stripe' }),
+      fact('flow.refund', 'proposed', { heading: 'Refund a purchase' }),
+    ],
+    pins: [
+      pin('decision.stripe', 'src/billing/gateway.ts#StripeGateway'),
+      pin('flow.refund', 'src/billing/refund.ts#validateRefund'),
+    ],
+  });
+
+  it('boxes only the module’s files, sorted, excluding other modules', () => {
+    const board = moduleBoard(index, config, 'src/billing', files, fileGraph);
+    expect(board.module).toBe('src/billing');
+    expect(board.files.map((f) => f.path)).toEqual([
+      'src/billing/Subscription.ts',
+      'src/billing/gateway.ts',
+      'src/billing/refund.ts',
+    ]);
+    expect(board.files.map((f) => f.name)).toContain('refund.ts');
+  });
+
+  it('keeps only intra-module import edges (a cross-module import is left off)', () => {
+    const board = moduleBoard(index, config, 'src/billing', files, fileGraph);
+    // refund→gateway stays; refund→notifications/email is dropped (cross-module)
+    expect(board.edges).toEqual([{ from: 'src/billing/refund.ts', to: 'src/billing/gateway.ts' }]);
+  });
+
+  it('lights each file with the facts pinned into it, strongest standing first', () => {
+    const board = moduleBoard(index, config, 'src/billing', files, fileGraph);
+    const gateway = board.files.find((f) => f.path === 'src/billing/gateway.ts');
+    expect(gateway?.facts).toEqual([
+      { id: 'decision.stripe', kind: 'decision', name: 'Use Stripe', status: 'certified' },
+    ]);
+    const refund = board.files.find((f) => f.path === 'src/billing/refund.ts');
+    expect(refund?.facts.map((f) => f.id)).toEqual(['flow.refund']);
+    // a file with no pins is a plain box, not an error
+    const sub = board.files.find((f) => f.path === 'src/billing/Subscription.ts');
+    expect(sub?.facts).toEqual([]);
+  });
+
+  it('a module with no source files yields an empty board, never throws', () => {
+    const board = moduleBoard(index, config, 'src/nonexistent', files, fileGraph);
+    expect(board).toEqual({ module: 'src/nonexistent', files: [], edges: [] });
   });
 });
 

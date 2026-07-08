@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Catalog, MapFeed, RefEdge } from '../api';
 import { type BoardNode, boardLayout, borderPoint } from '../board';
 import { BOARD, ROUTE } from '../copy';
 import { type FlowTrace, capabilitiesByModule, isMoonlit, shortName } from '../derive';
 import { roughArrowhead, roughCircle, roughLine, roughRect, seedFrom } from '../rough';
 import { routeHref } from '../router';
+import { type BoardOverrides, useBoardDrag } from './useBoardDrag';
 
 /**
  * The Board - the hero canvas after the 23a′ pivot: a handmade flowchart on a
@@ -18,8 +18,6 @@ import { routeHref } from '../router';
  *
  * Pure given positions (SSR-testable); `BoardViewport` below owns drag state.
  */
-
-export type BoardOverrides = Record<string, { x: number; y: number }>;
 
 export interface BoardProps {
   feed: MapFeed;
@@ -258,22 +256,11 @@ function BoardRoute({
 
 // ── the interactive viewport ──────────────────────────────────────────────────
 
-const STORE_KEY = 'artha.board.layout.v1';
-
-function loadOverrides(): BoardOverrides {
-  try {
-    const raw = window.localStorage.getItem(STORE_KEY);
-    return raw ? (JSON.parse(raw) as BoardOverrides) : {};
-  } catch {
-    return {};
-  }
-}
-
 /**
- * Owns what SSR cannot: dragging boxes (positions persist per browser), the
- * scroll-panned paper, the tidy control, and the route card. Click grammar
- * matches the terrain's tiles: click selects (inspector), click again opens
- * the module page; a drag never navigates.
+ * Owns what SSR cannot: dragging boxes (positions persist per browser via the
+ * shared {@link useBoardDrag} hook), the scroll-panned paper, the tidy control,
+ * and the route card. Click grammar matches the terrain's tiles: click selects
+ * (inspector), click again opens the module page; a drag never navigates.
  */
 export function BoardViewport(props: {
   feed: MapFeed;
@@ -283,83 +270,8 @@ export function BoardViewport(props: {
   selectedModule: string | null;
   trace?: FlowTrace | null;
 }): JSX.Element {
-  const [overrides, setOverrides] = useState<BoardOverrides>(() =>
-    typeof window === 'undefined' ? {} : loadOverrides(),
-  );
-  const drag = useRef<{
-    module: string;
-    pointerX: number;
-    pointerY: number;
-    originX: number;
-    originY: number;
-    moved: boolean;
-  } | null>(null);
-  const justDragged = useRef(false);
-
-  const onNodePointerDown = useCallback((e: React.PointerEvent, node: BoardNode) => {
-    if (e.button !== 0) return;
-    drag.current = {
-      module: node.module,
-      pointerX: e.clientX,
-      pointerY: e.clientY,
-      originX: node.x,
-      originY: node.y,
-      moved: false,
-    };
-    justDragged.current = false;
-  }, []);
-
-  useEffect(() => {
-    const onMove = (e: PointerEvent) => {
-      const d = drag.current;
-      if (!d) return;
-      const dx = e.clientX - d.pointerX;
-      const dy = e.clientY - d.pointerY;
-      if (!d.moved && Math.hypot(dx, dy) < 4) return;
-      d.moved = true;
-      justDragged.current = true;
-      setOverrides((prev) => ({
-        ...prev,
-        [d.module]: { x: Math.max(8, d.originX + dx), y: Math.max(8, d.originY + dy) },
-      }));
-    };
-    const onUp = () => {
-      const d = drag.current;
-      drag.current = null;
-      if (!d?.moved) return;
-      setOverrides((prev) => {
-        try {
-          window.localStorage.setItem(STORE_KEY, JSON.stringify(prev));
-        } catch {
-          /* private mode - the session still works, the layout just won't stick */
-        }
-        return prev;
-      });
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-  }, []);
-
-  const suppressNav = useCallback(() => {
-    const s = justDragged.current;
-    justDragged.current = false;
-    return s;
-  }, []);
-
-  const tidy = () => {
-    setOverrides({});
-    try {
-      window.localStorage.removeItem(STORE_KEY);
-    } catch {
-      /* nothing to forget */
-    }
-  };
-
-  const hasHandLayout = Object.keys(overrides).length > 0;
+  const { overrides, hasHandLayout, onPointerDown, suppressNav, tidy } =
+    useBoardDrag('artha.board.layout.v1');
   const trace = props.trace ?? null;
 
   return (
@@ -368,7 +280,9 @@ export function BoardViewport(props: {
         <Board
           {...props}
           overrides={overrides}
-          onNodePointerDown={onNodePointerDown}
+          onNodePointerDown={(e, node) =>
+            onPointerDown(e, { id: node.module, x: node.x, y: node.y })
+          }
           suppressNav={suppressNav}
         />
       </div>

@@ -1,6 +1,6 @@
 # Task 23 - Atlas elevation: from readable to knowledge discovery
 
-**Status: 23a shipped 2026-07-07; 23a′ (the board pivot) shipped the same day and supersedes 23a's wiring lens; 23b-23e specced below, sequenced by impact per effort.**
+**Status: 23a/23a′/23a″ shipped 2026-07-07; 23b (inner boards) shipped 2026-07-08; 23c-23e specced below, sequenced by impact per effort.**
 
 **Depends on:** v0.2 T16d (atlas shell), T17 (write-back), T17b (reference graph); 21a (inferred layer feeds the two-light grammar).
 **Design refs:** Dashboard.md §11 (the shell this elevates) and §12 (the lens grammar + honest readouts, recorded at 23a ship time); the 21c UX contract D1-D12 (21-inferred-layer.md), which 23d partially delivers.
@@ -67,14 +67,18 @@ Developer review of the board: right direction; wanted fullscreen in any view, m
 Every future discovery surface should ask "how would this look hand-drawn on the board?" before reaching for a denser encoding.
 Charts (23c) stay in the observatory; density stays in Terrain; the board stays clean.
 
-## 23b - inner boards (drill the blackboard down)
+## 23b - inner boards (drill the blackboard down, shipped 2026-07-08)
 
 Re-aimed by the 23a′ pivot: depth comes from **boards within boards**, not treemap texture.
+Opening a module now offers its **inner board** - the same chalk hand, one altitude down - so the descent board → module board → meaning reads as a diagram, not a wall of text.
 
-- Opening a module from the board offers its **inner board**: the module's files (later symbols) as chalk boxes, their imports as arrows, pinned facts lighting the boxes that carry them.
-- Capability chalk-marks on module boxes (small concept/flow glyphs), so the product layer is on the board itself, not only in the navigator.
+- [x] **The inner board.** The module page leads (section 01, above every text section) with the module drilled into its own files: each source file is a chalk box, an intra-module import is a chalk arrow reading "imports" (a cross-module import stays on the outer board), and each box is lit by the facts pinned into it - phosphor vouched, amber proposed, ember stale, dim grey when nothing is pinned there yet (the two-light grammar at file altitude). Backed by a new **`/api/module-board/:id`** (`moduleBoard` in `src/serve/api.ts`), pure over the index + the cached structural scan (`RepoStructure.files` added), so it stays offline like the pin suggester.
+- [x] **Reading is one altitude of descent.** Selecting a file (deep-linked as `#/module/…?file=…`, like the atlas selection) lights its box + imports and opens a **file card** listing the meaning pinned there, each concept/flow linking to its page. Esc / the card's Close / a second click let go.
+- [x] **Blackboard philosophy holds.** Shared `layeredLayout` (extracted from `boardLayout`) + `fileBoardLayout` + `rough.ts` draw both boards, so the inner board is few marks, ample space, and **draggable** (a shared `useBoardDrag` hook persists the hand layout per module + browser; "Tidy the files" forgets it; scroll pans).
+- [x] Capability chalk-marks on module boxes were already delivered by **23a″** (product-language capabilities with standing dots on every outer-box).
 - The level-2 *treemap* texture stays an optional Terrain nicety, no longer the headline.
-- Acceptance: a newcomer can descend board → module board → code without meeting a wall of text; every inner board obeys the blackboard philosophy (few marks, ample space, draggable).
+- **Deferred (a later slice):** symbol-level boxes inside a file (the box is the file today - "later symbols" per the original note); a code viewer for the box itself (out of scope - see the symbol-level-call-graph exclusion).
+- Acceptance met: a newcomer descends board → module board → meaning without a wall of text; the inner board obeys the blackboard philosophy (few marks, ample space, draggable). Verified live on the demo (billing: three files, the `refund.ts → gateway.ts` import, boxes lit by their real pins, file-card selection).
 
 ## 23c - the observatory (charts that answer questions)
 
@@ -107,10 +111,11 @@ This slice *is* the D5/D6/D9/D10 portion of the 21c contract - build it against 
 - Any new hue (D2 stands everywhere: phosphor, moonlight, amber, ember, grey ink carry everything).
 - Physics/force-directed layouts - the board is layered and hand-arranged, never jittering.
 
-## Contracts produced (23a + 23a′ + 23a″)
+## Contracts produced (23a + 23a′ + 23a″ + 23b)
 
-- Atlas route params: `lens=terrain`, `f=<flowId>`; `#/` is the board.
-- `web/src/rough.ts` (seeded chalk strokes) and `web/src/board.ts` (`boardLayout`, `borderPoint`) - pure, SSR-tested; any future hand-drawn surface (23b inner boards, 23e chalk state machines) draws with them.
+- Atlas route params: `lens=terrain`, `f=<flowId>`; `#/` is the board. Module route gains `?file=<path>` (23b) - the selected inner-board file, deep-linkable.
+- `web/src/rough.ts` (seeded chalk strokes) and `web/src/board.ts` - pure, SSR-tested; any future hand-drawn surface (23e chalk state machines) draws with them. 23b generalised the layout into **`layeredLayout(ids, links, metrics, sortKey?)`** (both `boardLayout` and `fileBoardLayout` are thin adapters over it) and extracted the drag/persist behaviour into the shared **`useBoardDrag(storeKey)`** hook.
+- **`GET /api/module-board/:id`** → `{ module, files: [{ path, name, facts }], edges: [{ from, to }] }` (`moduleBoard`, pure over the index + `RepoStructure.files`/`fileGraph`); the inner board's data, offline.
 - `derive.flowTrace(detail, modules)` and `derive.capabilitiesByModule(catalog)` - pure derivations shared by any canvas.
 - **`MapModule.describedAs`** on `/api/map` - the machine's per-module prose; the 21b synthesis writes here and every reader upgrades for free.
 - `Kpi.tone` gained `moon`; `AreaStat.explained` renamed to `vouched` (the honest metric everywhere).
