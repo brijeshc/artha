@@ -27,6 +27,10 @@ export interface MapModule {
   /** Machine-described meaning exists here (a module card / state machine) →
    * the tile glows *moonlight* even before anyone vouches (21a, D2). */
   described: boolean;
+  /** The module card's plain-language description - what the machine reads this
+   * code as. Deterministic prose today (21a); the same slot 21b's LLM synthesis
+   * enriches, so the board grows richer with zero client rework. */
+  describedAs: string | null;
   /** Inferred state-machine candidates in this module (21a) - moonlight detail. */
   inferredConcepts: number;
 }
@@ -97,9 +101,11 @@ export function mapFeed(repoRoot: string, index: ArthaIndex, config: ArthaConfig
 
   const inferredConcepts = new Map<string, number>();
   const describedModules = new Set<string>();
+  const describedAs = new Map<string, string>();
   for (const row of index.inferred) {
     if (!row.module) continue;
     describedModules.add(row.module);
+    if (row.kind === 'module' && row.body) describedAs.set(row.module, row.body);
     if (row.kind === 'concept') {
       inferredConcepts.set(row.module, (inferredConcepts.get(row.module) ?? 0) + 1);
     }
@@ -116,6 +122,7 @@ export function mapFeed(repoRoot: string, index: ArthaIndex, config: ArthaConfig
       staleFacts: r?.staleFacts ?? 0,
       score: r?.score ?? 0,
       described: describedModules.has(module),
+      describedAs: describedAs.get(module) ?? null,
       inferredConcepts: inferredConcepts.get(module) ?? 0,
     };
   });

@@ -3,7 +3,7 @@
 // and the pages. The dashboard's whole job is turning these numbers into
 // pixels; keeping the math here keeps the components about layout.
 
-import type { Catalog, MapArea, MapFeed, MapModule, RefEdge } from './api';
+import type { Catalog, FlowDetail, MapArea, MapFeed, MapModule, RefEdge } from './api';
 import { KPI } from './copy';
 import { type TreemapRect, treemap } from './treemap';
 
@@ -56,7 +56,7 @@ export function moduleOfPath(path: string, modules: string[]): string | null {
   return best;
 }
 
-export type Tone = 'signal' | 'warn' | 'alert' | 'muted';
+export type Tone = 'signal' | 'warn' | 'alert' | 'muted' | 'moon';
 
 export interface Kpi {
   key: string;
@@ -106,22 +106,37 @@ export function confidenceLabel(slug: string): string {
   }
 }
 
-/** The four header stats, derived entirely from the map feed (no extra fetch). */
+/**
+ * The four header stats (D11: honest KPIs). The trust number and the machine
+ * number are separate readouts on separate lights - "% described" must never
+ * inflate "% vouched", or the day the machine lights everything the top bar
+ * becomes a lie. A third D11 readout (disagreements) arrives with T22.
+ */
 export function kpis(feed: MapFeed): Kpi[] {
   const mods = feed.modules;
   const total = mods.length;
   const dark = mods.filter((m) => m.dark);
-  const nonDark = total - dark.length;
 
   const totalChurn = sum(mods.map((m) => m.churn));
-  const explainedChurn = sum(mods.filter((m) => !m.dark).map((m) => m.churn));
-  // Churn-weighted so the number reflects *active* code, not idle folders.
-  // Falls back to a plain module ratio when there is no churn signal at all.
-  const explainedPct =
-    totalChurn > 0 ? explainedChurn / totalChurn : total > 0 ? nonDark / total : 0;
+  // Vouched: churn-weighted *depth* of certified coverage. Depth (coverageOf,
+  // saturating) rather than a has-any-fact bit, so one lucky fact cannot claim
+  // a whole module. Churn-weighted so the number reflects *active* code; falls
+  // back to a plain module average when there is no churn signal at all.
+  const vouchedPct =
+    totalChurn > 0
+      ? sum(mods.map((m) => m.churn * coverageOf(m))) / totalChurn
+      : total > 0
+        ? sum(mods.map(coverageOf)) / total
+        : 0;
+
+  // Described: the machine layer's reach - the moonlight number, worded and
+  // toned apart from trust.
+  const described = mods.filter((m) => m.described ?? false);
+  const describedChurn = sum(described.map((m) => m.churn));
+  const describedPct =
+    totalChurn > 0 ? describedChurn / totalChurn : total > 0 ? described.length / total : 0;
 
   const staleFacts = sum(mods.map((m) => m.staleFacts));
-  const certifiedFacts = sum(mods.map((m) => m.certifiedFacts));
 
   // Is the single busiest module also unexplained? That's the sharpest signal.
   const busiest = [...mods].sort((a, b) => b.churn - a.churn)[0];
@@ -129,11 +144,18 @@ export function kpis(feed: MapFeed): Kpi[] {
 
   return [
     {
-      key: 'explained',
-      label: KPI.explained,
-      value: `${Math.round(explainedPct * 100)}%`,
-      hint: KPI.explainedHint,
-      tone: explainedPct >= 0.66 ? 'signal' : explainedPct >= 0.33 ? 'warn' : 'alert',
+      key: 'vouched',
+      label: KPI.vouched,
+      value: `${Math.round(vouchedPct * 100)}%`,
+      hint: KPI.vouchedHint,
+      tone: vouchedPct >= 0.66 ? 'signal' : vouchedPct >= 0.33 ? 'warn' : 'alert',
+    },
+    {
+      key: 'described',
+      label: KPI.described,
+      value: `${Math.round(describedPct * 100)}%`,
+      hint: KPI.describedHint,
+      tone: describedPct > 0 ? 'moon' : 'muted',
     },
     {
       key: 'dark',
@@ -148,13 +170,6 @@ export function kpis(feed: MapFeed): Kpi[] {
       value: String(staleFacts),
       hint: KPI.staleHint,
       tone: staleFacts > 0 ? 'warn' : 'muted',
-    },
-    {
-      key: 'certified',
-      label: KPI.certified,
-      value: String(certifiedFacts),
-      hint: KPI.certifiedHint,
-      tone: certifiedFacts > 0 ? 'signal' : 'muted',
     },
   ];
 }
@@ -242,6 +257,63 @@ export function atlasLayout(feed: MapFeed, width: number, height: number): Provi
   return provinces;
 }
 
+// ── flow routes (drawn linkage; the board draws them since 23a′) ─────────────
+
+/** A stop on a flow's route: a module plus the 1-based steps it performs
+ * (consecutive same-module steps collapse into one station). */
+export interface FlowStation {
+  module: string;
+  steps: number[];
+}
+
+/** One step as the route card lists it - every step, linked or not. */
+export interface FlowTraceStep {
+  n: number;
+  text: string;
+  module: string | null;
+}
+
+export interface FlowTrace {
+  id: string;
+  name: string;
+  status: string;
+  linked: number;
+  total: number;
+  /** Ordered stations the route line runs through - linked steps only. */
+  stations: FlowStation[];
+  steps: FlowTraceStep[];
+}
+
+/**
+ * A flow drawn as a route across the terrain: each linked step resolves its
+ * pin to the module that owns it (a station); unlinked steps stay in the card
+ * as honest gaps but draw nothing - the map never guesses.
+ */
+export function flowTrace(detail: FlowDetail, moduleNames: string[]): FlowTrace {
+  const stations: FlowStation[] = [];
+  const steps: FlowTraceStep[] = [];
+  detail.steps.forEach((s, i) => {
+    const n = i + 1;
+    const path = s.pin ? (s.pin.symbol.split('#')[0] ?? '') : null;
+    const module = path ? moduleOfPath(path, moduleNames) : null;
+    steps.push({ n, text: s.on ? `on ${s.on} - ${s.do}` : s.do, module });
+    if (module) {
+      const last = stations[stations.length - 1];
+      if (last && last.module === module) last.steps.push(n);
+      else stations.push({ module, steps: [n] });
+    }
+  });
+  return {
+    id: detail.id,
+    name: detail.name ?? detail.id,
+    status: detail.status,
+    linked: steps.filter((s) => s.module !== null).length,
+    total: steps.length,
+    stations,
+    steps,
+  };
+}
+
 // ── navigator / catalog derivations ──────────────────────────────────────────
 
 export interface AreaStat {
@@ -250,8 +322,9 @@ export interface AreaStat {
   certified: number;
   stale: number;
   darkModules: number;
-  /** Churn-weighted explained share within the area, 0..1. */
-  explained: number;
+  /** Churn-weighted vouched depth within the area, 0..1 (same honesty rule as
+   * the top bar: certified coverage, never the machine layer). */
+  vouched: number;
 }
 
 export function areaStats(feed: MapFeed): AreaStat[] {
@@ -259,15 +332,18 @@ export function areaStats(feed: MapFeed): AreaStat[] {
   return feed.areas.map((area) => {
     const mods = area.modules.flatMap((m) => byName.get(m) ?? []);
     const churn = sum(mods.map((m) => m.churn));
-    const explainedChurn = sum(mods.filter((m) => !m.dark).map((m) => m.churn));
-    const nonDark = mods.filter((m) => !m.dark).length;
     return {
       area,
       churn,
       certified: sum(mods.map((m) => m.certifiedFacts)),
       stale: sum(mods.map((m) => m.staleFacts)),
       darkModules: mods.filter((m) => m.dark).length,
-      explained: churn > 0 ? explainedChurn / churn : mods.length > 0 ? nonDark / mods.length : 0,
+      vouched:
+        churn > 0
+          ? sum(mods.map((m) => m.churn * coverageOf(m))) / churn
+          : mods.length > 0
+            ? sum(mods.map(coverageOf)) / mods.length
+            : 0,
     };
   });
 }
@@ -345,6 +421,39 @@ export function capabilitiesByArea(
     if (list && list.length > 0) out.push({ area: a, entries: list });
   }
   if (unplaced.length > 0) out.push({ area: null, entries: unplaced });
+  return out;
+}
+
+/** One capability as a board box lists it: product name + standing chalk. */
+export interface ModuleCapability {
+  id: string;
+  kind: 'concept' | 'flow';
+  name: string;
+  /** certified / proposed / stale for vouched work; `described` for moonlight. */
+  standing: string;
+}
+
+/**
+ * What each module *carries*, in product language - the board's chalk notes.
+ * Vouched capabilities first (the trust ladder's order), then machine-described
+ * ones; both name things a PM would say, never ids. This is the linkage the
+ * board exists to show, and the list 21b's synthesis makes richer.
+ */
+export function capabilitiesByModule(catalog: Catalog): Map<string, ModuleCapability[]> {
+  const out = new Map<string, ModuleCapability[]>();
+  const add = (module: string | null, cap: ModuleCapability) => {
+    if (!module) return;
+    const list = out.get(module) ?? [];
+    list.push(cap);
+    out.set(module, list);
+  };
+  for (const e of capabilityEntries(catalog))
+    for (const m of e.modules)
+      add(m, { id: e.ref.id, kind: e.ref.kind, name: e.name, standing: e.status });
+  for (const c of catalog.inferredConcepts ?? [])
+    add(c.module, { id: c.id, kind: 'concept', name: c.name, standing: 'described' });
+  for (const f of catalog.inferredFlows ?? [])
+    add(f.module, { id: f.id, kind: 'flow', name: f.name, standing: 'described' });
   return out;
 }
 

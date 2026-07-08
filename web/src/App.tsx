@@ -24,6 +24,7 @@ import {
   saveEntry,
 } from './api';
 import { AtlasViewport } from './components/Atlas';
+import { BoardViewport } from './components/Board';
 import { ConceptPage, FlowPage } from './components/CapabilityPages';
 import { CatalogPage } from './components/CatalogPage';
 import { CommandBar } from './components/CommandBar';
@@ -41,6 +42,7 @@ import {
   capabilitiesByArea,
   capabilityEntries,
   capabilityNames,
+  flowTrace,
   kpis,
   neighborsOf,
 } from './derive';
@@ -63,12 +65,18 @@ export function App(): JSX.Element {
   const [refs, setRefs] = useState<RefEdge[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [cmdkOpen, setCmdkOpen] = useState(false);
+  // Fullscreen focus (any view): the chrome folds away and, where the browser
+  // allows it, the window goes truly fullscreen. Transient - never in the URL.
+  const [focus, setFocus] = useState(false);
 
   // Per-id detail caches - a local server answers in ~1ms, but caching keeps
   // back/forward instant and avoids refetch loops on selection changes.
   const [moduleDetails, setModuleDetails] = useState<Map<string, ModuleDetail | null>>(new Map());
   const [conceptDetail, setConceptDetail] = useState<ConceptDetail | null>(null);
   const [flowDetail, setFlowDetail] = useState<FlowDetail | null>(null);
+  // The flow being traced as a route on the atlas (`#/?f=…`) - cached apart
+  // from the flow *page* detail so the two never contend.
+  const [traceDetail, setTraceDetail] = useState<FlowDetail | null>(null);
   const [inferredDetail, setInferredDetail] = useState<InferredFactView | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -96,25 +104,69 @@ export function App(): JSX.Element {
       .catch(() => setRefs([]));
   }, []);
 
-  // ⌘K / Ctrl-K toggles the command bar; Esc closes it, else clears selection.
+  const toggleFocus = useCallback(() => {
+    setFocus((f) => {
+      const next = !f;
+      // Best effort - denied/unsupported native fullscreen still folds the chrome.
+      try {
+        if (next) document.documentElement.requestFullscreen?.()?.catch(() => {});
+        else if (document.fullscreenElement) document.exitFullscreen?.()?.catch(() => {});
+      } catch {
+        /* the chrome fold alone is still a focus mode */
+      }
+      return next;
+    });
+  }, []);
+
+  // Leaving native fullscreen (browser Esc, F11, system UI) unfolds the chrome
+  // too - the two never drift apart.
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) setFocus(false);
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  // ⌘K / Ctrl-K toggles the command bar; `f` toggles fullscreen focus; Esc
+  // closes the bar, else leaves focus, else clears the selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing =
+        t !== null && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCmdkOpen((o) => !o);
+      } else if (e.key.toLowerCase() === 'f' && !e.metaKey && !e.ctrlKey && !e.altKey && !typing) {
+        e.preventDefault();
+        toggleFocus();
       } else if (e.key === 'Escape') {
         setCmdkOpen((open) => {
-          if (!open) {
+          if (open) return false;
+          setFocus((f) => {
+            if (f) {
+              try {
+                if (document.fullscreenElement) document.exitFullscreen?.()?.catch(() => {});
+              } catch {
+                /* nothing to leave */
+              }
+              return false;
+            }
             const r = parseRoute(window.location.hash);
-            if (r.view === 'atlas' && (r.area || r.module)) navigate({ view: 'atlas' });
-          }
+            // Esc clears what you are looking *at* (selection, traced flow)
+            // but keeps how you are looking (the lens is a mode, not a focus).
+            if (r.view === 'atlas' && (r.area || r.module || r.flow))
+              navigate({ view: 'atlas', ...(r.lens ? { lens: r.lens } : {}) });
+            return f;
+          });
           return false;
         });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [toggleFocus]);
 
   // The module the UI is inspecting (atlas selection) or reading (module page).
   const neededModule =
@@ -152,6 +204,15 @@ export function App(): JSX.Element {
       .then(setSuggestions)
       .catch(() => setSuggestions([]));
   }, [capabilityKey]);
+
+  // The flow behind an atlas route trace (`#/?f=…`).
+  const tracedFlowId = route.view === 'atlas' ? (route.flow ?? null) : null;
+  useEffect(() => {
+    if (!tracedFlowId) return;
+    getFlow(tracedFlowId)
+      .then(setTraceDetail)
+      .catch(() => setTraceDetail(null));
+  }, [tracedFlowId]);
 
   // The machine-described (moonlight) detail - a module card or state-machine
   // candidate. Loaded on its own so it never contends with the concept/flow cache.
@@ -238,6 +299,15 @@ export function App(): JSX.Element {
   const stats = areaStats(map);
   const selectedArea = route.view === 'atlas' ? (route.area ?? null) : null;
   const selectedModule = route.view === 'atlas' ? (route.module ?? null) : null;
+  const atlasLens = route.view === 'atlas' ? route.lens : undefined;
+  // Only trace once the loaded flow matches the URL - never draw a stale route.
+  const trace =
+    route.view === 'atlas' && route.flow && traceDetail && traceDetail.id === route.flow
+      ? flowTrace(
+          traceDetail,
+          map.modules.map((m) => m.module),
+        )
+      : null;
 
   const inspector = (() => {
     if (route.view !== 'atlas') return null;
@@ -267,13 +337,26 @@ export function App(): JSX.Element {
   const canvas = (() => {
     switch (route.view) {
       case 'atlas':
+        // The Board is the default canvas (23a′ pivot); the treemap Terrain
+        // stays one nav item away for the churn/coverage reading.
+        if (atlasLens === 'terrain')
+          return (
+            <AtlasViewport
+              feed={map}
+              selectedArea={selectedArea}
+              selectedModule={selectedModule}
+              zones={zones}
+              neighbors={neighborsOf(refs, selectedModule)}
+            />
+          );
         return (
-          <AtlasViewport
+          <BoardViewport
             feed={map}
+            refs={refs}
+            catalog={catalog}
             selectedArea={selectedArea}
             selectedModule={selectedModule}
-            zones={zones}
-            neighbors={neighborsOf(refs, selectedModule)}
+            trace={trace}
           />
         );
       case 'capabilities':
@@ -316,11 +399,13 @@ export function App(): JSX.Element {
   })();
 
   return (
-    <div className="shell">
+    <div className={focus ? 'shell focus' : 'shell'}>
       <TopBar
         crumbs={crumbs(route, names, route.view === 'inferred' ? inferredDetail?.name : undefined)}
         kpis={kpis(map)}
         onOpenCmdk={() => setCmdkOpen(true)}
+        focus={focus}
+        onToggleFocus={toggleFocus}
       />
       <div className="shell-body">
         <Navigator
@@ -341,11 +426,17 @@ export function App(): JSX.Element {
 function crumbs(route: Route, names: Map<string, string>, inferredName?: string | null): Crumb[] {
   switch (route.view) {
     case 'atlas': {
+      const terrain = route.lens === 'terrain';
+      const home = terrain ? '#/?lens=terrain' : '#/';
       const out: Crumb[] = [
-        { label: NAV.atlas, href: route.area || route.module ? '#/' : undefined },
+        {
+          label: terrain ? NAV.terrain : NAV.board,
+          href: route.area || route.module || route.flow ? home : undefined,
+        },
       ];
       if (route.area) out.push({ label: route.area });
       if (route.module) out.push({ label: route.module, mono: true });
+      if (route.flow) out.push({ label: names.get(route.flow) ?? route.flow });
       return out;
     }
     case 'capabilities':
@@ -354,7 +445,7 @@ function crumbs(route: Route, names: Map<string, string>, inferredName?: string 
       return [{ label: NAV.queue }];
     case 'module':
       return [
-        { label: NAV.atlas, href: '#/' },
+        { label: NAV.board, href: '#/' },
         { label: route.id, mono: true },
       ];
     case 'concept':

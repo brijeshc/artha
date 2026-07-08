@@ -65,6 +65,29 @@ describe('mapFeed', () => {
     expect(billingArea?.dark).toBe(false);
   });
 
+  it('carries the module card description - the slot 21b enriches', () => {
+    const index = fakeIndex({
+      inferred: [
+        {
+          id: 'inferred.module.src-billing',
+          kind: 'module',
+          module: 'src/billing',
+          heading: 'Billing',
+          body: 'Shared foundation that Checkout builds on.',
+          confidence: 'read-from-code',
+          origin: 'inferred',
+        },
+      ],
+    });
+    const feed = mapFeed(repo, index, config);
+    const billing = feed.modules.find((m) => m.module === 'src/billing');
+    const checkout = feed.modules.find((m) => m.module === 'src/checkout');
+    expect(billing?.described).toBe(true);
+    expect(billing?.describedAs).toBe('Shared foundation that Checkout builds on.');
+    // no card → the field is honestly null, never invented
+    expect(checkout?.describedAs).toBeNull();
+  });
+
   it('cold start: empty index → a valid, all-dark map, not an error', () => {
     const feed = mapFeed(repo, fakeIndex({}), config);
     expect(feed.cold).toBe(true);

@@ -3,7 +3,8 @@
 // is deep-linkable and the back button always means "where I just was".
 
 export type Route =
-  | { view: 'atlas'; area?: string; module?: string }
+  // '' (the default canvas) renders the Board; `lens=terrain` shows the treemap.
+  | { view: 'atlas'; area?: string; module?: string; flow?: string; lens?: 'terrain' }
   | { view: 'capabilities' }
   | { view: 'queue' }
   | { view: 'module'; id: string }
@@ -23,7 +24,15 @@ export function parseRoute(hash: string): Route {
   if (path === '') {
     const area = params.get('a') ?? undefined;
     const module = params.get('m') ?? undefined;
-    return { view: 'atlas', ...(area ? { area } : {}), ...(module ? { module } : {}) };
+    const flow = params.get('f') ?? undefined;
+    const lens = params.get('lens') === 'terrain' ? ('terrain' as const) : undefined;
+    return {
+      view: 'atlas',
+      ...(area ? { area } : {}),
+      ...(module ? { module } : {}),
+      ...(flow ? { flow } : {}),
+      ...(lens ? { lens } : {}),
+    };
   }
   if (path === 'capabilities') return { view: 'capabilities' };
   if (path === 'queue') return { view: 'queue' };
@@ -46,6 +55,8 @@ export function routeHref(route: Route): string {
       const params = new URLSearchParams();
       if (route.area) params.set('a', route.area);
       if (route.module) params.set('m', route.module);
+      if (route.flow) params.set('f', route.flow);
+      if (route.lens) params.set('lens', route.lens);
       const q = params.toString();
       return q ? `#/?${q}` : '#/';
     }

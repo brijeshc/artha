@@ -5,12 +5,12 @@ import { type CoverageBucket, atlasLayout, coverageBucket, isMoonlit, shortName 
 import { type Route, routeHref } from '../router';
 
 /**
- * The Understanding Atlas - the hero surface. A squarified treemap where every
- * code module is terrain: **area = how much it changes** (churn earns space),
- * **brightness = how well it is understood** (certified coverage), so the eye
- * reads "big and dark = flying blind" with no legend required. Product areas
- * are provinces - named borders over their modules - which puts the product
- * structure and the code structure in one picture instead of two lists.
+ * The Terrain - the treemap reading of the codebase (the analytics view since
+ * the 23a′ board pivot; the Board is the default canvas). A squarified treemap
+ * where every code module is terrain: **area = how much it changes** (churn
+ * earns space), **brightness = how well it is understood** (certified
+ * coverage), so the eye reads "big and dark = flying blind" with no legend
+ * required. Product areas are provinces - named borders over their modules.
  *
  * Pure given width/height (SSR-testable); `AtlasViewport` below measures.
  */
@@ -42,7 +42,7 @@ export function Atlas(props: AtlasProps): JSX.Element {
   const hasSelection = lit.size > 0;
 
   return (
-    <div className="atlas" style={{ width, height }} aria-label="Understanding atlas">
+    <div className="atlas" style={{ width, height }} aria-label="Understanding terrain">
       {provinces.map((p) => (
         <section
           key={p.area.area}
@@ -61,8 +61,8 @@ export function Atlas(props: AtlasProps): JSX.Element {
               className="province-name"
               href={
                 selectedArea === p.area.area
-                  ? '#/'
-                  : routeHref({ view: 'atlas', area: p.area.area })
+                  ? '#/?lens=terrain'
+                  : routeHref({ view: 'atlas', area: p.area.area, lens: 'terrain' })
               }
               title={
                 selectedArea === p.area.area ? 'Clear selection' : `Select the ${p.area.area} area`
@@ -147,7 +147,9 @@ function ModuleTile(props: {
       className={cls}
       style={place(rect)}
       href={
-        selected ? routeHref({ view: 'module', id: module }) : routeHref({ view: 'atlas', module })
+        selected
+          ? routeHref({ view: 'module', id: module })
+          : routeHref({ view: 'atlas', module, lens: 'terrain' })
       }
       title={`${module} - ${standing} · ${churn} commits in 90 days${wired}${selected ? ' · open module' : ''}`}
       aria-current={selected ? 'true' : undefined}

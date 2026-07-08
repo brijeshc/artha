@@ -12,6 +12,9 @@ export interface MapModule {
   /** Machine-described meaning exists here (21a) → the tile glows moonlight even
    * before anyone vouches. Optional so a pre-21a index still types. */
   described?: boolean;
+  /** The module card's plain-language description (21a) - the board's chalk
+   * caption, and the slot 21b's LLM synthesis enriches. */
+  describedAs?: string | null;
   /** Inferred state-machine candidates in this module (21a). */
   inferredConcepts?: number;
 }

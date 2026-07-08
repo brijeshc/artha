@@ -52,6 +52,8 @@
   --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
 
   --fast: 130ms ease-out;
+  /* chalk handwriting for the board's labels - system faces only, offline */
+  --chalk: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Sans MS", cursive;
 }
 
 * {
@@ -246,6 +248,10 @@ a.crumb:hover {
 .readout.tone-muted .readout-value {
   color: var(--ink-3);
 }
+/* the machine layer's readout - moonlight, never the phosphor of trust (D11) */
+.readout.tone-moon .readout-value {
+  color: var(--moon);
+}
 
 .cmdk-trigger {
   display: inline-flex;
@@ -273,6 +279,33 @@ a.crumb:hover {
   border: 1px solid var(--line);
   border-radius: 2px;
   padding: 1px 5px;
+}
+
+/* fullscreen focus: fold the side panes away, keep the instrument bar */
+.focus-trigger {
+  margin-left: 8px;
+  padding: 5px 9px;
+  background: var(--night-2);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color var(--fast), color var(--fast);
+}
+.focus-trigger:hover {
+  border-color: var(--line-2);
+  color: var(--ink);
+}
+.focus-trigger.active {
+  color: var(--phosphor);
+  border-color: var(--phosphor-2);
+}
+.shell.focus .navigator,
+.shell.focus .inspector {
+  display: none;
 }
 
 /* ── Navigator ─────────────────────────────────────────────────────────────── */
@@ -649,6 +682,322 @@ a.crumb:hover {
 .tile-churn {
   font-family: var(--mono);
   white-space: nowrap;
+}
+
+/* ── Board (the blackboard flowchart - the default canvas since 23a′) ──────── */
+
+/* The register: a handmade diagram on a blackboard. Chalk = light; the two-
+ * light grammar survives as chalk colours (phosphor vouched, moonlight
+ * described, dim grey unexplained). Ample space is the whole point - the
+ * layout breathes, and the reader drags boxes to make the board theirs. */
+
+.board-wrap {
+  position: absolute;
+  inset: 0;
+}
+
+.board-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  /* the faintest chalk-dust sheen at the board's centre - still a night surface */
+  background: radial-gradient(ellipse at 50% 36%, #0c1514 0%, var(--night-0) 76%);
+}
+
+.board {
+  display: block;
+  min-width: 100%;
+  min-height: 100%;
+  user-select: none;
+}
+
+/* import edges: chalk arrows reading "depends on" - structure, never phosphor */
+.bedge {
+  opacity: 0.5;
+  transition: opacity var(--fast);
+}
+.bedge path {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-linecap: round;
+  pointer-events: visibleStroke;
+}
+.bedge:hover {
+  opacity: 0.95;
+}
+.bedge:hover path {
+  stroke: var(--ink-2);
+}
+.bedge.hot {
+  opacity: 0.9;
+}
+.bedge.hot path {
+  stroke: var(--ink);
+}
+.bedge.faded {
+  opacity: 0.12;
+}
+
+/* module boxes: chalk frames, drawn twice like a hand going over its line */
+.bnode {
+  cursor: grab;
+}
+.bnode:active {
+  cursor: grabbing;
+}
+.bnode-frame {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  opacity: 0.85;
+  transition: opacity var(--fast);
+}
+.bnode-frame.echo {
+  opacity: 0.22;
+  stroke-width: 1.1;
+}
+.bnode-vouched .bnode-frame {
+  stroke: var(--phosphor);
+}
+.bnode-described .bnode-frame {
+  stroke: var(--moon);
+}
+.bnode-unexplained .bnode-frame {
+  stroke: var(--ink-3);
+  opacity: 0.55;
+}
+.bnode:hover .bnode-frame {
+  opacity: 1;
+}
+.bnode.selected .bnode-frame {
+  stroke-width: 2.7;
+  opacity: 1;
+}
+.bnode.dimmed {
+  opacity: 0.28;
+}
+
+/* a chalk tick in ember: some certified meaning here has gone stale */
+.bnode-stale {
+  fill: none;
+  stroke: var(--ember);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.bnode-name {
+  font-family: var(--chalk);
+  font-size: 16.5px;
+  fill: var(--ink);
+}
+/* the machine's one-liner: moonlight chalk, never the ink of a human sentence */
+.bnode-desc {
+  font-family: var(--sans);
+  font-style: italic;
+  font-size: 10px;
+  fill: var(--moon);
+  opacity: 0.78;
+}
+/* a capability the box carries, in product language, with its standing dot */
+.bcap text {
+  font-family: var(--sans);
+  font-size: 10.5px;
+  fill: var(--ink-2);
+}
+.bcap-dot.standing-certified {
+  fill: var(--phosphor);
+}
+.bcap-dot.standing-proposed {
+  fill: var(--amber);
+}
+.bcap-dot.standing-stale {
+  fill: var(--ember);
+}
+.bcap-dot.standing-described {
+  fill: var(--moon);
+}
+.bnode-meta {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  fill: var(--ink-3);
+}
+.bnode-more {
+  font-family: var(--sans);
+  font-size: 9.5px;
+  fill: var(--ink-3);
+  text-anchor: end;
+}
+.bnode-vouched .bnode-meta {
+  fill: var(--phosphor);
+  opacity: 0.75;
+}
+.bnode-described .bnode-meta {
+  fill: var(--moon);
+  opacity: 0.8;
+}
+
+/* a traced flow: a chalk route under the boxes, numbered station badges on them */
+.broute path {
+  fill: none;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  opacity: 0.95;
+}
+.bstation path {
+  fill: var(--night-0);
+  stroke-width: 2;
+}
+.bstation text {
+  font-family: var(--mono);
+  font-size: 9px;
+  fill: var(--ink);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.route-proposed .broute path,
+.route-proposed .bstation path {
+  stroke: var(--amber);
+}
+.route-certified .broute path,
+.route-certified .bstation path {
+  stroke: var(--phosphor);
+}
+.route-stale .broute path,
+.route-stale .bstation path {
+  stroke: var(--ember);
+}
+.route-unknown .broute path,
+.route-unknown .bstation path {
+  stroke: var(--ink-2);
+}
+
+/* quiet chrome: one hint, one undo-the-hand-layout control */
+.board-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  margin: 0;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+.board-tidy {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  padding: 4px 10px;
+  background: var(--night-1);
+  border: 1px solid var(--line-2);
+  border-radius: 2px;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: color var(--fast), border-color var(--fast);
+}
+.board-tidy:hover {
+  color: var(--ink);
+  border-color: var(--phosphor-2);
+}
+
+/* the route card - the traced flow's identity, bottom-right over the board */
+.route-card {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 5;
+  width: 300px;
+  max-height: 46%;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: var(--night-1);
+  border: 1px solid var(--line-2);
+  border-radius: 2px;
+}
+.route-kind {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 3px;
+}
+.route-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 2px;
+}
+.route-name a {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.route-name a:hover {
+  color: var(--phosphor);
+}
+.route-coverage {
+  font-size: 10px;
+  color: var(--ink-3);
+  margin: 0 0 7px;
+}
+.route-empty {
+  font-size: 11.5px;
+  color: var(--ink-2);
+  margin: 0 0 7px;
+}
+.route-steps {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.route-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+}
+.route-step-n {
+  flex: none;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.route-step-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-2);
+}
+.route-step-module {
+  flex: none;
+  font-size: 10px;
+  color: var(--ink-2);
+}
+.route-step.unlinked .route-step-text,
+.route-step.unlinked .route-step-module {
+  color: var(--ink-3);
+}
+.route-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+}
+.route-open {
+  font-size: 11.5px;
+  color: var(--phosphor);
+}
+.route-clear {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.route-clear:hover {
+  color: var(--ink-2);
 }
 
 /* the legend - one quiet corner popover */
@@ -1052,6 +1401,15 @@ a.fact-line:hover {
 .module-chip:hover {
   border-color: var(--phosphor-2);
   color: var(--ink);
+}
+
+/* "Trace on atlas" - read this flow as terrain */
+.trace-link {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.trace-link:hover {
+  color: var(--phosphor);
 }
 
 .page-area-link {

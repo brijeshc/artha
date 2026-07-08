@@ -7,26 +7,56 @@
 export const WORDMARK = 'Artha';
 export const TAGLINE = 'What this codebase means - and where it doesn’t.';
 
-/** Labels for the four instrument readouts (values computed in derive.ts). */
+/** Labels for the four instrument readouts (values computed in derive.ts).
+ * D11: the trust number and the machine number are separate words on separate
+ * lights - "described" must never dress up as "vouched". */
 export const KPI = {
-  explained: 'explained',
-  explainedHint: 'share of recent change that carries certified meaning',
+  vouched: 'vouched',
+  vouchedHint: 'how much of the recent change carries meaning a human vouched for',
+  described: 'described',
+  describedHint: 'share of recent change the machine has described - readable, not yet vouched',
   darkZones: 'dark zones',
   darkZonesHint: 'high-churn modules nobody has explained',
   stale: 'stale',
   staleHint: 'certified meaning whose code has since moved',
-  certified: 'certified',
-  certifiedHint: 'meaning a human has vouched for',
+} as const;
+
+/** A flow traced as a route across the board. */
+export const ROUTE = {
+  kind: 'flow route',
+  open: 'Open flow',
+  clear: 'Clear route',
+  trace: 'Trace on the board',
+  traceHint: 'Draw this flow as a route across the board - station by station.',
+  notLinked: 'not linked',
+  noStations:
+    'None of this flow’s steps are linked to code yet, so there is no route to draw. Link a step and the line appears.',
 } as const;
 
 /** Navigator sections and view names. */
 export const NAV = {
   views: 'Views',
-  atlas: 'Atlas',
+  board: 'Board',
+  terrain: 'Terrain',
   capabilities: 'Capabilities',
   queue: 'Dark zones',
   areas: 'Product areas',
   offline: 'Reads .artha/index.db · fully offline',
+} as const;
+
+/** The board - the blackboard flowchart, the default canvas since 23a′. */
+export const BOARD = {
+  hint: 'Drag a box to arrange the board - your layout sticks. An arrow reads "depends on".',
+  tidy: 'Tidy the board',
+  tidyHint: 'Re-lay every box automatically and forget the hand-placed positions.',
+  more: 'more',
+} as const;
+
+/** Fullscreen focus - the canvas without the chrome, in any view. */
+export const FOCUS = {
+  enter: 'Fullscreen',
+  exit: 'Exit fullscreen',
+  enterHint: 'Hide the side panes and go fullscreen - press f anywhere, Esc leaves.',
 } as const;
 
 /** The atlas legend - the one place terms are defined. */

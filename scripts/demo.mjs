@@ -142,6 +142,8 @@ const ARTHA = {
     '  - do: reverse the charge\n' +
     '    pin:\n      symbol: src/billing/refund.ts#issueRefund\n' +
     '  - do: notify the customer\n' +
+    '    pin:\n      symbol: src/notifications/email.ts#sendEmail\n' +
+    '  - do: reconcile the ledger\n' +
     'entry:\n' +
     '  - symbol: src/billing/refund.ts#startRefund\n' +
     'pins:\n' +

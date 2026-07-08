@@ -7,7 +7,8 @@ Rationale and evidence are in [21-inferred-layer.md](21-inferred-layer.md) §Why
 Contradiction detection remains in v0.3, but as a near-byproduct: once inferred meaning exists, "inferred disagrees with certified" *is* the loophole view.
 
 **Progress:** 21a is done - all four offline extractors ship (module cards + state machines in slice 1; flow skeletons + naming conventions in slice 2), evidence-pinned and byte-deterministic, so a stranger's repo renders a complete moonlight map with zero human input.
-Then 21b (LLM synthesis + verification) and the rest of 21c (vouch-by-reading, value-ranked queue, honest KPIs).
+**23a is done (2026-07-07)** - the atlas elevation's first slice: honest D11 KPIs (% vouched / % described, no more "explained"), the wiring lens (import graph drawn as arcs), and flow routes (flows traced as transit lines with numbered stations).
+Then 21b (LLM synthesis + verification), the rest of 21c (vouch-by-reading, value-ranked queue - 23d delivers these), and 23b/23c (terrain texture, observatory charts).
 
 | #   | Task | Depends on | One-line summary |
 |-----|------|------------|------------------|
@@ -15,6 +16,7 @@ Then 21b (LLM synthesis + verification) and the rest of 21c (vouch-by-reading, v
 | 21b | [Inferred layer - LLM synthesis + verification](21-inferred-layer.md) | 21a, v0.1 T06 engine | opt-in, spend-capped, incremental synthesis into readable meaning; every claim cites pins; verifier gates confidence |
 | 21c | [Inferred layer - dashboard reframe](21-inferred-layer.md) | 21a (21b enriches), v0.2 T16d/T17 | two-light map (moonlight/phosphor), vouch-by-reading, the delta band, inverted interview entry |
 | 22  | Contradiction view (inferred vs certified) | 21b | the v0.3 loophole view, seeded by disagreement between the machine layer and vouched facts |
+| 23  | [Atlas elevation](23-atlas-elevation.md) | T16d, T17b, 21a | drawn linkage (wiring lens + flow routes, **23a shipped**), terrain texture, observatory charts, review mode (delivers 21c's D5/D6/D9/D10), craft debt |
 
 ## Interplay with unfinished v0.2 tasks
 
@@ -25,3 +27,4 @@ Then 21b (LLM synthesis + verification) and the rest of 21c (vouch-by-reading, v
 ## Critical path
 
 21a → 21c (structural value, fully offline) with 21b enriching both; 22 and T18 hang off 21b.
+23 runs alongside: 23a (shipped) needed nothing new from the backend; 23b/23c/23e are pure dashboard; 23d is the delivery vehicle for 21c's D5/D6/D9/D10.

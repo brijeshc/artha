@@ -8,9 +8,12 @@ import type {
   MapFeed,
   ModuleDetail,
   RankedModule,
+  RefEdge,
   Suggestion,
 } from '../../web/src/api';
+import { GAP_Y, boardLayout } from '../../web/src/board';
 import { Atlas } from '../../web/src/components/Atlas';
+import { Board, RouteCard } from '../../web/src/components/Board';
 import { CapCard } from '../../web/src/components/CapCard';
 import { ConceptPage, FlowPage } from '../../web/src/components/CapabilityPages';
 import { CatalogPage } from '../../web/src/components/CatalogPage';
@@ -25,12 +28,15 @@ import {
   areaStats,
   atlasLayout,
   capabilitiesByArea,
+  capabilitiesByModule,
   capabilityEntries,
   coverageBucket,
+  flowTrace,
   kpis,
   moduleOfPath,
   shortName,
 } from '../../web/src/derive';
+import { roughLine, roughRect, seedFrom } from '../../web/src/rough';
 import { parseRoute, routeHref } from '../../web/src/router';
 import { treemap } from '../../web/src/treemap';
 
@@ -89,7 +95,16 @@ const feed: MapFeed = {
       staleFacts: 0,
       score: 0.4,
     },
-    { module: 'src/legacy', dark: true, churn: 20, certifiedFacts: 0, staleFacts: 0, score: 0 },
+    {
+      module: 'src/legacy',
+      dark: true,
+      churn: 20,
+      certifiedFacts: 0,
+      staleFacts: 0,
+      score: 0,
+      described: true,
+      describedAs: 'Old order paths kept for imports.',
+    },
   ],
 };
 
@@ -144,6 +159,9 @@ describe('router', () => {
       { view: 'atlas' },
       { view: 'atlas', area: 'Billing & Money' },
       { view: 'atlas', module: 'src/billing' },
+      { view: 'atlas', flow: 'flow.refund' },
+      { view: 'atlas', module: 'src/billing', flow: 'flow.refund', lens: 'terrain' },
+      { view: 'atlas', lens: 'terrain' },
       { view: 'capabilities' },
       { view: 'queue' },
       { view: 'module', id: 'src/billing' },
@@ -250,20 +268,27 @@ describe('derive', () => {
     expect(coverageBucket(feed.modules[2])).toBe('dark'); // 0
   });
 
-  it('derives churn-weighted KPIs from the map feed', () => {
+  it('derives honest KPIs: vouched depth and machine reach on separate lights (D11)', () => {
     const k = kpis(feed);
     const byKey = Object.fromEntries(k.map((x) => [x.key, x]));
-    expect(byKey.explained.value).toBe('71%'); // 50 of 70 churn is explained
+    // vouched = churn-weighted certified depth: (40·5/6 + 10·1/2 + 20·0) / 70
+    expect(byKey.vouched.value).toBe('55%');
+    // described = the machine layer's reach (src/legacy only): 20 of 70 churn -
+    // it reads moonlight, never the phosphor tone of trust
+    expect(byKey.described.value).toBe('29%');
+    expect(byKey.described.tone).toBe('moon');
     expect(byKey.dark.value).toBe('1');
     expect(byKey.stale.value).toBe('1');
-    expect(byKey.certified.value).toBe('6');
+    // the machine layer never inflates the trust number
+    expect(byKey.vouched.value).not.toBe('100%');
   });
 
   it('rolls areas up for the navigator', () => {
     const stats = areaStats(feed);
     const billing = stats.find((s) => s.area.area === 'Billing & Money');
     expect(billing).toMatchObject({ churn: 50, certified: 6, stale: 1, darkModules: 0 });
-    expect(billing?.explained).toBe(1);
+    // same honesty rule as the top bar: vouched depth, not a has-any-fact bit
+    expect(billing?.vouched).toBeCloseTo((40 * (5 / 6) + 10 * 0.5) / 50, 6);
   });
 
   it('groups capabilities under the areas their modules belong to', () => {
@@ -276,6 +301,27 @@ describe('derive', () => {
   it('shortens module paths to place-names', () => {
     expect(shortName('src/billing')).toBe('billing');
     expect(shortName('lib')).toBe('lib');
+  });
+
+  it('lists what each module carries - vouched first, then machine-described', () => {
+    const caps = capabilitiesByModule({
+      ...catalog,
+      inferredConcepts: [
+        {
+          id: 'inferred.concept.order',
+          name: 'Order State',
+          module: 'src/billing',
+          states: ['placed'],
+          confidence: 'read-from-code',
+        },
+      ],
+    });
+    expect(caps.get('src/billing')?.map((c) => `${c.name}:${c.standing}`)).toEqual([
+      'Invoice:certified',
+      'Refund a purchase:proposed',
+      'Order State:described',
+    ]);
+    expect(caps.get('src/payments')?.map((c) => c.name)).toEqual(['Refund a purchase']);
   });
 
   it('resolves a pinned path to its owning module (longest prefix wins)', () => {
@@ -349,6 +395,273 @@ describe('Atlas', () => {
   });
 });
 
+// ── the board (blackboard flowchart, default canvas since 23a′) ──────────────
+
+const refEdges: RefEdge[] = [
+  { from_module: 'src/billing', to_module: 'src/payments', count: 3 },
+  { from_module: 'src/payments', to_module: 'src/billing', count: 1 },
+  { from_module: 'src/payments', to_module: 'src/legacy', count: 1 },
+  { from_module: 'src/legacy', to_module: 'src/legacy', count: 9 }, // self-edge: never drawn
+  { from_module: 'src/billing', to_module: 'src/gone', count: 2 }, // unplaced: skipped, not guessed
+];
+
+describe('chalk strokes (rough)', () => {
+  it('is deterministic per seed - a rebuild redraws the same hand', () => {
+    const a = roughLine(0, 0, 200, 80, seedFrom('src/billing'));
+    const b = roughLine(0, 0, 200, 80, seedFrom('src/billing'));
+    expect(a).toBe(b);
+    expect(roughLine(0, 0, 200, 80, seedFrom('src/payments'))).not.toBe(a);
+  });
+
+  it('a chalk rectangle is four strokes with honest corners', () => {
+    const d = roughRect(10, 10, 190, 72, 7);
+    expect(count(d, /M /g)).toBe(4); // one stroke per side
+    expect(d).not.toContain('NaN');
+  });
+});
+
+describe('boardLayout', () => {
+  const mod = (module: string): MapFeed['modules'][number] => ({
+    module,
+    dark: false,
+    churn: 1,
+    certifiedFacts: 0,
+    staleFacts: 0,
+    score: 0,
+  });
+
+  it('layers by dependency depth - consumers on top, foundations below', () => {
+    const layout = boardLayout(
+      [mod('src/a'), mod('src/b'), mod('src/c')],
+      [
+        { from_module: 'src/a', to_module: 'src/b', count: 1 },
+        { from_module: 'src/b', to_module: 'src/c', count: 1 },
+        { from_module: 'src/a', to_module: 'src/c', count: 2 },
+      ],
+    );
+    const byName = new Map(layout.nodes.map((n) => [n.module, n]));
+    expect(byName.get('src/a')?.layer).toBe(0);
+    expect(byName.get('src/b')?.layer).toBe(1);
+    expect(byName.get('src/c')?.layer).toBe(2); // longest path wins, not shortest
+    // ample space: full row gaps between layers, nothing crammed
+    const a = byName.get('src/a');
+    const b = byName.get('src/b');
+    if (!a || !b) throw new Error('missing nodes');
+    expect(b.y - (a.y + a.h)).toBe(GAP_Y);
+  });
+
+  it('survives an import cycle deterministically', () => {
+    const cyclic = [
+      { from_module: 'src/billing', to_module: 'src/payments', count: 1 },
+      { from_module: 'src/payments', to_module: 'src/billing', count: 1 },
+    ];
+    const one = boardLayout([mod('src/billing'), mod('src/payments')], cyclic);
+    const two = boardLayout([mod('src/payments'), mod('src/billing')], cyclic);
+    expect(one).toEqual(two); // input order never changes the board
+    expect(one.nodes).toHaveLength(2);
+  });
+
+  it('never overlaps two boxes', () => {
+    const layout = boardLayout(feed.modules, refEdges);
+    for (let i = 0; i < layout.nodes.length; i++)
+      for (let j = i + 1; j < layout.nodes.length; j++) {
+        const a = layout.nodes[i];
+        const b = layout.nodes[j];
+        const apart = a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+        expect(apart).toBe(true);
+      }
+  });
+});
+
+describe('Board', () => {
+  const base = {
+    feed,
+    refs: refEdges,
+    catalog,
+    selectedArea: null,
+    selectedModule: null,
+  };
+
+  it('draws chalk boxes carrying the two-light grammar', () => {
+    const html = markup(<Board {...base} />);
+    expect(html).toContain('bnode-frame'); // the chalk frame
+    expect(count(html, /class="bnode /g)).toBe(3);
+    expect(html).toContain('bnode-vouched'); // billing/payments carry phosphor chalk
+    expect(html).toContain('bnode-described'); // legacy glows moonlight, not black
+    expect(html).toContain('has-stale'); // billing's ember chalk tick
+    expect(html).toContain('billing'); // place-names in chalk
+    expect(html).toContain('5 certified');
+  });
+
+  it('annotates boxes with meaning: the machine one-liner and product capabilities', () => {
+    const html = markup(<Board {...base} />);
+    // the module card's description, in moonlight chalk - the 21b slot
+    expect(html).toContain('Old order paths kept for imports.');
+    // what the box carries, in product language with standing dots
+    expect(html).toContain('Invoice');
+    expect(html).toContain('Refund a purchase');
+    expect(html).toContain('standing-certified');
+    expect(html).toContain('standing-proposed');
+  });
+
+  it('shows two capabilities and counts the rest honestly', () => {
+    const rich: CatalogData = {
+      ...catalog,
+      inferredConcepts: [
+        {
+          id: 'inferred.concept.order',
+          name: 'Order State',
+          module: 'src/billing',
+          states: ['placed'],
+          confidence: 'read-from-code',
+        },
+      ],
+      inferredFlows: [
+        {
+          id: 'inferred.flow.pay',
+          name: 'Take Payment',
+          module: 'src/payments',
+          steps: ['Billing'],
+          confidence: 'read-from-code',
+        },
+      ],
+    };
+    const html = markup(<Board {...base} catalog={rich} />);
+    expect(html).toContain('+1 more'); // billing carries 3 - two shown, one counted
+    expect(html).toContain('standing-described'); // payments' machine-described flow dot
+    expect(html).toContain('Take Payment');
+  });
+
+  it('draws one chalk arrow per drawable import edge, reading "depends on"', () => {
+    const html = markup(<Board {...base} />);
+    expect(count(html, /class="bedge"/g)).toBe(3); // self + unplaced skipped
+    expect(html).toContain('src/billing depends on src/payments · 3 imports');
+  });
+
+  it('selection makes a module’s edges hot, fades the rest, dims other boxes', () => {
+    const html = markup(<Board {...base} selectedModule="src/billing" />);
+    expect(count(html, /class="bedge hot"/g)).toBe(2);
+    expect(count(html, /class="bedge faded"/g)).toBe(1);
+    expect(html).toContain('dimmed');
+    // second click opens the module page - same grammar as the terrain's tiles
+    expect(html).toContain(`href="${routeHref({ view: 'module', id: 'src/billing' })}"`);
+  });
+
+  it('a dragged seat wins over the auto layout', () => {
+    const html = markup(<Board {...base} overrides={{ 'src/billing': { x: 1234, y: 567 } }} />);
+    expect(html).toContain('1234'); // the hand-placed x lands in the markup
+  });
+});
+
+describe('flow routes on the board', () => {
+  const base = {
+    feed,
+    refs: refEdges,
+    catalog,
+    selectedArea: null,
+    selectedModule: null,
+  };
+
+  const routeDetail: FlowDetail = {
+    id: 'flow.refund',
+    kind: 'flow',
+    name: 'Refund a purchase',
+    summary: null,
+    status: 'proposed',
+    certifiedBy: null,
+    certifiedAt: null,
+    entry: [],
+    steps: [
+      {
+        on: null,
+        do: 'validate the request',
+        pin: {
+          symbol: 'src/billing/validate.ts#validate',
+          symbolId: 'a',
+          contentHash: 'h',
+          stale: false,
+        },
+      },
+      {
+        on: null,
+        do: 'reverse the charge',
+        pin: {
+          symbol: 'src/billing/gateway.ts#reverse',
+          symbolId: 'b',
+          contentHash: 'h',
+          stale: false,
+        },
+      },
+      {
+        on: null,
+        do: 'notify the customer',
+        pin: {
+          symbol: 'src/payments/email.ts#send',
+          symbolId: 'c',
+          contentHash: 'h',
+          stale: false,
+        },
+      },
+      { on: 'ledger closed', do: 'reconcile', pin: null },
+    ],
+    related: [],
+    modules: ['src/billing', 'src/payments'],
+  };
+
+  it('collapses consecutive same-module steps into stations; unlinked steps draw nothing', () => {
+    const t = flowTrace(
+      routeDetail,
+      feed.modules.map((m) => m.module),
+    );
+    expect(t.stations).toEqual([
+      { module: 'src/billing', steps: [1, 2] },
+      { module: 'src/payments', steps: [3] },
+    ]);
+    expect(t.linked).toBe(3);
+    expect(t.total).toBe(4);
+    expect(t.steps[3]).toEqual({ n: 4, text: 'on ledger closed - reconcile', module: null });
+  });
+
+  it('draws the route in the flow’s own status colour with numbered station badges', () => {
+    const t = flowTrace(
+      routeDetail,
+      feed.modules.map((m) => m.module),
+    );
+    const html = markup(<Board {...base} trace={t} />);
+    expect(html).toContain('route-proposed'); // never a new hue - the flow's own status
+    expect(html).toContain('broute'); // the chalk route line
+    expect(count(html, /class="bstation"/g)).toBe(2);
+    expect(html).toContain('1·2'); // the collapsed billing station badge
+    // the route lights its stations; the rest of the board dims
+    expect(html).toContain('dimmed');
+  });
+
+  it('the route card answers "what am I looking at" with honest coverage', () => {
+    const t = flowTrace(
+      routeDetail,
+      feed.modules.map((m) => m.module),
+    );
+    const html = markup(<RouteCard trace={t} clearHref="#/" />);
+    expect(html).toContain('Refund a purchase');
+    expect(html).toContain('3/4 steps linked');
+    expect(html).toContain('not linked'); // the honest dashed gap
+    expect(html).toContain(`href="${routeHref({ view: 'flow', id: 'flow.refund' })}"`);
+  });
+
+  it('a route with no linked steps says so instead of drawing a guess', () => {
+    const bare: FlowDetail = {
+      ...routeDetail,
+      steps: [{ on: null, do: 'reverse the charge', pin: null }],
+    };
+    const t = flowTrace(
+      bare,
+      feed.modules.map((m) => m.module),
+    );
+    expect(markup(<Board {...base} trace={t} />)).not.toContain('broute');
+    expect(markup(<RouteCard trace={t} clearHref="#/" />)).toContain('no route to draw');
+  });
+});
+
 // ── shell chrome ─────────────────────────────────────────────────────────────
 
 describe('TopBar', () => {
@@ -365,10 +678,19 @@ describe('TopBar', () => {
     );
     expect(html).toContain('Artha');
     expect(html).toContain('src/billing');
-    expect(html).toContain('71%');
+    expect(html).toContain('55%'); // vouched, the honest trust number
+    expect(html).toContain('described'); // the machine layer, on its own light
     expect(html).toContain('dark zones');
     // platform-spelled shortcut: ⌘K on a Mac, Ctrl K everywhere else
     expect(html).toMatch(/⌘K|Ctrl K/);
+  });
+
+  it('offers fullscreen focus in any view when the shell provides the toggle', () => {
+    const html = markup(
+      <TopBar crumbs={[]} kpis={kpis(feed)} onOpenCmdk={noop} focus={false} onToggleFocus={noop} />,
+    );
+    expect(html).toContain('focus-trigger');
+    expect(html).toContain('aria-pressed="false"');
   });
 });
 
@@ -383,7 +705,8 @@ describe('Navigator', () => {
         zoneCount={1}
       />,
     );
-    expect(html).toContain('Atlas');
+    expect(html).toContain('Board'); // the default canvas since the 23a′ pivot
+    expect(html).toContain('Terrain'); // the treemap, one nav item away
     expect(html).toContain('Capabilities');
     expect(html).toContain('Dark zones');
     expect(html).toContain('Billing &amp; Money');
@@ -457,7 +780,9 @@ describe('Inspector', () => {
     const entries = capabilityEntries(catalog);
     const html = markup(<Inspector content={{ kind: 'area', stat, entries }} />);
     expect(html).toContain('Billing &amp; Money');
-    expect(html).toContain('100%');
+    // vouched depth, the same honest rule as the top bar: (40·5/6 + 10·1/2) / 50
+    expect(html).toContain('77%');
+    expect(html).toContain('vouched');
     expect(html).toContain('Invoice');
     expect(html).toContain('src/payments');
   });
@@ -668,6 +993,9 @@ describe('FlowPage', () => {
     expect(html).toContain('Entry points');
     expect(html).toContain('on customer asks');
     expect(html).not.toContain('error');
+    // the flow can be read as a route: the trace CTA deep-links the board
+    expect(html).toContain('Trace on the board');
+    expect(html).toContain(`href="${routeHref({ view: 'atlas', flow: 'flow.refund' })}"`);
   });
 
   it('entry and step pins link to their module page', () => {

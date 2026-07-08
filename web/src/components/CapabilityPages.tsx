@@ -1,5 +1,5 @@
 import type { ConceptDetail, FlowDetail, PinView, Suggestion } from '../api';
-import { CURATE, DETAIL } from '../copy';
+import { CURATE, DETAIL, ROUTE } from '../copy';
 import { moduleOfPath, shortName } from '../derive';
 import { routeHref } from '../router';
 import { CertifyButton, type Curation, EditFields, LinkCode, SuggestedCode } from './Curate';
@@ -155,6 +155,8 @@ function CapabilityHead({
   detail: ConceptDetail | FlowDetail;
   curation: Curation;
 }): JSX.Element {
+  // A flow can be read *as terrain*: trace it station-by-station on the atlas.
+  const traceHref = kind === 'flow' ? routeHref({ view: 'atlas', flow: detail.id }) : null;
   return (
     <header className="page-head">
       <p className="page-kind">{kind}</p>
@@ -180,6 +182,14 @@ function CapabilityHead({
                 {shortName(m)}
               </a>
             ))}
+          </>
+        )}
+        {traceHref && (
+          <>
+            <span className="meta-sep">·</span>
+            <a className="trace-link" href={traceHref} title={ROUTE.traceHint}>
+              {ROUTE.trace} →
+            </a>
           </>
         )}
       </p>

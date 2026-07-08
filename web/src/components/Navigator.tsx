@@ -55,7 +55,18 @@ export function Navigator({ route, feed, catalog, stats, zoneCount }: NavigatorP
     <nav className="navigator" aria-label="Knowledge base">
       <div className="nav-section">
         <p className="nav-heading">{NAV.views}</p>
-        <ViewLink href="#/" label={NAV.atlas} active={route.view === 'atlas'} glyph="◆" />
+        <ViewLink
+          href="#/"
+          label={NAV.board}
+          active={route.view === 'atlas' && route.lens !== 'terrain'}
+          glyph="▭"
+        />
+        <ViewLink
+          href="#/?lens=terrain"
+          label={NAV.terrain}
+          active={route.view === 'atlas' && route.lens === 'terrain'}
+          glyph="◆"
+        />
         <ViewLink
           href="#/capabilities"
           label={NAV.capabilities}
@@ -176,12 +187,12 @@ function AreaNode({
         </a>
         <span
           className="nav-area-meter"
-          title={`${Math.round(stat.explained * 100)}% of this area's recent change is explained`}
+          title={`${Math.round(stat.vouched * 100)}% of this area's recent change carries vouched meaning`}
           aria-hidden="true"
         >
           <span
             className="nav-area-meter-fill"
-            style={{ width: `${Math.round(stat.explained * 100)}%` }}
+            style={{ width: `${Math.round(stat.vouched * 100)}%` }}
           />
         </span>
       </div>

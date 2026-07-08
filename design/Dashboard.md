@@ -432,6 +432,78 @@ Each write is a `.artha/*.yaml` git diff; the server rebuilds the index so the m
 Certify, link, and edit touch no model; a write reuses the previous index's embedding vectors when they exist (a certify/link changes no fact text) so the map and search stay warm with no download.
 The LLM only enters for the T18 interview that *drafts* the prose — the persist/certify plumbing here is fully local.
 
+## 12. Lenses and honest readouts (shipped 2026-07-07, task 23a)
+
+The atlas gained a second axis of reading: *what* you look at (selection, a traced flow) versus *how* you look at it (the lens).
+Both live in the URL, so every reading is deep-linkable; Esc clears the focus but keeps the lens.
+
+### 12.1 The lens grammar *(superseded same day - see §13)*
+
+The first cut drew the import graph as arcs **over the treemap** (`?lens=wiring`).
+The developer's verdict, hours later: a treemap has no empty space, so anything drawn over it adds confusion rather than clarity.
+The lens was deleted the same day; §13 records the pivot that replaced it.
+What survives from this cut: structure draws in **grey ink, never phosphor** (structure is proof, not meaning), and edges touching an unplaced module are skipped, never guessed - both rules carried into the board.
+
+### 12.2 Flow routes *(moved to the board - see §13.3)*
+
+A flow reads as a drawn route: linked steps resolve their pins to modules, consecutive same-module steps collapse into one numbered **station**, and the line runs station to station **in the flow's own status colour** (D2: no new hue - a route inherits exactly the trust its flow has).
+Stations light; everything else dims.
+The **route card** names the flow, its standing, and every step - unlinked steps stay as dashed, honest gaps that draw nothing.
+First shipped over the terrain; since 23a′ the route draws on the board, where it has room.
+
+### 12.3 Honest readouts (D11, partial)
+
+The top bar dropped "explained" (which had become a lie the moment the moonlight layer lit everything) for:
+
+- **% vouched** - churn-weighted certified *depth* (the saturating coverage curve, so one fact cannot claim a module), phosphor/amber/ember by threshold;
+- **% described** - the machine layer's reach, on its own **moonlight tone**, never the phosphor of trust;
+- dark zones and stale, unchanged.
+
+Navigator area meters and the area inspector show the same vouched-depth metric under the same word.
+The third D11 readout (disagreements) arrives with T22.
+
+The remaining elevation program (inner boards, observatory charts, the review pass, craft debt) is specced as [tasks-v0.3/23-atlas-elevation.md](../tasks-v0.3/23-atlas-elevation.md).
+
+## 13. The Board - the blackboard pivot (shipped 2026-07-07, task 23a′)
+
+### 13.1 The design philosophy
+
+The developer's brief, verbatim in spirit: **a handmade flowchart on a classroom blackboard** - simple, ample space, clean, and you can drag things around.
+This is now the organizing genre for knowledge discovery, and it is not a skin: it is how a senior engineer actually explains a codebase to a newcomer, which makes it the native visual language for a product whose job is explaining codebases.
+The rule going forward: before adding any discovery surface, ask *"how would this look hand-drawn on the board?"* - density belongs in Terrain and the observatory, never on the board.
+
+### 13.2 The shape
+
+- **The Board is the default canvas** (`#/`); the treemap lives on as **Terrain** (`?lens=terrain`), the churn/coverage analytics reading, one nav item away.
+- Modules are **chalk boxes** - seeded rough strokes (`web/src/rough.ts`: wobbly lines, corner overshoot, a double-drawn frame like a hand going over its line), names in system handwriting faces (`--chalk`), on a blackboard ground.
+Determinism matters: the same repo draws the same wobble, so tests and rebuilds agree.
+- **Layered auto-layout** (`web/src/board.ts`): consumers on top, foundations at the bottom (longest-path layering, cycle-safe); generous gaps are the point.
+Imports are chalk arrows reading **"depends on"**, border to border, thickness by count, hot/faded under selection.
+- **The reader owns the layout**: boxes drag (positions persist per browser, `artha.board.layout.v1`), "Tidy the board" restores the auto seats, scroll pans, a drag never navigates.
+A committed team layout (`.artha/board.yaml`) is 23e.
+- The night-map identity survives whole: chalk **is** light on dark, so phosphor/moonlight/ember chalk carries the two-light grammar unchanged, and viewing stays offline (system faces only).
+
+### 13.3 Meaning on the board
+
+Standing colours the chalk: a vouched module's frame is phosphor, a described one moonlight, an unexplained one dim grey; an ember chalk tick marks stale meaning.
+A box is not just a name - it carries, in chalk: the machine's one-line description (moonlight italic), the capabilities it holds in product language each with its standing dot (top-N with an honest `+N more`), and the standing line (`N certified · churn`).
+This is the code↔meaning linkage the board exists to show, drawn where the reader already is.
+Flow routes draw here (§12.2): numbered chalk station badges on box corners, legs in the flow's status colour, the route card bottom-right.
+Selection keeps the shell grammar: click selects and opens the inspector, click again opens the module page; `?m=` / `?a=` / `?f=` deep-link the board.
+
+### 13.4 The 21b seam
+
+The board is built to get *richer*, not rebuilt, when LLM synthesis (21b) lands.
+The machine's per-module prose is a single map-feed field, `MapModule.describedAs`; `capabilitiesByModule` reads inferred concept/flow names the same way it reads vouched ones.
+When `artha infer` overwrites those deterministic strings with synthesized meaning, every reader - the board's captions, the inspector, MCP - upgrades with no client change.
+The design rule that makes this safe: the board renders *what the layer says*, and the trust grammar (moonlight vs phosphor) already marks it as machine-described until a human vouches.
+
+### 13.5 Fullscreen focus (any view)
+
+Any view can go fullscreen: a top-bar toggle (or `f`, ignored while typing) folds the navigator and inspector away and requests native browser fullscreen where allowed, so the canvas - board, terrain, a capability page - fills the screen for reading or presenting.
+Esc leaves focus before it clears a selection; leaving native fullscreen by any route (browser Esc, F11, the OS) unfolds the chrome too, so the two never drift apart.
+Focus is transient and deliberately not in the URL - it is a way of looking, not a place.
+
 ## Sources
 
 - [CodeScene — Hotspots](https://codescene.io/docs/guides/technical/hotspots.html)

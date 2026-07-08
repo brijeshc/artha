@@ -153,7 +153,7 @@ function AreaLook({
   content: Extract<InspectorContent, { kind: 'area' }>;
 }): JSX.Element {
   const { stat, entries } = content;
-  const pct = Math.round(stat.explained * 100);
+  const pct = Math.round(stat.vouched * 100);
   return (
     <>
       <header className="inspector-head">
@@ -170,7 +170,7 @@ function AreaLook({
       </header>
 
       <div className="inspector-stats">
-        <Stat label="explained" value={<span className="mono">{pct}%</span>} />
+        <Stat label="vouched" value={<span className="mono">{pct}%</span>} />
         <Stat label="churn / 90d" value={<span className="mono">{stat.churn}</span>} />
         <Stat label="certified" value={<span className="mono">{stat.certified}</span>} />
         <Stat label="dark modules" value={<span className="mono">{stat.darkModules}</span>} />

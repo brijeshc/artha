@@ -137,6 +137,7 @@ Every row states its "why now" in words, same discipline as D5.
 "% explained" would become a lie the day the machine lights everything.
 The top bar reframes to: **% described** (machine), **% vouched** (team), **disagreements** (count).
 The inferred layer must never inflate a trust metric.
+*(Shipped 2026-07-07 via task 23a: % vouched as churn-weighted certified depth, % described as machine reach on a moonlight tone; the disagreements readout still waits on T22.)*
 
 **D12. Drift is quiet for moonlight, loud for phosphor.**
 Inferred facts regenerate silently on code change (cache semantics - nothing to nag about).

@@ -1,4 +1,4 @@
-import { SEARCH_KEY, WORDMARK } from '../copy';
+import { FOCUS, SEARCH_KEY, WORDMARK } from '../copy';
 import type { Kpi } from '../derive';
 
 /**
@@ -18,10 +18,15 @@ export function TopBar({
   crumbs,
   kpis,
   onOpenCmdk,
+  focus = false,
+  onToggleFocus,
 }: {
   crumbs: Crumb[];
   kpis: Kpi[];
   onOpenCmdk: () => void;
+  /** Fullscreen focus (any view): chrome folded, canvas everywhere. */
+  focus?: boolean;
+  onToggleFocus?: () => void;
 }): JSX.Element {
   return (
     <header className="topbar">
@@ -62,6 +67,18 @@ export function TopBar({
           <span className="cmdk-trigger-text">Search</span>
           <kbd>{SEARCH_KEY}</kbd>
         </button>
+        {onToggleFocus && (
+          <button
+            type="button"
+            className={focus ? 'focus-trigger active' : 'focus-trigger'}
+            onClick={onToggleFocus}
+            title={focus ? FOCUS.exit : FOCUS.enterHint}
+            aria-label={focus ? FOCUS.exit : FOCUS.enter}
+            aria-pressed={focus}
+          >
+            {focus ? '⤡' : '⤢'}
+          </button>
+        )}
       </div>
     </header>
   );
