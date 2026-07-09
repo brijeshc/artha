@@ -19,8 +19,9 @@ import {
   search,
   vouchedHistory,
 } from './api';
+import { evidenceFor } from './evidence';
 import { suggestPins } from './suggest';
-import { repoStructure, searchSymbols, symbolCatalog } from './symbols';
+import { repoResolver, repoStructure, searchSymbols, symbolCatalog } from './symbols';
 import { addPin, certifyEntry, commitWrite, upsertEntry } from './write';
 
 export interface ServeOptions {
@@ -100,6 +101,14 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: Ctx): Prom
       if (url.pathname === '/api/symbols') {
         const q = url.searchParams.get('q') ?? '';
         sendJson(res, 200, await searchSymbols(ctx.repoRoot, ctx.config, q));
+        return;
+      }
+      // Evidence (D5) is repo-derived, not index-derived - resolve the pin to
+      // its source lines without opening the index, like the symbol catalog.
+      if (url.pathname === '/api/evidence') {
+        const ref = url.searchParams.get('ref') ?? '';
+        const view = ref ? evidenceFor(await repoResolver(ctx.repoRoot), ref) : null;
+        view ? sendJson(res, 200, view) : sendJson(res, 404, { error: `cannot resolve ${ref}` });
         return;
       }
       await handleApi(url, res, ctx);

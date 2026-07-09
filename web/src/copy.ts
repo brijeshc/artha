@@ -172,6 +172,17 @@ export const INFERRED = {
   page: 'inferred',
 } as const;
 
+/** Evidence, revealed (D5) - the code a machine claim was read from, one click
+ * away, so nothing on the page is an unexplained assertion. */
+export const EVIDENCE = {
+  reveal: 'Read from code',
+  revealHint: 'Show the exact source this was read from',
+  hide: 'Hide code',
+  loading: 'reading the code…',
+  gone: 'This code has moved or been renamed since it was read - nothing to show.',
+  more: (n: number): string => `+${n} more line${n === 1 ? '' : 's'}`,
+} as const;
+
 /** Cold start - the honest empty state that funnels into the queue. */
 export const COLD = {
   headline: '0% of active code explained',

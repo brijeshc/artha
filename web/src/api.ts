@@ -321,6 +321,25 @@ export function getSuggest(id: string): Promise<Suggestion[]> {
   return getJson<Suggestion[]>(`api/suggest?id=${encodeURIComponent(id)}`);
 }
 
+/** The source lines a pin (`path#Symbol`) was read from (D5) - revealed on click
+ * under an evidence chip so no machine claim is an unexplained assertion. */
+export interface EvidenceView {
+  ref: string;
+  symbol: string;
+  path: string;
+  startLine: number;
+  endLine: number;
+  lines: string[];
+  /** How many lines of the symbol were omitted by the length cap (0 when none). */
+  truncated: number;
+}
+
+/** Resolve a pin ref to its backing source lines; the server 404s a ref that no
+ * longer resolves (drifted code), which the reveal surfaces honestly. */
+export function getEvidence(ref: string): Promise<EvidenceView> {
+  return getJson<EvidenceView>(`api/evidence?ref=${encodeURIComponent(ref)}`);
+}
+
 export function getSearch(query: string): Promise<SearchHit[]> {
   return getJson<SearchHit[]>(`api/search?q=${encodeURIComponent(query)}`);
 }

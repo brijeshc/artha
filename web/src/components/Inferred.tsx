@@ -8,6 +8,7 @@ import type {
 import { INFERRED } from '../copy';
 import { confidenceLabel, moduleOfPath, shortName } from '../derive';
 import { routeHref } from '../router';
+import { EvidenceReveal } from './Evidence';
 import { SectionHead } from './Status';
 
 /**
@@ -196,23 +197,21 @@ function MemberPreview({ pins }: { pins: PinView[] }): JSX.Element {
 }
 
 /** An evidence pin (moonlight): the code a claim was read from, linking to its
- * module when known. Never "stale" - moonlight regenerates on drift (D12). */
+ * module when known and revealing the exact source on click (D5). Never "stale"
+ * - moonlight regenerates on drift (D12). */
 function EvidenceLine({ pin, modules }: { pin: PinView; modules: string[] }): JSX.Element {
   const module = moduleOfPath(pin.symbol.split('#')[0] ?? '', modules);
   const code = <code>{pin.symbol}</code>;
+  const face = module ? (
+    <a className="pin-link" href={routeHref({ view: 'module', id: module })}>
+      {code}
+    </a>
+  ) : (
+    code
+  );
   return (
     <span className="pin evidence">
-      {module ? (
-        <a className="pin-link" href={routeHref({ view: 'module', id: module })}>
-          {code}
-        </a>
-      ) : (
-        code
-      )}
-      <span className="confidence">
-        <span className="confidence-dot" aria-hidden="true" />
-        read from code
-      </span>
+      <EvidenceReveal refId={pin.symbol}>{face}</EvidenceReveal>
     </span>
   );
 }

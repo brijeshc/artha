@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   Catalog as CatalogData,
   ConceptDetail,
+  EvidenceView,
   FlowDetail,
   InferredFactView,
   MapFeed,
@@ -20,6 +21,7 @@ import { CapCard } from '../../web/src/components/CapCard';
 import { ConceptPage, FlowPage } from '../../web/src/components/CapabilityPages';
 import { CatalogPage } from '../../web/src/components/CatalogPage';
 import { CommandBar } from '../../web/src/components/CommandBar';
+import { EvidenceCode, EvidenceReveal } from '../../web/src/components/Evidence';
 import { InferredPage } from '../../web/src/components/Inferred';
 import { Inspector } from '../../web/src/components/Inspector';
 import { FileCard, ModuleBoard } from '../../web/src/components/ModuleBoard';
@@ -1496,6 +1498,16 @@ describe('inferred layer (21a) - moonlight', () => {
     expect(html).toContain('What the code can’t say'); // the delta band (D6)
   });
 
+  it('every evidence pin carries a reveal-the-code toggle (D5)', () => {
+    const html = markup(<InferredPage detail={inferredConcept} />);
+    // the pin now offers to show its backing source, one interaction away
+    expect(html).toContain('evidence-toggle');
+    expect(html).toContain('Read from code');
+    expect(html).toContain('aria-expanded="false"'); // collapsed until asked
+    // and the code panel is lazy - nothing is fetched/shown in the collapsed state
+    expect(html).not.toContain('evidence-panel');
+  });
+
   it('the module page leads with the moonlight card and lists inferred capabilities', () => {
     const detail: ModuleDetail = {
       module: 'src/orders',
@@ -1676,6 +1688,49 @@ describe('inferred layer (21a) - moonlight', () => {
     expect(html).toContain('Machine-described capabilities');
     expect(html).toContain('Place Order');
     expect(html).not.toContain('No capabilities have been described yet');
+  });
+});
+
+// ── evidence, revealed (23d - D5) ─────────────────────────────────────────────
+
+describe('evidence, revealed (D5)', () => {
+  const evidence: EvidenceView = {
+    ref: 'src/billing/refund.ts#issueRefund',
+    symbol: 'issueRefund',
+    path: 'src/billing/refund.ts',
+    startLine: 12,
+    endLine: 14,
+    lines: ['export function issueRefund(cents: number): number {', '  return cents;', '}'],
+    truncated: 0,
+  };
+
+  it('EvidenceCode shows the file, its real line span, and every source line', () => {
+    const html = markup(<EvidenceCode evidence={evidence} />);
+    expect(html).toContain('src/billing/refund.ts');
+    expect(html).toContain(':12-14'); // the real 1-based span, so a reader can find it
+    // a numbered row per source line (12, 13, 14)
+    expect(html).toContain('>12<');
+    expect(html).toContain('>13<');
+    expect(html).toContain('>14<');
+    expect(html).toContain('export function issueRefund');
+  });
+
+  it('EvidenceCode reports an honest remainder when a long symbol was capped', () => {
+    const capped: EvidenceView = { ...evidence, endLine: 80, truncated: 26 };
+    const html = markup(<EvidenceCode evidence={capped} />);
+    expect(html).toContain('+26 more lines');
+  });
+
+  it('EvidenceReveal is a collapsed toggle - lazy, nothing fetched until asked', () => {
+    const html = markup(
+      <EvidenceReveal refId="src/billing/refund.ts#issueRefund">
+        <code>src/billing/refund.ts#issueRefund</code>
+      </EvidenceReveal>,
+    );
+    expect(html).toContain('src/billing/refund.ts#issueRefund'); // the chip face
+    expect(html).toContain('Read from code'); // the reveal action
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('evidence-panel'); // the panel is not rendered until open
   });
 });
 

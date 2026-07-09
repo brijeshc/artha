@@ -1,6 +1,6 @@
 # Task 23 - Atlas elevation: from readable to knowledge discovery
 
-**Status: 23a/23a′/23a″ shipped 2026-07-07; 23b (inner boards) shipped 2026-07-08; 23c (the observatory) shipped 2026-07-09; 23d-23e specced below, sequenced by impact per effort.**
+**Status: 23a/23a′/23a″ shipped 2026-07-07; 23b (inner boards) shipped 2026-07-08; 23c (the observatory) shipped 2026-07-09; 23d-1 (evidence revealed, D5) shipped 2026-07-09; the rest of 23d + 23e specced below, sequenced by impact per effort.**
 
 **Depends on:** v0.2 T16d (atlas shell), T17 (write-back), T17b (reference graph); 21a (inferred layer feeds the two-light grammar).
 **Design refs:** Dashboard.md §11 (the shell this elevates) and §12 (the lens grammar + honest readouts, recorded at 23a ship time); the 21c UX contract D1-D12 (21-inferred-layer.md), which 23d partially delivers.
@@ -93,10 +93,11 @@ The signal behind the map, drawn as three hand-rolled instrument charts on a fou
 
 ## 23d - reading is reviewing (delivers part of 21c)
 
-This slice *is* the D5/D6/D9/D10 portion of the 21c contract - build it against that spec, do not fork it:
+This slice *is* the D5/D6/D9/D10 portion of the 21c contract - build it against that spec, do not fork it.
+Shipped in impact-ordered sub-slices:
 
-- Evidence chips inline on every inferred sentence (D5): hover/click reveals the pinned code lines.
-- The review pass (D9): `R` on any module/capability page walks claim by claim - claim left, pinned code right; `v` vouch, `e` edit, `x` flag, `j`/`k` move; one keystroke per decision, exit anywhere.
+- [x] **23d-1 - evidence, revealed (D5, shipped 2026-07-09).** Every pin (moonlight evidence + vouched `path#Symbol`) now reveals the *exact source it points at* one click away: a "Read from code" toggle drops a line-numbered code panel, so no claim on the page is an unexplained assertion. Backed by a new **`GET /api/evidence?ref=path%23Symbol`** → `EvidenceView` (`evidenceFor` in `src/serve/evidence.ts`, pure over a cached tree-sitter resolver `repoResolver`), read off the repo like the symbol catalog - offline, off the index, hit on click. A long symbol is capped with an honest "+N more lines"; a ref that no longer resolves (drifted code) 404s and the reveal says so. `EvidenceReveal` + `EvidenceCode` (`web/src/components/Evidence.tsx`), the reveal lazy (nothing fetched until asked). Wired into the inferred evidence pins and the capability pin lines.
+- The review pass (D9): `R` on any module/capability page walks claim by claim - claim left, pinned code right; `v` vouch, `e` edit, `x` flag, `j`/`k` move; one keystroke per decision, exit anywhere. (Reuses `/api/evidence`.)
 - The delta band (D6): "What the code can't say" as typographically distinct human ink on every capability/module page.
 - The queue re-ranked by value (D10) with a worded "why now" per row.
 
@@ -118,6 +119,7 @@ This slice *is* the D5/D6/D9/D10 portion of the 21c contract - build it against 
 
 - Atlas route params: `lens=terrain`, `f=<flowId>`; `#/` is the board. Module route gains `?file=<path>` (23b) - the selected inner-board file, deep-linkable. New top-level route `#/observatory` (23c).
 - **`GET /api/vouched-history`** → `VouchedPoint[]` (`{ at, id, kind, name }`, certified-and-dated only, oldest first) - the burn-up's raw series, read from each entry's `certified_at`, offline.
+- **`GET /api/evidence?ref=<path%23Symbol>`** → `EvidenceView` (`{ ref, symbol, path, startLine, endLine, lines, truncated }`) (23d-1) - the source lines a pin was read from (D5), resolved off the repo via the cached `repoResolver`, offline and off the index; 404 when the ref no longer resolves. `EvidenceReveal`/`EvidenceCode` render it lazily under any pin.
 - `derive.flyingBlind(feed)`, `derive.areaShares(feed)`, `derive.vouchedBurnup(points)`, and `derive.standingOf(module)` - pure observatory derivations, SSR-tested; the charts (`components/Observatory.tsx`) are hand-rolled SVG like `treemap.ts`.
 - `web/src/rough.ts` (seeded chalk strokes) and `web/src/board.ts` - pure, SSR-tested; any future hand-drawn surface (23e chalk state machines) draws with them. 23b generalised the layout into **`layeredLayout(ids, links, metrics, sortKey?)`** (both `boardLayout` and `fileBoardLayout` are thin adapters over it) and extracted the drag/persist behaviour into the shared **`useBoardDrag(storeKey)`** hook.
 - **`GET /api/module-board/:id`** → `{ module, files: [{ path, name, facts }], edges: [{ from, to }] }` (`moduleBoard`, pure over the index + `RepoStructure.files`/`fileGraph`); the inner board's data, offline.

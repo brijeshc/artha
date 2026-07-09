@@ -152,6 +152,28 @@ describe('artha serve', () => {
     expect((await fetch(`${url}/api/concept/concept.nope`)).status).toBe(404);
     expect((await fetch(`${url}/api/map`, { method: 'POST' })).status).toBe(405);
   });
+
+  it('reveals a pin’s source lines at /api/evidence, 404s an unresolvable ref (D5)', async () => {
+    writeFileSync(
+      join(repo, 'src', 'billing', 'refund.ts'),
+      'export function issueRefund(cents: number): number {\n  return cents;\n}\n',
+    );
+    const url = await boot();
+
+    const ref = encodeURIComponent('src/billing/refund.ts#issueRefund');
+    const res = await fetch(`${url}/api/evidence?ref=${ref}`);
+    expect(res.status).toBe(200);
+    const view = (await res.json()) as { symbol: string; lines: string[]; startLine: number };
+    expect(view.symbol).toBe('issueRefund');
+    expect(view.startLine).toBe(1);
+    expect(view.lines[0]).toContain('export function issueRefund');
+
+    // a ref that does not resolve → 404 (the reveal shows an honest "code moved" note)
+    const gone = encodeURIComponent('src/billing/refund.ts#ghost');
+    expect((await fetch(`${url}/api/evidence?ref=${gone}`)).status).toBe(404);
+    // a missing ref param → 404, never a crash
+    expect((await fetch(`${url}/api/evidence`)).status).toBe(404);
+  });
 });
 
 describe('artha serve — curation writes (T17)', () => {

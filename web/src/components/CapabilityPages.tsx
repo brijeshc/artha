@@ -3,6 +3,7 @@ import { CURATE, DETAIL, ROUTE } from '../copy';
 import { moduleOfPath, shortName } from '../derive';
 import { routeHref } from '../router';
 import { CertifyButton, type Curation, EditFields, LinkCode, SuggestedCode } from './Curate';
+import { EvidenceReveal } from './Evidence';
 import { StateMachine } from './StateMachine';
 import { KindTag, SectionHead, StatusBadge } from './Status';
 
@@ -250,23 +251,25 @@ function PinsSection({
 }
 
 /** A pinned `path#Symbol`. When the path falls inside a known module, the pin
- * links to that module's page - product meaning to engineer lens in one step. */
+ * links to that module's page - product meaning to engineer lens in one step -
+ * and reveals the exact source it points at on click (D5). */
 function PinLine({ pin, modules }: { pin: PinView; modules: string[] }): JSX.Element {
   const module = moduleOfPath(pin.symbol.split('#')[0] ?? '', modules);
   const code = <code>{pin.symbol}</code>;
+  const face = module ? (
+    <a
+      className="pin-link"
+      href={routeHref({ view: 'module', id: module })}
+      title={CURATE.openModuleHint}
+    >
+      {code}
+    </a>
+  ) : (
+    code
+  );
   return (
     <span className={pin.stale ? 'pin stale' : 'pin'}>
-      {module ? (
-        <a
-          className="pin-link"
-          href={routeHref({ view: 'module', id: module })}
-          title={CURATE.openModuleHint}
-        >
-          {code}
-        </a>
-      ) : (
-        code
-      )}
+      <EvidenceReveal refId={pin.symbol}>{face}</EvidenceReveal>
       <span className={`status status-${pin.stale ? 'stale' : 'certified'}`}>
         <span className="status-dot" aria-hidden="true" />
         {pin.stale ? 'stale' : 'linked'}

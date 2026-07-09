@@ -1,5 +1,6 @@
 import { type FileGraph, fileImportGraph, listSourceFiles } from '../analytics/references';
 import type { ArthaConfig } from '../config/config';
+import type { SymbolResolver } from '../resolver/SymbolResolver';
 import { createTreeSitterResolver } from '../resolver/treeSitterResolver';
 
 /**
@@ -50,6 +51,24 @@ export function repoStructure(repoRoot: string, config: ArthaConfig): Promise<Re
 /** The link picker's symbol catalog (cached via {@link repoStructure}). */
 export async function symbolCatalog(repoRoot: string, config: ArthaConfig): Promise<SymbolHit[]> {
   return (await repoStructure(repoRoot, config)).catalog;
+}
+
+const resolvers = new Map<string, Promise<SymbolResolver>>();
+
+/** The repo's tree-sitter resolver, built once per repo and cached - so the
+ * evidence reveal (D5) can resolve a pin to its source without a fresh parser
+ * load per click. Concurrent callers share the one in-flight build; a failed
+ * build is dropped so a later request retries. */
+export function repoResolver(repoRoot: string): Promise<SymbolResolver> {
+  let pending = resolvers.get(repoRoot);
+  if (!pending) {
+    pending = createTreeSitterResolver(repoRoot).catch((error) => {
+      resolvers.delete(repoRoot);
+      throw error;
+    });
+    resolvers.set(repoRoot, pending);
+  }
+  return pending;
 }
 
 /** Search the (cached) catalog for a query. Empty query → nothing (the picker
