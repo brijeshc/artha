@@ -71,6 +71,14 @@ describe('validateEntry', () => {
     }
   });
 
+  it('accepts derived_from provenance on a materialized inferred fact (23d-2)', () => {
+    const materialized: Concept = {
+      ...validConcept,
+      derived_from: 'inferred@abc123',
+    };
+    expect(validateEntry(materialized).ok).toBe(true);
+  });
+
   it('accepts a concept with neither states nor transitions (summary-first capture)', () => {
     const { states, transitions, ...bare } = validConcept;
     void states;

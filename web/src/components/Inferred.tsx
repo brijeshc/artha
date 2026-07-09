@@ -8,6 +8,7 @@ import type {
 import { INFERRED } from '../copy';
 import { confidenceLabel, moduleOfPath, shortName } from '../derive';
 import { routeHref } from '../router';
+import { CertifyButton, type Curation, EditFields } from './Curate';
 import { EvidenceReveal } from './Evidence';
 import { SectionHead } from './Status';
 
@@ -16,8 +17,10 @@ import { SectionHead } from './Status';
  * tell "described" from "vouched" without a legend (D2), every claim carries its
  * evidence (D5), and the delta the code can't hold is invited, not assumed (D6).
  * One grammar spans all four inferred kinds - module cards, state machines, flow
- * skeletons, and naming conventions. Read-only for now: vouch-by-reading (the
- * one-keystroke certify) lands with the dashboard reframe; nothing auto-certifies.
+ * skeletons, and naming conventions. Reading is reviewing (D9, 23d-2): a concept
+ * or flow can be vouched or corrected right here - the machine reading becomes a
+ * certified human draft (materialize-on-touch). Cards + conventions stay read-only
+ * (no human kind / a rule the code can't state). Nothing ever auto-certifies.
  */
 
 /** Anything the moonlight card can render: a full inferred view or a catalog summary. */
@@ -86,7 +89,14 @@ function CardPreview({ item }: { item: CardItem }): JSX.Element {
 /** The full page for one inferred fact - prose first, then what was read from
  * code (states, a fan-out, or matched symbols), the evidence, and the delta band
  * inviting the human part. */
-export function InferredPage({ detail }: { detail: InferredFactView }): JSX.Element {
+export function InferredPage({
+  detail,
+  curation,
+}: {
+  detail: InferredFactView;
+  /** Wired to the vouch/correct affordance - a concept/flow can be certified here. */
+  curation?: Curation;
+}): JSX.Element {
   const modules = detail.module ? [detail.module] : [];
   const steps = detail.steps ?? [];
   const isConvention = detail.kind === 'convention';
@@ -115,6 +125,7 @@ export function InferredPage({ detail }: { detail: InferredFactView }): JSX.Elem
             </>
           )}
         </p>
+        {curation && <VouchBar detail={detail} curation={curation} />}
       </header>
 
       {detail.states.length > 0 && (
@@ -165,6 +176,44 @@ export function InferredPage({ detail }: { detail: InferredFactView }): JSX.Elem
         <SectionHead n={next()} title={INFERRED.deltaHead} />
         <p className="delta-body">{INFERRED.delta[detail.kind] ?? INFERRED.deltaFallback}</p>
       </section>
+    </div>
+  );
+}
+
+/** Vouch-by-reading (D9): certify or correct an inferred concept/flow in place -
+ * the machine reading materializes into a real entry. Cards + conventions can't be
+ * vouched yet (no human kind / a rule the code can't state), so they carry an
+ * honest note instead of a dead button. */
+function VouchBar({
+  detail,
+  curation,
+}: {
+  detail: InferredFactView;
+  curation: Curation;
+}): JSX.Element {
+  if (detail.kind !== 'concept' && detail.kind !== 'flow') {
+    return (
+      <p className="vouch-note moon-prose">
+        {INFERRED.vouchNotYet[detail.kind] ?? INFERRED.vouchNotYet.module}
+      </p>
+    );
+  }
+  return (
+    <div className="vouch-bar">
+      <p className="vouch-gloss">
+        <span className="vouch-head">{INFERRED.vouchHead}</span> {INFERRED.vouchGloss[detail.kind]}
+      </p>
+      <div className="curate-bar">
+        {/* No status on an inferred fact - 'proposed' just keeps the button shown;
+            certifying materializes it into a real, certified entry. */}
+        <CertifyButton id={detail.id} status="proposed" curation={curation} />
+        <EditFields
+          id={detail.id}
+          name={detail.name}
+          summary={detail.summary}
+          curation={curation}
+        />
+      </div>
     </div>
   );
 }

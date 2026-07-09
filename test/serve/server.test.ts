@@ -365,4 +365,74 @@ describe('artha serve — curation writes (T17)', () => {
     const pins = (detail.pins as Array<{ symbol: string }>).map((p) => p.symbol);
     expect(pins).toContain('src/billing/refund.ts#issueRefund');
   });
+
+  // ── vouch-by-reading: materialize an inferred fact on touch (23d-2, D9/OQ-A) ──
+
+  const INFERRED_CONCEPT = 'inferred:concept:src/billing/order.ts#OrderState';
+
+  /** A repo whose build produces one inferred concept (a string-literal union). */
+  async function withInferredConcept(): Promise<string> {
+    writeFileSync(
+      join(repo, 'src', 'billing', 'order.ts'),
+      "export type OrderState = 'cart' | 'paid' | 'fulfilled';\n",
+    );
+    await buildIndex(repo, defaultConfig());
+    return boot();
+  }
+
+  it('vouches an inferred concept via POST /api/certify: materializes a certified entry', async () => {
+    const url = await withInferredConcept();
+
+    // it starts life in the moonlight catalog, not as a human fact
+    const before = (await getJson(url, '/api/catalog')).inferredConcepts as Array<{ id: string }>;
+    expect(before.some((c) => c.id === INFERRED_CONCEPT)).toBe(true);
+
+    const res = await post(url, '/api/certify', { id: INFERRED_CONCEPT });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      id: 'concept.order_state',
+      status: 'certified',
+      created: true,
+    });
+
+    // the materialized concept is real, certified, and carries its states + provenance
+    const detail = await getJson(url, '/api/concept/concept.order_state');
+    expect(detail.status).toBe('certified');
+    expect((detail.states as Array<{ name: string }>).map((s) => s.name)).toEqual([
+      'cart',
+      'paid',
+      'fulfilled',
+    ]);
+    const yaml = readFileSync(join(repo, '.artha', 'concepts', 'concept.order_state.yaml'), 'utf8');
+    expect(yaml).toContain('derived_from: inferred@');
+
+    // materialize-on-touch: the candidate is now suppressed - no duplicate moonlight
+    const after = (await getJson(url, '/api/catalog')).inferredConcepts as Array<{ id: string }>;
+    expect(after.some((c) => c.id === INFERRED_CONCEPT)).toBe(false);
+    const gone = await fetch(`${url}/api/inferred/${encodeURIComponent(INFERRED_CONCEPT)}`);
+    expect(gone.status).toBe(404);
+  });
+
+  it('correcting an inferred concept via POST /api/entry materializes a proposed draft', async () => {
+    const url = await withInferredConcept();
+
+    const res = await post(url, '/api/entry', {
+      id: INFERRED_CONCEPT,
+      name: 'Order lifecycle',
+      summary: 'The lifecycle of a customer order.',
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; status: string };
+    expect(body.status).toBe('proposed');
+
+    const detail = await getJson(url, `/api/concept/${body.id}`);
+    expect(detail.name).toBe('Order lifecycle');
+    expect(detail.status).toBe('proposed');
+  });
+
+  it('refuses to vouch a module card - it has no human kind to become (400)', async () => {
+    const url = await withInferredConcept();
+    const res = await post(url, '/api/certify', { id: 'inferred:module:src/billing' });
+    expect(res.status).toBe(400);
+  });
 });

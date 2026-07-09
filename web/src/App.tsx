@@ -282,7 +282,11 @@ export function App(): JSX.Element {
   const curation = useMemo<Curation>(
     () => ({
       certify: async (id) => {
-        await certify(id);
+        const res = await certify(id);
+        // Vouching an inferred (moonlight) fact materializes it into a real
+        // entry (23d-2); the inferred page is now suppressed, so land on the
+        // freshly-vouched human page - which glows phosphor.
+        landAfterMaterialize(id, res.id);
         await refresh();
       },
       link: async (id, symbol) => {
@@ -290,7 +294,8 @@ export function App(): JSX.Element {
         await refresh();
       },
       edit: async (patch) => {
-        await saveEntry(patch);
+        const res = await saveEntry(patch);
+        landAfterMaterialize(patch.id, res.id);
         await refresh();
       },
     }),
@@ -434,7 +439,7 @@ export function App(): JSX.Element {
       case 'inferred':
         if (detailError) return <NotFound label={route.id} note={detailError} />;
         if (!inferredDetail) return <Loading />;
-        return <InferredPage detail={inferredDetail} />;
+        return <InferredPage detail={inferredDetail} curation={curation} />;
     }
   })();
 
@@ -508,6 +513,16 @@ function crumbs(route: Route, names: Map<string, string>, inferredName?: string 
 
 function darkCount(map: MapFeed): number {
   return map.modules.filter((m) => m.dark && m.churn > 0).length;
+}
+
+/** After a write, if the source id was an inferred (moonlight) fact, the write
+ * materialized it into a new human entry (`newId`, e.g. `concept.…`); navigate to
+ * that page since the inferred route no longer resolves. A plain human edit
+ * (`sourceId` unchanged) stays put. */
+function landAfterMaterialize(sourceId: string, newId: string): void {
+  if (!sourceId.startsWith('inferred:')) return;
+  const view = newId.split('.')[0];
+  if (view === 'concept' || view === 'flow') navigate({ view, id: newId });
 }
 
 function Loading(): JSX.Element {

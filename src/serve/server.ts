@@ -4,7 +4,7 @@ import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ArthaConfig } from '../config/config';
 import { type Embedder, embedQueryForIndex, getEmbedder } from '../embed/embedder';
-import { openArthaIndex } from '../mcp/query';
+import { type ArthaIndex, openArthaIndex } from '../mcp/query';
 import { createTreeSitterResolver } from '../resolver/treeSitterResolver';
 import {
   catalog,
@@ -20,6 +20,7 @@ import {
   vouchedHistory,
 } from './api';
 import { evidenceFor } from './evidence';
+import { materializeInferred } from './materialize';
 import { suggestPins } from './suggest';
 import { repoResolver, repoStructure, searchSymbols, symbolCatalog } from './symbols';
 import { addPin, certifyEntry, commitWrite, upsertEntry } from './write';
@@ -210,6 +211,11 @@ async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void>
  * map redraws); a write that would break the build is rolled back. Writes are
  * serialized (`ctx.writeLock`) so concurrent tabs can't interleave a rebuild.
  * Read endpoints stay GET-only, so `POST /api/map` is a 405.
+ *
+ * Certify/edit accept an **inferred id** too (`inferred:…`): the machine layer is
+ * a regenerable cache with no YAML, so vouching/editing one first materializes it
+ * into a real entry (23d-2, OQ-A) and then follows the same lifecycle - the write
+ * reports the new human id.
  */
 async function handleWrite(
   url: URL,
@@ -250,14 +256,31 @@ async function handleWrite(
 
   const result = await ctx.writeLock(() =>
     commitWrite(deps, async () => {
+      const id = asString(body.id);
       if (path === '/api/certify') {
-        return certifyEntry(ctx.repoRoot, asString(body.id));
+        // Vouch-by-reading: an inferred id has no YAML yet, so materialize it
+        // into a certified entry (reading the machine layer from the index).
+        if (id.startsWith('inferred:')) {
+          return withIndex(ctx.dbPath, (index) =>
+            materializeInferred(ctx.repoRoot, index, id, { certify: true }),
+          );
+        }
+        return certifyEntry(ctx.repoRoot, id);
       }
       if (path === '/api/pin') {
         // Resolve against the live repo so an unresolvable pin is refused before
         // it ever reaches disk (the on-disk YAML stays buildable).
         const resolver = await createTreeSitterResolver(ctx.repoRoot);
-        return addPin(ctx.repoRoot, asString(body.id), asString(body.symbol), resolver);
+        return addPin(ctx.repoRoot, id, asString(body.symbol), resolver);
+      }
+      // Editing an inferred id materializes it as a proposed draft with the
+      // correction applied (D8: correct the machine draft, don't compose blank).
+      if (id.startsWith('inferred:')) {
+        return withIndex(ctx.dbPath, (index) =>
+          materializeInferred(ctx.repoRoot, index, id, {
+            patch: { name: asString(body.name), summary: asString(body.summary) },
+          }),
+        );
       }
       return upsertEntry(ctx.repoRoot, body);
     }),
@@ -323,6 +346,17 @@ function createWriteLock(): <T>(fn: () => Promise<T>) => Promise<T> {
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+/** Open the index for one read (materializing a vouched inferred fact needs the
+ * machine layer), always closing it - the rebuild inside `commitWrite` reopens it. */
+function withIndex<T>(dbPath: string, fn: (index: ArthaIndex) => T): T {
+  const index = openArthaIndex(dbPath);
+  try {
+    return fn(index);
+  } finally {
+    index.close();
+  }
 }
 
 /** Serve the built frontend from `webDir`; fall back to a placeholder page so

@@ -1508,6 +1508,38 @@ describe('inferred layer (21a) - moonlight', () => {
     expect(html).not.toContain('evidence-panel');
   });
 
+  it('reading is reviewing (D9): a concept inferred page offers vouch + correct', () => {
+    const html = markup(<InferredPage detail={inferredConcept} curation={noopCuration} />);
+    expect(html).toContain('Reading is reviewing'); // the vouch bar head
+    expect(html).toContain('btn-certify'); // the one-keystroke vouch
+    expect(html).toContain('Certify');
+    expect(html).toContain('Edit'); // correct-in-place is the deeper fix
+  });
+
+  it('no curation → the inferred page stays read-only (no vouch bar)', () => {
+    const html = markup(<InferredPage detail={inferredConcept} />);
+    expect(html).not.toContain('Reading is reviewing');
+    expect(html).not.toContain('btn-certify');
+  });
+
+  it('a module card cannot be vouched - an honest note, never a dead button', () => {
+    const card: InferredFactView = {
+      id: 'inferred:module:src/orders',
+      kind: 'module',
+      module: 'src/orders',
+      name: 'Orders',
+      summary: 'Entry area that draws on Billing.',
+      confidence: 'read-from-code',
+      states: [],
+      steps: [],
+      pins: [],
+    };
+    const html = markup(<InferredPage detail={card} curation={noopCuration} />);
+    expect(html).toContain('vouch-note');
+    expect(html).toContain('not a claim to certify'); // honest reason, not a dead button
+    expect(html).not.toContain('btn-certify');
+  });
+
   it('the module page leads with the moonlight card and lists inferred capabilities', () => {
     const detail: ModuleDetail = {
       module: 'src/orders',

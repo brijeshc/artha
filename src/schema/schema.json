@@ -92,6 +92,7 @@
         "certified_at": { "type": "string", "format": "date" },
         "pins": { "type": "array", "items": { "$ref": "#/$defs/pin" } },
         "mined_from": { "$ref": "#/$defs/provenance" },
+        "derived_from": { "type": "string" },
         "related": { "type": "array", "items": { "$ref": "#/$defs/id" } },
         "tags": { "type": "array", "items": { "type": "string" } }
       },

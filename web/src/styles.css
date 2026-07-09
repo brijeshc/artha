@@ -2828,6 +2828,40 @@ a.fact-line:hover {
   font-size: 11px;
 }
 
+/* vouch-by-reading (D9): reading an inferred concept/flow *is* reviewing it - the
+ * vouch/correct actions sit right under the head, framed by a quiet moonlight
+ * gloss so the "read it, then vouch it" loop reads in one glance. */
+.vouch-bar {
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line-2);
+  border-left: 2px solid var(--moon-2);
+  border-radius: 3px;
+  background: var(--moon-dim);
+}
+.vouch-gloss {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  max-width: 68ch;
+}
+.vouch-head {
+  color: var(--moon);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.vouch-bar .curate-bar {
+  margin-top: 12px;
+}
+.vouch-note {
+  margin: 18px 0 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--line-2);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  max-width: 64ch;
+}
+
 .pin.evidence code {
   color: var(--ink-2);
 }

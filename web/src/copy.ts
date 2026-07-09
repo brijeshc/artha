@@ -170,6 +170,22 @@ export const INFERRED = {
   } as Record<string, string>,
   notVouched: 'Machine-described · not yet vouched by your team',
   page: 'inferred',
+  /** Vouch-by-reading (D9, 23d-2): the reading surface *is* the review surface.
+   * Only concepts and flows can be vouched today - a card has no human kind and a
+   * convention needs a rule the code can't state. */
+  vouchHead: 'Reading is reviewing',
+  vouchGloss: {
+    concept:
+      'Read the states against the code above. If this is right, vouch it - it becomes a certified concept your team and agents can trust. Correct it first if the name or summary is off.',
+    flow: 'Read the entry point against the code above. If this is right, vouch it - it becomes a certified flow your team and agents can trust. Correct it first if the name or summary is off.',
+  } as Record<string, string>,
+  /** Why cards + conventions carry no vouch action yet (honest, not a dead end). */
+  vouchNotYet: {
+    module:
+      'A module card is a description, not a claim to certify - vouch the concepts and flows inside it instead.',
+    convention:
+      'This convention needs a rule the code can’t state before it can be vouched - that part is still yours to write.',
+  } as Record<string, string>,
 } as const;
 
 /** Evidence, revealed (D5) - the code a machine claim was read from, one click

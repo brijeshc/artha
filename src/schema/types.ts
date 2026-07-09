@@ -43,6 +43,14 @@ export interface BaseEntry {
   related?: string[];
   tags?: string[];
   /**
+   * Provenance for an entry that began as a machine inference (21a) and was
+   * materialized into `.artha/` YAML when a human vouched/edited it (OQ-A).
+   * `inferred@<hash>` records the content hash of the code span the machine read
+   * its description from, so a later reader can tell whether the code has drifted
+   * since it was vouched. Absent on hand-written and mined entries.
+   */
+  derived_from?: string;
+  /**
    * Absolute path of the `.artha/*.yaml` this entry was loaded from. Populated
    * by the loader at read time; never part of the schema and never written
    * back to disk by the dumper.
