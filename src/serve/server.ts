@@ -17,6 +17,7 @@ import {
   moduleDetail,
   refsFeed,
   search,
+  vouchedHistory,
 } from './api';
 import { suggestPins } from './suggest';
 import { repoStructure, searchSymbols, symbolCatalog } from './symbols';
@@ -136,6 +137,10 @@ async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void>
     }
     if (path === '/api/refs') {
       sendJson(res, 200, refsFeed(index));
+      return;
+    }
+    if (path === '/api/vouched-history') {
+      sendJson(res, 200, vouchedHistory(index));
       return;
     }
     const boardModule = matchModuleBoard(path);

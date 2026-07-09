@@ -39,9 +39,44 @@ export const NAV = {
   board: 'Board',
   terrain: 'Terrain',
   capabilities: 'Capabilities',
+  observatory: 'Observatory',
   queue: 'Dark zones',
   areas: 'Product areas',
   offline: 'Reads .artha/index.db · fully offline',
+} as const;
+
+/** The observatory (23c) - the charts that answer the leadership questions. The
+ * board stays clean; density and analytics live here. Follows the dataviz
+ * method: one axis, direct labels, the status palette (no new hues). */
+export const OBSERVATORY = {
+  title: 'Observatory',
+  gloss:
+    'The signal behind the map, as charts: where the team is flying blind, how vouched meaning has grown, and how each product area stands. Read off .artha/ - fully offline.',
+  // The three standings the charts colour by - the legend that keeps colour from
+  // being the only encoding (position and labels carry it too).
+  legend: {
+    vouched: 'vouched',
+    described: 'described',
+    unexplained: 'unexplained',
+  } as Record<'vouched' | 'described' | 'unexplained', string>,
+  blindTitle: 'Where we’re flying blind',
+  blindGloss:
+    'Each dot is a module: how much it changed (→) against how much of it a human has vouched for (↑). Busy code low on the wall is where a newcomer - or an agent - is flying blind.',
+  blindX: 'commits, last 90 days →',
+  blindY: 'vouched depth ↑',
+  blindQuadrant: 'flying blind',
+  blindEmpty: 'No modules to plot yet.',
+  burnTitle: 'Vouched over time',
+  burnGloss:
+    'Certified facts accumulated by the date each was vouched - reconstructed from the entries’ own history, no new storage.',
+  burnY: 'facts vouched',
+  burnLatest: 'vouched',
+  burnEmpty:
+    'Not enough certification history to draw a curve yet - vouch a few facts and the line appears.',
+  areasTitle: 'How each area stands',
+  areasGloss:
+    'One bar per product area, busiest first: the phosphor share is vouched, the moonlight share is described by the machine, any grey is still dark.',
+  areasEmpty: 'No product areas to chart yet.',
 } as const;
 
 /** The board - the blackboard flowchart, the default canvas since 23a′. */

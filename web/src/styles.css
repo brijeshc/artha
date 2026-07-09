@@ -2884,3 +2884,168 @@ a.fact-line:hover {
   color: var(--moon-2);
   overflow-wrap: anywhere;
 }
+
+/* ── The Observatory (23c): charts that answer the leadership questions ───────
+   The board stays a clean blackboard; analytics live here as instrument charts.
+   Recessive axes, thin marks, the status palette as the chart palette (no new
+   hues), and colour reinforced by position + a shared legend, never alone. */
+.observatory {
+  max-width: 70rem;
+}
+.obs-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 16px 0 0;
+  padding: 0;
+}
+.obs-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.obs-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  display: inline-block;
+}
+/* the two-light grammar as chart fills - shared by swatch, dot, and bar segment */
+.obs-swatch.standing-vouched,
+.obs-dot.standing-vouched,
+.obs-seg.standing-vouched {
+  fill: var(--phosphor);
+  background: var(--phosphor);
+}
+.obs-swatch.standing-described,
+.obs-dot.standing-described,
+.obs-seg.standing-described {
+  fill: var(--moon);
+  background: var(--moon);
+}
+.obs-swatch.standing-unexplained,
+.obs-dot.standing-unexplained,
+.obs-seg.standing-unexplained {
+  fill: var(--ink-3);
+  background: var(--ink-3);
+}
+
+.obs-figure {
+  margin: 34px 0 0;
+  padding: 20px 22px 22px;
+  background: var(--night-1);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.obs-figure figcaption {
+  margin-bottom: 14px;
+}
+.obs-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.obs-gloss {
+  font-size: 13px;
+  color: var(--ink-3);
+  max-width: 48rem;
+  margin: 5px 0 0;
+}
+.obs-empty {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin: 6px 0 2px;
+}
+
+.obs-chart {
+  display: block;
+  overflow: visible;
+}
+/* recessive grid + axes: present, quiet, never competing with the data */
+.obs-grid line {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+.obs-axis {
+  stroke: var(--line-2);
+  stroke-width: 1;
+}
+.obs-tick {
+  fill: var(--ink-3);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.obs-tick.end {
+  text-anchor: end;
+}
+.obs-axis-label {
+  fill: var(--ink-3);
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+}
+.obs-axis-label.x {
+  text-anchor: end;
+}
+
+/* the flying-blind quadrant: a faint concern wash + its quiet corner label */
+.obs-quadrant {
+  fill: rgba(232, 122, 93, 0.06);
+}
+.obs-quadrant-label {
+  fill: var(--ember);
+  opacity: 0.55;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-anchor: end;
+}
+.obs-dot {
+  stroke: var(--night-1);
+  stroke-width: 2;
+}
+.obs-callout {
+  fill: var(--ink-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.obs-callout.strong {
+  fill: var(--phosphor);
+  font-weight: 600;
+}
+
+/* the vouched burn-up: one phosphor series, faint fill, dotted nodes */
+.obs-area {
+  fill: var(--phosphor-dim);
+  stroke: none;
+}
+.obs-line {
+  fill: none;
+  stroke: var(--phosphor);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.obs-node {
+  fill: var(--phosphor);
+  stroke: var(--night-1);
+  stroke-width: 2;
+}
+
+/* per-area two-light bars */
+.obs-row-label {
+  fill: var(--ink-2);
+  font-size: 12px;
+}
+.obs-row-pct {
+  fill: var(--ink-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.obs-seg {
+  stroke: none;
+}

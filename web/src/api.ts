@@ -245,6 +245,16 @@ export interface Suggestion {
   score: number;
 }
 
+/** One certification event (23c) - a fact that reached `certified`, dated to
+ * when it was vouched. The observatory accumulates these into the burn-up. */
+export interface VouchedPoint {
+  /** `certified_at` - a `YYYY-MM-DD` date. */
+  at: string;
+  id: string;
+  kind: string;
+  name: string | null;
+}
+
 /** Ranked dark-zone (the ask-queue, T13). `score` lower = darker. */
 export interface RankedModule {
   module: string;
@@ -299,6 +309,11 @@ export function getInferred(id: string): Promise<InferredFactView> {
 /** The whole module reference graph (T17b) - the atlas outlines a tile's neighbours from it. */
 export function getRefs(): Promise<RefEdge[]> {
   return getJson<RefEdge[]>('api/refs');
+}
+
+/** Every certified fact as a dated point (23c) - the vouched burn-up's raw series. */
+export function getVouchedHistory(): Promise<VouchedPoint[]> {
+  return getJson<VouchedPoint[]>('api/vouched-history');
 }
 
 /** Ranked, explainable pin suggestions for an entry (T17b); confirm one via linkPin. */

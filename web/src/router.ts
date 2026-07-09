@@ -6,6 +6,7 @@ export type Route =
   // '' (the default canvas) renders the Board; `lens=terrain` shows the treemap.
   | { view: 'atlas'; area?: string; module?: string; flow?: string; lens?: 'terrain' }
   | { view: 'capabilities' }
+  | { view: 'observatory' }
   | { view: 'queue' }
   // `file` selects a box on the module's inner board (23b) - deep-linkable, like
   // the atlas selection, so back always retraces which file you were reading.
@@ -37,6 +38,7 @@ export function parseRoute(hash: string): Route {
     };
   }
   if (path === 'capabilities') return { view: 'capabilities' };
+  if (path === 'observatory') return { view: 'observatory' };
   if (path === 'queue') return { view: 'queue' };
 
   const [head, ...rest] = path.split('/');
@@ -67,6 +69,8 @@ export function routeHref(route: Route): string {
     }
     case 'capabilities':
       return '#/capabilities';
+    case 'observatory':
+      return '#/observatory';
     case 'queue':
       return '#/queue';
     case 'module': {

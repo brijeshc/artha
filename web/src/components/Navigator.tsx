@@ -74,6 +74,12 @@ export function Navigator({ route, feed, catalog, stats, zoneCount }: NavigatorP
           glyph="▤"
         />
         <ViewLink
+          href="#/observatory"
+          label={NAV.observatory}
+          active={route.view === 'observatory'}
+          glyph="◔"
+        />
+        <ViewLink
           href="#/queue"
           label={NAV.queue}
           active={route.view === 'queue'}

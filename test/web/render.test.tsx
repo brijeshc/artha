@@ -11,6 +11,7 @@ import type {
   RankedModule,
   RefEdge,
   Suggestion,
+  VouchedPoint,
 } from '../../web/src/api';
 import { GAP_Y, boardLayout, fileBoardLayout } from '../../web/src/board';
 import { Atlas } from '../../web/src/components/Atlas';
@@ -24,9 +25,11 @@ import { Inspector } from '../../web/src/components/Inspector';
 import { FileCard, ModuleBoard } from '../../web/src/components/ModuleBoard';
 import { ModulePage } from '../../web/src/components/ModulePage';
 import { Navigator } from '../../web/src/components/Navigator';
+import { Observatory } from '../../web/src/components/Observatory';
 import { QueuePage } from '../../web/src/components/QueuePage';
 import { TopBar } from '../../web/src/components/TopBar';
 import {
+  areaShares,
   areaStats,
   atlasLayout,
   capabilitiesByArea,
@@ -34,9 +37,11 @@ import {
   capabilityEntries,
   coverageBucket,
   flowTrace,
+  flyingBlind,
   kpis,
   moduleOfPath,
   shortName,
+  vouchedBurnup,
 } from '../../web/src/derive';
 import { roughLine, roughRect, seedFrom } from '../../web/src/rough';
 import { parseRoute, routeHref } from '../../web/src/router';
@@ -165,6 +170,7 @@ describe('router', () => {
       { view: 'atlas', module: 'src/billing', flow: 'flow.refund', lens: 'terrain' },
       { view: 'atlas', lens: 'terrain' },
       { view: 'capabilities' },
+      { view: 'observatory' },
       { view: 'queue' },
       { view: 'module', id: 'src/billing' },
       // the inner-board file selection (23b) is in the URL, so it deep-links
@@ -1670,5 +1676,79 @@ describe('inferred layer (21a) - moonlight', () => {
     expect(html).toContain('Machine-described capabilities');
     expect(html).toContain('Place Order');
     expect(html).not.toContain('No capabilities have been described yet');
+  });
+});
+
+// ── the observatory (23c) ─────────────────────────────────────────────────────
+
+describe('observatory', () => {
+  const history: VouchedPoint[] = [
+    { at: '2026-06-30', id: 'decision.stripe', kind: 'decision', name: 'Stripe' },
+    { at: '2026-06-30', id: 'invariant.money', kind: 'invariant', name: 'Money' },
+    { at: '2026-07-04', id: 'concept.checkout', kind: 'concept', name: 'Checkout' },
+  ];
+
+  it('flyingBlind maps every module to a dot, busiest first, with its standing', () => {
+    const dots = flyingBlind(feed);
+    expect(dots.map((d) => d.module)).toEqual(['src/billing', 'src/legacy', 'src/payments']);
+    const legacy = dots.find((d) => d.module === 'src/legacy');
+    // legacy: no certified facts but machine-described → moonlight, not dark
+    expect(legacy).toMatchObject({ churn: 20, vouched: 0, standing: 'described' });
+    // billing: 5 certified facts → vouched, coverage the saturating 5/6 depth
+    const billing = dots.find((d) => d.module === 'src/billing');
+    expect(billing?.standing).toBe('vouched');
+    expect(billing?.vouched).toBeCloseTo(5 / 6, 5);
+  });
+
+  it('areaShares splits each area into three shares that sum to ~1', () => {
+    const shares = areaShares(feed);
+    // busiest area first (Billing & Money = 50 churn, legacy = 20)
+    expect(shares[0].area).toBe('Billing & Money');
+    for (const s of shares) {
+      expect(s.vouched + s.described + s.unexplained).toBeCloseTo(1, 5);
+    }
+    // the un-vouched mass of un-described modules is dark, not described
+    const billingArea = shares.find((s) => s.area === 'Billing & Money');
+    expect(billingArea?.described).toBe(0);
+    expect(billingArea?.unexplained).toBeGreaterThan(0);
+    // a purely machine-described area is all moonlight, no phosphor
+    const legacyArea = shares.find((s) => s.area === 'src/legacy');
+    expect(legacyArea).toMatchObject({ vouched: 0, described: 1, unexplained: 0 });
+  });
+
+  it('vouchedBurnup accumulates certifications by date, monotonically', () => {
+    expect(vouchedBurnup(history)).toEqual([
+      { date: '2026-06-30', count: 2 },
+      { date: '2026-07-04', count: 3 },
+    ]);
+    expect(vouchedBurnup([])).toEqual([]);
+  });
+
+  it('renders one dot per module, a shared legend, and the two standings', () => {
+    const html = markup(<Observatory feed={feed} history={history} />);
+    expect(count(html, /obs-dot/g)).toBe(feed.modules.length);
+    // the legend keeps colour from being the only encoding
+    expect(html).toContain('obs-legend');
+    expect(html).toContain('standing-vouched');
+    expect(html).toContain('standing-described');
+    // one bar row per product area, with a vouched % readout
+    expect(count(html, /obs-row-label/g)).toBe(feed.areas.length);
+    expect(html).toContain('obs-seg');
+  });
+
+  it('draws the burn-up line and direct-labels the running total', () => {
+    const html = markup(<Observatory feed={feed} history={history} />);
+    expect(html).toContain('obs-line');
+    // the endpoint is labelled with the cumulative count, not a legend
+    expect(html).toContain('3 vouched');
+    expect(html).toContain('2026-07-04');
+  });
+
+  it('shows an honest empty state when there is no certification history', () => {
+    const html = markup(<Observatory feed={feed} history={[]} />);
+    expect(html).toContain('Not enough certification history');
+    expect(html).not.toContain('obs-line');
+    // the other two charts still draw
+    expect(count(html, /obs-dot/g)).toBe(feed.modules.length);
   });
 });

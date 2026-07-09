@@ -1,6 +1,6 @@
 # Task 23 - Atlas elevation: from readable to knowledge discovery
 
-**Status: 23a/23a′/23a″ shipped 2026-07-07; 23b (inner boards) shipped 2026-07-08; 23c-23e specced below, sequenced by impact per effort.**
+**Status: 23a/23a′/23a″ shipped 2026-07-07; 23b (inner boards) shipped 2026-07-08; 23c (the observatory) shipped 2026-07-09; 23d-23e specced below, sequenced by impact per effort.**
 
 **Depends on:** v0.2 T16d (atlas shell), T17 (write-back), T17b (reference graph); 21a (inferred layer feeds the two-light grammar).
 **Design refs:** Dashboard.md §11 (the shell this elevates) and §12 (the lens grammar + honest readouts, recorded at 23a ship time); the 21c UX contract D1-D12 (21-inferred-layer.md), which 23d partially delivers.
@@ -80,13 +80,16 @@ Opening a module now offers its **inner board** - the same chalk hand, one altit
 - **Deferred (a later slice):** symbol-level boxes inside a file (the box is the file today - "later symbols" per the original note); a code viewer for the box itself (out of scope - see the symbol-level-call-graph exclusion).
 - Acceptance met: a newcomer descends board → module board → meaning without a wall of text; the inner board obeys the blackboard philosophy (few marks, ample space, draggable). Verified live on the demo (billing: three files, the `refund.ts → gateway.ts` import, boxes lit by their real pins, file-card selection).
 
-## 23c - the observatory (charts that answer questions)
+## 23c - the observatory (charts that answer questions, shipped 2026-07-09)
 
-- **Flying-blind quadrant:** churn (x) vs vouched depth (y), one dot per module in its standing colour - the leadership question as one chart.
-- **Vouched burn-up:** the certification time series reconstructed from `git log` over `.artha/` - history is already in git, no new storage; drawn as a plain line with the phosphor reserved for the vouched series.
-- **Per-area bars:** vouched / described / unexplained shares, stacked, one row per product area.
-- All hand-rolled SVG like `treemap.ts` (zero deps, offline); follow the dataviz method (one axis, direct labels, no new hues - the status palette is the chart palette).
-- Placement: a fourth navigator view ("Observatory"), not widgets crowding the atlas.
+The signal behind the map, drawn as three hand-rolled instrument charts on a fourth navigator view (`#/observatory`) - the board stays a clean blackboard, density and analytics live here. Built to the dataviz method: one axis each, recessive dashed grid, direct labels over legend boxes, and the *status palette as the chart palette* (no new hues). Colour is never the only encoding - position (the quadrant, the bar order) and a shared legend carry the same reading, so a colour-blind or printed page still answers the question.
+
+- [x] **Flying-blind quadrant.** Churn (x) vs vouched depth (y), one dot per module in its standing colour (phosphor vouched / moonlight described / dim unexplained). The busy-and-under-half-vouched region is washed and labelled "flying blind"; the busiest such modules get selective direct labels (never a label on every dot). `derive.flyingBlind`.
+- [x] **Vouched burn-up.** Certified facts accumulated over time as a phosphor step line with a faint area fill, the running total direct-labelled at the endpoint. Reconstructed from the entries' own `certified_at` (already versioned in git under `.artha/`) via a new `GET /api/vouched-history` → `VouchedPoint[]` and the pure `derive.vouchedBurnup` - **deterministic and offline, no git-log archaeology** (the timestamp is already stored, which beats walking history). An honest empty state below two dated certifications.
+- [x] **Per-area two-light bars.** Vouched / described / unexplained shares stacked, one row per product area, busiest first, with a 2px surface gap between fills and the vouched % direct-labelled. `derive.areaShares` (the three shares sum to 1 - the two-light grammar as a bar).
+- [x] All hand-rolled SVG like `treemap.ts` (zero deps, offline); `<title>` hover tooltips on every mark, consistent with the board/atlas.
+- [x] Placement: a fourth navigator view ("Observatory", glyph `◔`), not widgets crowding the atlas.
+- [x] Tests (+8: `vouchedHistory` certified-and-dated-only + sort; `flyingBlind` mapping/standing/order; `areaShares` three-share sum + described-vs-dark split; `vouchedBurnup` cumulative; the page's dot-per-module, shared legend, burn-up line + endpoint label, per-area rows, honest empty state; router round-trips `observatory`), lint, both typechecks, live demo screenshots.
 
 ## 23d - reading is reviewing (delivers part of 21c)
 
@@ -111,9 +114,11 @@ This slice *is* the D5/D6/D9/D10 portion of the 21c contract - build it against 
 - Any new hue (D2 stands everywhere: phosphor, moonlight, amber, ember, grey ink carry everything).
 - Physics/force-directed layouts - the board is layered and hand-arranged, never jittering.
 
-## Contracts produced (23a + 23a′ + 23a″ + 23b)
+## Contracts produced (23a + 23a′ + 23a″ + 23b + 23c)
 
-- Atlas route params: `lens=terrain`, `f=<flowId>`; `#/` is the board. Module route gains `?file=<path>` (23b) - the selected inner-board file, deep-linkable.
+- Atlas route params: `lens=terrain`, `f=<flowId>`; `#/` is the board. Module route gains `?file=<path>` (23b) - the selected inner-board file, deep-linkable. New top-level route `#/observatory` (23c).
+- **`GET /api/vouched-history`** → `VouchedPoint[]` (`{ at, id, kind, name }`, certified-and-dated only, oldest first) - the burn-up's raw series, read from each entry's `certified_at`, offline.
+- `derive.flyingBlind(feed)`, `derive.areaShares(feed)`, `derive.vouchedBurnup(points)`, and `derive.standingOf(module)` - pure observatory derivations, SSR-tested; the charts (`components/Observatory.tsx`) are hand-rolled SVG like `treemap.ts`.
 - `web/src/rough.ts` (seeded chalk strokes) and `web/src/board.ts` - pure, SSR-tested; any future hand-drawn surface (23e chalk state machines) draws with them. 23b generalised the layout into **`layeredLayout(ids, links, metrics, sortKey?)`** (both `boardLayout` and `fileBoardLayout` are thin adapters over it) and extracted the drag/persist behaviour into the shared **`useBoardDrag(storeKey)`** hook.
 - **`GET /api/module-board/:id`** → `{ module, files: [{ path, name, facts }], edges: [{ from, to }] }` (`moduleBoard`, pure over the index + `RepoStructure.files`/`fileGraph`); the inner board's data, offline.
 - `derive.flowTrace(detail, modules)` and `derive.capabilitiesByModule(catalog)` - pure derivations shared by any canvas.

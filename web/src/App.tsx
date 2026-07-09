@@ -11,6 +11,7 @@ import {
   type RankedModule,
   type RefEdge,
   type Suggestion,
+  type VouchedPoint,
   certify,
   getCatalog,
   getConcept,
@@ -22,6 +23,7 @@ import {
   getModuleBoard,
   getRefs,
   getSuggest,
+  getVouchedHistory,
   linkPin,
   saveEntry,
 } from './api';
@@ -35,6 +37,7 @@ import { InferredPage } from './components/Inferred';
 import { Inspector } from './components/Inspector';
 import { ModulePage } from './components/ModulePage';
 import { Navigator } from './components/Navigator';
+import { Observatory } from './components/Observatory';
 import { QueuePage } from './components/QueuePage';
 import { type Crumb, TopBar } from './components/TopBar';
 import { MISC, NAV, WORDMARK } from './copy';
@@ -65,6 +68,7 @@ export function App(): JSX.Element {
   const [zones, setZones] = useState<RankedModule[]>([]);
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
   const [refs, setRefs] = useState<RefEdge[]>([]);
+  const [history, setHistory] = useState<VouchedPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [cmdkOpen, setCmdkOpen] = useState(false);
   // Fullscreen focus (any view): the chrome folds away and, where the browser
@@ -105,6 +109,10 @@ export function App(): JSX.Element {
     getRefs()
       .then(setRefs)
       .catch(() => setRefs([]));
+    // The vouched burn-up's raw series (23c) - certified facts by date.
+    getVouchedHistory()
+      .then(setHistory)
+      .catch(() => setHistory([]));
   }, []);
 
   const toggleFocus = useCallback(() => {
@@ -250,10 +258,16 @@ export function App(): JSX.Element {
   // (and the open capability detail, whose route key hasn't changed) so the map
   // redraws and the just-certified item glows without a reload.
   const refresh = useCallback(async () => {
-    const [m, c, z] = await Promise.allSettled([getMap(), getCatalog(), getDarkZones()]);
+    const [m, c, z, h] = await Promise.allSettled([
+      getMap(),
+      getCatalog(),
+      getDarkZones(),
+      getVouchedHistory(),
+    ]);
     if (m.status === 'fulfilled') setMap(m.value);
     if (c.status === 'fulfilled') setCatalog(c.value);
     if (z.status === 'fulfilled') setZones(z.value);
+    if (h.status === 'fulfilled') setHistory(h.value);
     setModuleDetails(new Map());
     setModuleBoards(new Map());
     const r = parseRoute(window.location.hash);
@@ -377,6 +391,8 @@ export function App(): JSX.Element {
         );
       case 'capabilities':
         return <CatalogPage catalog={catalog} feed={map} />;
+      case 'observatory':
+        return <Observatory feed={map} history={history} />;
       case 'queue':
         return <QueuePage zones={zones} cold={map.cold} />;
       case 'module': {
@@ -465,6 +481,8 @@ function crumbs(route: Route, names: Map<string, string>, inferredName?: string 
     }
     case 'capabilities':
       return [{ label: NAV.capabilities }];
+    case 'observatory':
+      return [{ label: NAV.observatory }];
     case 'queue':
       return [{ label: NAV.queue }];
     case 'module':

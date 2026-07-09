@@ -3,7 +3,15 @@
 // and the pages. The dashboard's whole job is turning these numbers into
 // pixels; keeping the math here keeps the components about layout.
 
-import type { Catalog, FlowDetail, MapArea, MapFeed, MapModule, RefEdge } from './api';
+import type {
+  Catalog,
+  FlowDetail,
+  MapArea,
+  MapFeed,
+  MapModule,
+  RefEdge,
+  VouchedPoint,
+} from './api';
 import { KPI } from './copy';
 import { type TreemapRect, treemap } from './treemap';
 
@@ -466,6 +474,122 @@ export function capabilityNames(catalog: Catalog): Map<string, string> {
   for (const c of catalog.inferredConcepts ?? []) names.set(c.id, c.name);
   for (const f of catalog.inferredFlows ?? []) names.set(f.id, f.name);
   return names;
+}
+
+// ── the observatory (23c: charts that answer questions) ──────────────────────
+
+/** The standing a module reads at, in the two-light grammar (D2). Position and
+ * legend carry it in the charts, so colour is never the only encoding. */
+export type Standing = 'vouched' | 'described' | 'unexplained';
+
+/** How a module stands: vouched (a human certified it) wins; else described
+ * (the machine has read it) is moonlight; else it is genuinely unexplained. */
+export function standingOf(m: MapModule): Standing {
+  if (m.certifiedFacts > 0) return 'vouched';
+  if (isMoonlit(m)) return 'described';
+  return 'unexplained';
+}
+
+/** One module as a dot in the flying-blind quadrant. */
+export interface BlindDot {
+  module: string;
+  /** Commits in the churn window - the x axis (activity). */
+  churn: number;
+  /** Vouched depth 0..1 (the saturating coverage curve) - the y axis (trust). */
+  vouched: number;
+  standing: Standing;
+}
+
+/**
+ * The leadership question as one chart (23c): churn (how much a module moves) vs
+ * vouched depth (how much of it a human has stood behind). A module high on
+ * churn and low on vouched is code the team is flying blind on. Sorted busiest
+ * first so the callout labels go to the modules that matter.
+ */
+export function flyingBlind(feed: MapFeed): BlindDot[] {
+  return feed.modules
+    .map(
+      (m): BlindDot => ({
+        module: m.module,
+        churn: m.churn,
+        vouched: coverageOf(m),
+        standing: standingOf(m),
+      }),
+    )
+    .sort((a, b) => b.churn - a.churn || a.module.localeCompare(b.module));
+}
+
+/** One product area's two-light split (23c) - the three shares sum to ~1. */
+export interface AreaShare {
+  area: string;
+  /** Churn-weighted vouched depth (phosphor). */
+  vouched: number;
+  /** The remaining, machine-described mass (moonlight). */
+  described: number;
+  /** The remaining, un-described mass (dark). */
+  unexplained: number;
+  churn: number;
+}
+
+/**
+ * Per-area vouched / described / unexplained shares (23c), churn-weighted so the
+ * bar reflects *active* code (falling back to a plain module average when an
+ * area has no churn signal). A module's vouched mass is its coverage depth; the
+ * rest is described if the machine has read it, else dark. The three shares of a
+ * bar sum to 1, so one row is the two-light grammar drawn as a stacked bar.
+ * Busiest area first.
+ */
+export function areaShares(feed: MapFeed): AreaShare[] {
+  const byName = new Map(feed.modules.map((m) => [m.module, m]));
+  return feed.areas
+    .map((area): AreaShare => {
+      const mods = area.modules.flatMap((m) => byName.get(m) ?? []);
+      const churn = sum(mods.map((m) => m.churn));
+      const weight = (m: MapModule) => (churn > 0 ? m.churn : 1);
+      const denom = churn > 0 ? churn : mods.length;
+      let vouched = 0;
+      let described = 0;
+      let unexplained = 0;
+      for (const m of mods) {
+        const cov = coverageOf(m);
+        vouched += weight(m) * cov;
+        const rest = weight(m) * (1 - cov);
+        if (m.described ?? false) described += rest;
+        else unexplained += rest;
+      }
+      return {
+        area: area.area,
+        vouched: denom > 0 ? vouched / denom : 0,
+        described: denom > 0 ? described / denom : 0,
+        unexplained: denom > 0 ? unexplained / denom : 0,
+        churn,
+      };
+    })
+    .sort((a, b) => b.churn - a.churn || a.area.localeCompare(b.area));
+}
+
+/** One point on the vouched burn-up: the cumulative certified count on a date. */
+export interface BurnPoint {
+  /** `YYYY-MM-DD`. */
+  date: string;
+  /** Running total of certified facts vouched on or before this date. */
+  count: number;
+}
+
+/**
+ * The vouched burn-up (23c): certified facts accumulated over time, one step per
+ * date on which something was vouched. Reconstructed from the entries' own
+ * `certified_at` (already in git via `.artha/`), so it needs no new storage. A
+ * monotonic curve - the phosphor series the observatory reserves its trust hue for.
+ */
+export function vouchedBurnup(points: VouchedPoint[]): BurnPoint[] {
+  const byDate = new Map<string, number>();
+  for (const p of points) byDate.set(p.at, (byDate.get(p.at) ?? 0) + 1);
+  let running = 0;
+  return [...byDate.keys()].sort().map((date) => {
+    running += byDate.get(date) ?? 0;
+    return { date, count: running };
+  });
 }
 
 function sum(ns: number[]): number {

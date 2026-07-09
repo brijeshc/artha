@@ -14,6 +14,7 @@ import {
   moduleDetail,
   refsFeed,
   search,
+  vouchedHistory,
 } from '../../src/serve/api';
 import { fact, fakeIndex, pin } from '../helpers/fakeIndex';
 
@@ -43,6 +44,32 @@ describe('areasOf (OQ5)', () => {
     expect(areas).toContainEqual({ area: 'Billing', modules: ['src/billing', 'src/payments'] });
     // leftover module keeps its own area (nothing hidden)
     expect(areas).toContainEqual({ area: 'src/checkout', modules: ['src/checkout'] });
+  });
+});
+
+describe('vouchedHistory (23c)', () => {
+  it('returns only dated, certified facts, oldest first', () => {
+    const index = fakeIndex({
+      facts: [
+        fact('concept.checkout', 'certified', { heading: 'Checkout', certified_at: '2026-07-04' }),
+        fact('decision.stripe', 'certified', { heading: 'Stripe', certified_at: '2026-06-30' }),
+        // certified but undated (a hand-edited entry) → excluded, never guessed
+        fact('invariant.money', 'certified', { heading: 'Money', certified_at: null }),
+        // proposed → not vouched, excluded
+        fact('flow.refund', 'proposed', { heading: 'Refund', certified_at: '2026-07-01' }),
+      ],
+    });
+
+    const history = vouchedHistory(index);
+    expect(history.map((p) => p.id)).toEqual(['decision.stripe', 'concept.checkout']);
+    expect(history[0]).toMatchObject({ at: '2026-06-30', kind: 'decision', name: 'Stripe' });
+  });
+
+  it('is empty when nothing is vouched yet', () => {
+    const index = fakeIndex({
+      facts: [fact('flow.refund', 'proposed', { certified_at: '2026-07-01' })],
+    });
+    expect(vouchedHistory(index)).toEqual([]);
   });
 });
 

@@ -7,8 +7,10 @@ Rationale and evidence are in [21-inferred-layer.md](21-inferred-layer.md) §Why
 Contradiction detection remains in v0.3, but as a near-byproduct: once inferred meaning exists, "inferred disagrees with certified" *is* the loophole view.
 
 **Progress:** 21a is done - all four offline extractors ship (module cards + state machines in slice 1; flow skeletons + naming conventions in slice 2), evidence-pinned and byte-deterministic, so a stranger's repo renders a complete moonlight map with zero human input.
-**23a is done (2026-07-07)** - the atlas elevation's first slice: honest D11 KPIs (% vouched / % described, no more "explained"), the wiring lens (import graph drawn as arcs), and flow routes (flows traced as transit lines with numbered stations).
-Then 21b (LLM synthesis + verification), the rest of 21c (vouch-by-reading, value-ranked queue - 23d delivers these), and 23b/23c (terrain texture, observatory charts).
+**23a is done (2026-07-07)** - the atlas elevation's first slice: honest D11 KPIs (% vouched / % described, no more "explained"), the board pivot (a handmade flowchart on a blackboard), and flow routes.
+**23b is done (2026-07-08)** - inner boards: drilling a module into its own blackboard of files + imports.
+**23c is done (2026-07-09)** - the observatory: three hand-rolled instrument charts (flying-blind quadrant, vouched burn-up, per-area two-light bars) on a fourth navigator view, built to the dataviz method.
+Then 21b (LLM synthesis + verification), the rest of 21c (vouch-by-reading, value-ranked queue - 23d delivers these), and 23e (craft debt).
 
 | #   | Task | Depends on | One-line summary |
 |-----|------|------------|------------------|

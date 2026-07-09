@@ -438,6 +438,32 @@ export function catalog(index: ArthaIndex, config: ArthaConfig): Catalog {
   return { concepts, flows, inferredConcepts, inferredFlows };
 }
 
+// ── /api/vouched-history  (23c - the observatory's burn-up series) ─────────────
+
+/** One certification event: a fact that reached `certified`, dated to when it
+ * was vouched. The observatory accumulates these into the vouched burn-up. */
+export interface VouchedPoint {
+  /** `certified_at` - a `YYYY-MM-DD` date (schema §2). */
+  at: string;
+  id: string;
+  kind: string;
+  name: string | null;
+}
+
+/**
+ * Every certified fact as a dated point, oldest first - the raw series behind
+ * the vouched burn-up (23c). The history already lives in each entry's
+ * `certified_at`, so there is no new storage and no git walk: a fact counts
+ * only once it is `certified` and carries a date, so the curve is exactly "how
+ * much meaning the team has vouched for, over time." Deterministic (ties by id).
+ */
+export function vouchedHistory(index: ArthaIndex): VouchedPoint[] {
+  return index.facts
+    .filter((f) => f.status === 'certified' && f.certified_at)
+    .map((f) => ({ at: f.certified_at as string, id: f.id, kind: f.kind, name: f.heading }))
+    .sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+}
+
 // ── /api/dark-zones ───────────────────────────────────────────────────────────
 
 export function darkZonesFeed(
