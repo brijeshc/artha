@@ -39,16 +39,20 @@ import { ModulePage } from './components/ModulePage';
 import { Navigator } from './components/Navigator';
 import { Observatory } from './components/Observatory';
 import { QueuePage } from './components/QueuePage';
+import { ReviewWalk } from './components/ReviewWalk';
 import { type Crumb, TopBar } from './components/TopBar';
 import { MISC, NAV, WORDMARK } from './copy';
 import {
   type CapabilityEntry,
+  type ReviewClaim,
   areaStats,
   capabilitiesByArea,
   capabilityEntries,
   capabilityNames,
+  capabilityReviewClaims,
   flowTrace,
   kpis,
+  moduleReviewClaims,
   neighborsOf,
 } from './derive';
 import { type Route, navigate, parseRoute, routeHref } from './router';
@@ -71,6 +75,9 @@ export function App(): JSX.Element {
   const [history, setHistory] = useState<VouchedPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [cmdkOpen, setCmdkOpen] = useState(false);
+  // The review walk (D9): a full-screen sweep of the current page's unvouched
+  // claims. Transient - a mode over a page, never a URL of its own.
+  const [reviewOpen, setReviewOpen] = useState(false);
   // Fullscreen focus (any view): the chrome folds away and, where the browser
   // allows it, the window goes truly fullscreen. Transient - never in the URL.
   const [focus, setFocus] = useState(false);
@@ -87,6 +94,12 @@ export function App(): JSX.Element {
   const [inferredDetail, setInferredDetail] = useState<InferredFactView | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
+
+  // Latest-value refs the global key handler reads without re-subscribing: the
+  // page's reviewable claims (for R) and whether the walk already owns the keys.
+  const pageClaimsRef = useRef<ReviewClaim[]>([]);
+  const reviewOpenRef = useRef(false);
+  reviewOpenRef.current = reviewOpen;
 
   useEffect(() => {
     const onHash = () => setRoute(parseRoute(window.location.hash));
@@ -143,6 +156,9 @@ export function App(): JSX.Element {
   // closes the bar, else leaves focus, else clears the selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // While the review walk is open it owns the keyboard - let it handle
+      // everything (j/k/v/e/Esc) so the shell's own shortcuts never contend.
+      if (reviewOpenRef.current) return;
       const t = e.target as HTMLElement | null;
       const typing =
         t !== null && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
@@ -152,6 +168,18 @@ export function App(): JSX.Element {
       } else if (e.key.toLowerCase() === 'f' && !e.metaKey && !e.ctrlKey && !e.altKey && !typing) {
         e.preventDefault();
         toggleFocus();
+      } else if (
+        e.key.toLowerCase() === 'r' &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !typing &&
+        pageClaimsRef.current.length > 0
+      ) {
+        // Reading is reviewing (D9): R walks this page's unvouched claims.
+        e.preventDefault();
+        setCmdkOpen(false);
+        setReviewOpen(true);
       } else if (e.key === 'Escape') {
         setCmdkOpen((open) => {
           if (open) return false;
@@ -313,6 +341,29 @@ export function App(): JSX.Element {
     [entryById],
   );
 
+  // The unvouched claims the review walk (D9) would sweep on the current page -
+  // machine-described + proposed, never the certified. Drives both the top-bar
+  // review pill and the R shortcut; empty on non-reviewable views.
+  const pageClaims = useMemo<ReviewClaim[]>(() => {
+    if (route.view === 'module') {
+      const d = moduleDetails.get(route.id);
+      return d ? moduleReviewClaims(d) : [];
+    }
+    if (route.view === 'concept') return conceptDetail ? capabilityReviewClaims(conceptDetail) : [];
+    if (route.view === 'flow') return flowDetail ? capabilityReviewClaims(flowDetail) : [];
+    return [];
+  }, [route, moduleDetails, conceptDetail, flowDetail]);
+  pageClaimsRef.current = pageClaims;
+
+  const reviewSubject =
+    route.view === 'module'
+      ? route.id
+      : route.view === 'concept' && conceptDetail
+        ? (conceptDetail.name ?? conceptDetail.id)
+        : route.view === 'flow' && flowDetail
+          ? (flowDetail.name ?? flowDetail.id)
+          : '';
+
   if (error) {
     return (
       <div className="boot">
@@ -451,6 +502,8 @@ export function App(): JSX.Element {
         onOpenCmdk={() => setCmdkOpen(true)}
         focus={focus}
         onToggleFocus={toggleFocus}
+        onReview={pageClaims.length > 0 ? () => setReviewOpen(true) : undefined}
+        reviewCount={pageClaims.length}
       />
       <div className="shell-body">
         <Navigator
@@ -464,6 +517,14 @@ export function App(): JSX.Element {
         {inspector}
       </div>
       <CommandBar open={cmdkOpen} feed={map} onClose={() => setCmdkOpen(false)} onGo={onGo} />
+      {reviewOpen && (
+        <ReviewWalk
+          claims={pageClaims}
+          subject={reviewSubject}
+          onClose={() => setReviewOpen(false)}
+          onChanged={refresh}
+        />
+      )}
     </div>
   );
 }

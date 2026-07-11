@@ -12,7 +12,8 @@ Contradiction detection remains in v0.3, but as a near-byproduct: once inferred 
 **23c is done (2026-07-09)** - the observatory: three hand-rolled instrument charts (flying-blind quadrant, vouched burn-up, per-area two-light bars) on a fourth navigator view, built to the dataviz method.
 **23d-1 is done (2026-07-09)** - evidence revealed (D5): every pin reveals its exact source lines one click away.
 **23d-2 is done (2026-07-09)** - vouch-by-reading (D9 core + OQ-A): an inferred concept/flow can be vouched or corrected in place, materializing into a real `.artha/` entry with `derived_from` provenance - the moonlight layer is now actionable, not just readable.
-Then 21b (LLM synthesis + verification), the rest of 21c (the review walk, value-ranked queue - the rest of 23d delivers these), and 23e (craft debt).
+**23d-3 is done (2026-07-11)** - the review walk (D9): press `R` (or a top-bar Review pill) on any module/capability page to sweep its unvouched claims one at a time - claim left, code right, one keystroke to vouch or correct - page-scoped, never a global queue, and needing no new backend.
+Then the delta band (D6) + value-ranked queue (D10) finish 23d, then 21b (LLM synthesis + verification) and 23e (craft debt).
 
 | #   | Task | Depends on | One-line summary |
 |-----|------|------------|------------------|

@@ -5,10 +5,14 @@
 
 import type {
   Catalog,
+  ConceptDetail,
   FlowDetail,
+  InferredFactView,
   MapArea,
   MapFeed,
   MapModule,
+  ModuleDetail,
+  ModuleFact,
   RefEdge,
   VouchedPoint,
 } from './api';
@@ -474,6 +478,118 @@ export function capabilityNames(catalog: Catalog): Map<string, string> {
   for (const c of catalog.inferredConcepts ?? []) names.set(c.id, c.name);
   for (const f of catalog.inferredFlows ?? []) names.set(f.id, f.name);
   return names;
+}
+
+// ── the review walk (D9, 23d-3: reading is reviewing) ────────────────────────
+
+/**
+ * One claim as the review walk presents it (D9): a machine-described or proposed
+ * unit you can vouch for or correct in one keystroke, with the exact code it was
+ * read from. Normalized across the inferred (moonlight) and human (proposed)
+ * tiers so the walk renders one grammar. Every claim here is *actionable* - the
+ * walk never parks you on something you can't decide.
+ */
+export interface ReviewClaim {
+  id: string;
+  kind: string;
+  /** inferred → vouching materializes it; human → vouching certifies it in place. */
+  origin: 'inferred' | 'human';
+  name: string;
+  /** The machine (or human) prose - the sentence you read against the code. */
+  prose: string | null;
+  /** A concept's lifecycle, read from code (moonlight); empty otherwise. */
+  states: string[];
+  /** A flow's fan-out / step labels; empty otherwise. */
+  steps: string[];
+  /** Worded confidence (inferred only) - never a number (D7). */
+  confidence?: string;
+  /** proposed / stale (human only). */
+  status?: string;
+  /** The evidence refs (`path#Symbol`) whose code the walk reveals on the right. */
+  pins: string[];
+  /** Concepts + flows carry a name/summary the walk can correct in place (D8). */
+  canEdit: boolean;
+}
+
+function inferredClaim(v: InferredFactView): ReviewClaim {
+  return {
+    id: v.id,
+    kind: v.kind,
+    origin: 'inferred',
+    name: v.name,
+    prose: v.summary,
+    states: v.states ?? [],
+    steps: (v.steps ?? []).map((s) => s.label),
+    confidence: v.confidence,
+    pins: v.pins.map((p) => p.symbol),
+    canEdit: v.kind === 'concept' || v.kind === 'flow',
+  };
+}
+
+function humanClaim(f: ModuleFact): ReviewClaim {
+  return {
+    id: f.id,
+    kind: f.kind,
+    origin: 'human',
+    name: f.name ?? f.id,
+    prose: f.body,
+    states: [],
+    steps: [],
+    status: f.status,
+    pins: f.symbols,
+    canEdit: f.kind === 'concept' || f.kind === 'flow',
+  };
+}
+
+const notCertified = (f: ModuleFact): boolean => f.status !== 'certified';
+
+/**
+ * The unvouched claims on a module page, in reading order (top of the page down):
+ * proposed human capabilities, then the machine-described concepts + flows, then
+ * proposed rules and decisions. Certified facts are done, so they are left out;
+ * module cards and naming conventions can't be vouched yet (no human kind / a
+ * rule the code can't state), so they stay read-only on the page and out of the
+ * walk. The result is a clean sweep of everything here that awaits a human.
+ */
+export function moduleReviewClaims(detail: ModuleDetail): ReviewClaim[] {
+  const caps = [...detail.concepts, ...detail.flows].filter(notCertified).map(humanClaim);
+  const inferred = [...(detail.inferredConcepts ?? []), ...(detail.inferredFlows ?? [])].map(
+    inferredClaim,
+  );
+  const rules = detail.rules.filter(notCertified).map(humanClaim);
+  const decisions = detail.decisions.filter(notCertified).map(humanClaim);
+  return [...caps, ...inferred, ...rules, ...decisions];
+}
+
+/**
+ * A capability page as a one-station walk: the capability itself, unless it is
+ * already certified (then there is nothing to review). Its pins - a concept's
+ * implementing code, a flow's entry + linked steps - are the evidence the walk
+ * lays out on the right.
+ */
+export function capabilityReviewClaims(detail: ConceptDetail | FlowDetail): ReviewClaim[] {
+  if (detail.status === 'certified') return [];
+  const pins =
+    detail.kind === 'concept'
+      ? detail.pins
+      : [...detail.entry, ...detail.steps.flatMap((s) => (s.pin ? [s.pin] : []))];
+  return [
+    {
+      id: detail.id,
+      kind: detail.kind,
+      origin: 'human',
+      name: detail.name ?? detail.id,
+      prose: detail.summary,
+      states: detail.kind === 'concept' ? detail.states.map((s) => s.name) : [],
+      steps:
+        detail.kind === 'flow'
+          ? detail.steps.map((s) => (s.on ? `on ${s.on} - ${s.do}` : s.do))
+          : [],
+      status: detail.status,
+      pins: pins.map((p) => p.symbol),
+      canEdit: true,
+    },
+  ];
 }
 
 // ── the observatory (23c: charts that answer questions) ──────────────────────

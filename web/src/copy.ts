@@ -306,6 +306,35 @@ export const CURATE = {
   openModuleHint: 'Open the module this code lives in',
 } as const;
 
+/** The review walk (D9, 23d-3): reading a page's unvouched claims one at a time,
+ * one keystroke per decision. Page-scoped, never a global queue over thousands of
+ * machine facts - that would be the tiredness machine the contract forbids. */
+export const REVIEW = {
+  enter: 'Review',
+  enterHint: 'Walk this page’s unvouched claims one at a time - vouch or correct each. Press R.',
+  aria: 'Review the unvouched claims on this page',
+  kicker: 'Reading is reviewing',
+  reviewing: 'reviewing',
+  close: 'Close review',
+  codeHead: 'Read from code',
+  codeGloss: 'The exact source this claim was read from - decide against the code, not a summary.',
+  noPins: 'Nothing is pinned to code here yet - there is no source to check this against.',
+  vouch: 'Vouch',
+  vouchHint: 'This reads right - certify it. Press v.',
+  edit: 'Correct',
+  editHint: 'Fix the name or summary first, then it saves as proposed. Press e.',
+  keys: 'j / k  move   ·   v  vouch   ·   e  correct   ·   x  flag (soon)   ·   esc  exit',
+  flagSoon: 'Flagging a disagreement arrives with contradiction detection.',
+  doneTitle: 'Sweep complete',
+  done: (n: number, v: number): string =>
+    `You walked ${n} claim${n === 1 ? '' : 's'} here - ${v} vouched.`,
+  doneNone: 'Nothing was vouched this pass - the code is still worth another read.',
+  back: '← last claim',
+  closeDone: 'Done',
+  vouched: 'vouched',
+  corrected: 'corrected',
+} as const;
+
 export const MISC = {
   loading: 'reading the index…',
   notFound: 'Nothing at this address.',

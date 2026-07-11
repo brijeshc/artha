@@ -29,6 +29,7 @@ import { ModulePage } from '../../web/src/components/ModulePage';
 import { Navigator } from '../../web/src/components/Navigator';
 import { Observatory } from '../../web/src/components/Observatory';
 import { QueuePage } from '../../web/src/components/QueuePage';
+import { ReviewWalk } from '../../web/src/components/ReviewWalk';
 import { TopBar } from '../../web/src/components/TopBar';
 import {
   areaShares,
@@ -37,11 +38,13 @@ import {
   capabilitiesByArea,
   capabilitiesByModule,
   capabilityEntries,
+  capabilityReviewClaims,
   coverageBucket,
   flowTrace,
   flyingBlind,
   kpis,
   moduleOfPath,
+  moduleReviewClaims,
   shortName,
   vouchedBurnup,
 } from '../../web/src/derive';
@@ -1837,5 +1840,238 @@ describe('observatory', () => {
     expect(html).not.toContain('obs-line');
     // the other two charts still draw
     expect(count(html, /obs-dot/g)).toBe(feed.modules.length);
+  });
+});
+
+// ── the review walk (D9, 23d-3: reading is reviewing) ────────────────────────
+
+describe('review walk (D9, 23d-3)', () => {
+  const pin = (symbol: string) => ({ symbol, symbolId: symbol, contentHash: 'h', stale: false });
+  const moduleDetail: ModuleDetail = {
+    module: 'src/billing',
+    areas: ['Billing & Money'],
+    dark: false,
+    churn: 40,
+    score: 0.7,
+    certifiedFacts: 5,
+    staleFacts: 1,
+    queueRank: null,
+    concepts: [
+      // certified → done, out of the walk
+      {
+        id: 'concept.invoice',
+        kind: 'concept',
+        name: 'Invoice',
+        status: 'certified',
+        body: null,
+        symbols: ['src/billing/Invoice.ts#Invoice'],
+        stalePins: 0,
+        viaScope: false,
+      },
+      // proposed → a claim to vouch
+      {
+        id: 'concept.refund',
+        kind: 'concept',
+        name: 'Refund draft',
+        status: 'proposed',
+        body: 'A partial refund.',
+        symbols: ['src/billing/refund.ts#issueRefund'],
+        stalePins: 0,
+        viaScope: false,
+      },
+    ],
+    flows: [],
+    rules: [
+      {
+        id: 'invariant.money',
+        kind: 'invariant',
+        name: 'Money integer',
+        status: 'proposed',
+        body: 'Integer minor units.',
+        symbols: [],
+        stalePins: 0,
+        viaScope: true,
+      },
+    ],
+    decisions: [
+      {
+        id: 'decision.stripe',
+        kind: 'decision',
+        name: 'Use Stripe',
+        status: 'certified',
+        body: 'PCI.',
+        symbols: [],
+        stalePins: 0,
+        viaScope: false,
+      },
+    ],
+    dependsOn: [],
+    usedBy: [],
+    card: {
+      id: 'inferred:card:src/billing',
+      kind: 'card',
+      module: 'src/billing',
+      name: 'billing',
+      summary: 'Billing module.',
+      confidence: 'read-from-code',
+      states: [],
+      pins: [pin('src/billing/index.ts#x')],
+    },
+    inferredConcepts: [
+      {
+        id: 'inferred:concept:src/billing/types.ts#Dunning',
+        kind: 'concept',
+        module: 'src/billing',
+        name: 'Dunning',
+        summary: '3 states read from the Dunning type.',
+        confidence: 'read-from-code',
+        states: ['active', 'retrying', 'failed'],
+        pins: [pin('src/billing/types.ts#Dunning')],
+      },
+    ],
+    inferredFlows: [
+      {
+        id: 'inferred:flow:src/billing/refund.ts#issueRefund',
+        kind: 'flow',
+        module: 'src/billing',
+        name: 'Issue refund',
+        summary: 'Reaches notifications.',
+        confidence: 'read-from-code',
+        states: [],
+        steps: [{ label: 'Notifications', module: 'src/notifications' }],
+        pins: [pin('src/billing/refund.ts#issueRefund')],
+      },
+    ],
+    inferredConventions: [
+      {
+        id: 'inferred:convention:src/billing',
+        kind: 'convention',
+        module: 'src/billing',
+        name: '*Repo',
+        summary: 'A naming pattern.',
+        confidence: 'read-from-code',
+        states: [],
+        pins: [pin('src/billing/x.ts#UserRepo')],
+      },
+    ],
+  };
+
+  it('sweeps the unvouched only - proposed + machine-described, never certified/card/convention', () => {
+    const ids = moduleReviewClaims(moduleDetail).map((c) => c.id);
+    // proposed work is in; certified work is done and left out
+    expect(ids).toContain('concept.refund');
+    expect(ids).toContain('invariant.money');
+    expect(ids).not.toContain('concept.invoice'); // certified
+    expect(ids).not.toContain('decision.stripe'); // certified
+    // both machine-described capabilities are in (vouching materializes them)
+    expect(ids).toContain('inferred:concept:src/billing/types.ts#Dunning');
+    expect(ids).toContain('inferred:flow:src/billing/refund.ts#issueRefund');
+    // a module card + a naming convention can't be vouched yet → never a station
+    expect(ids).not.toContain('inferred:card:src/billing');
+    expect(ids).not.toContain('inferred:convention:src/billing');
+  });
+
+  it('normalizes each tier: inferred is editable moonlight with states, a rule is not', () => {
+    const claims = moduleReviewClaims(moduleDetail);
+    const dunning = claims.find((c) => c.id.includes('Dunning'));
+    expect(dunning).toMatchObject({
+      origin: 'inferred',
+      canEdit: true,
+      confidence: 'read-from-code',
+      states: ['active', 'retrying', 'failed'],
+      pins: ['src/billing/types.ts#Dunning'],
+    });
+    const rule = claims.find((c) => c.id === 'invariant.money');
+    expect(rule).toMatchObject({ origin: 'human', status: 'proposed', canEdit: false });
+  });
+
+  it('walks in reading order: proposed caps, then machine-described, then rules', () => {
+    const ids = moduleReviewClaims(moduleDetail).map((c) => c.id);
+    expect(ids.indexOf('concept.refund')).toBeLessThan(
+      ids.indexOf('inferred:concept:src/billing/types.ts#Dunning'),
+    );
+    expect(ids.indexOf('inferred:flow:src/billing/refund.ts#issueRefund')).toBeLessThan(
+      ids.indexOf('invariant.money'),
+    );
+  });
+
+  it('capabilityReviewClaims is a one-station walk for a proposed capability, empty when certified', () => {
+    const proposed: ConceptDetail = {
+      id: 'concept.refund',
+      kind: 'concept',
+      name: 'Refund',
+      summary: 'A refund.',
+      status: 'proposed',
+      certifiedBy: null,
+      certifiedAt: null,
+      states: [{ name: 'requested', effect: null, invariant: null }],
+      transitions: [],
+      pins: [pin('src/billing/refund.ts#issueRefund')],
+      related: [],
+      modules: ['src/billing'],
+    };
+    const claims = capabilityReviewClaims(proposed);
+    expect(claims).toHaveLength(1);
+    expect(claims[0]).toMatchObject({
+      id: 'concept.refund',
+      origin: 'human',
+      canEdit: true,
+      states: ['requested'],
+      pins: ['src/billing/refund.ts#issueRefund'],
+    });
+    // a certified capability has nothing left to review
+    expect(capabilityReviewClaims({ ...proposed, status: 'certified' })).toEqual([]);
+  });
+
+  it('renders the current claim, the code panel head, the vouch action, and the key legend', () => {
+    const claims = moduleReviewClaims(moduleDetail);
+    const html = markup(
+      <ReviewWalk claims={claims} subject="src/billing" onClose={noop} onChanged={noop} />,
+    );
+    expect(html).toContain('Reading is reviewing'); // the kicker
+    expect(html).toContain('src/billing'); // the subject
+    expect(html).toContain(`1 / ${claims.length}`); // progress
+    expect(html).toContain('Refund draft'); // the first claim (proposed) leads
+    expect(html).toContain('Read from code'); // the evidence panel head (D5)
+    expect(html).toContain('Vouch'); // the one-keystroke decision
+    expect(html).toContain('esc'); // the key legend
+    expect(html).toContain('flag (soon)'); // x-flag is honestly deferred, not a dead button
+  });
+
+  it('lights a machine-described claim in moonlight with worded confidence and its states', () => {
+    const claims = moduleReviewClaims(moduleDetail).filter((c) => c.origin === 'inferred');
+    const html = markup(
+      <ReviewWalk claims={claims} subject="src/billing" onClose={noop} onChanged={noop} />,
+    );
+    expect(html).toContain('claim-name moon'); // moonlight, never the phosphor of trust
+    expect(html).toContain('read from code'); // worded confidence (D7), never a number
+    expect(html).toContain('active'); // a state read from code, laid out on the left
+  });
+
+  it('shows a done panel when there is nothing to walk', () => {
+    const html = markup(
+      <ReviewWalk claims={[]} subject="src/billing" onClose={noop} onChanged={noop} />,
+    );
+    expect(html).toContain('Sweep complete');
+  });
+
+  it('the top bar surfaces a review pill with the unvouched count, and hides it at zero', () => {
+    const withWork = markup(
+      <TopBar
+        crumbs={[{ label: 'x' }]}
+        kpis={kpis(feed)}
+        onOpenCmdk={noop}
+        onReview={noop}
+        reviewCount={3}
+      />,
+    );
+    expect(withWork).toContain('review-trigger');
+    expect(withWork).toContain('Review');
+    expect(withWork).toContain('>3<'); // the count badge
+
+    const none = markup(
+      <TopBar crumbs={[{ label: 'x' }]} kpis={kpis(feed)} onOpenCmdk={noop} reviewCount={0} />,
+    );
+    expect(none).not.toContain('review-trigger');
   });
 });

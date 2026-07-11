@@ -1,4 +1,4 @@
-import { FOCUS, SEARCH_KEY, WORDMARK } from '../copy';
+import { FOCUS, REVIEW, SEARCH_KEY, WORDMARK } from '../copy';
 import type { Kpi } from '../derive';
 
 /**
@@ -20,6 +20,8 @@ export function TopBar({
   onOpenCmdk,
   focus = false,
   onToggleFocus,
+  onReview,
+  reviewCount = 0,
 }: {
   crumbs: Crumb[];
   kpis: Kpi[];
@@ -27,6 +29,10 @@ export function TopBar({
   /** Fullscreen focus (any view): chrome folded, canvas everywhere. */
   focus?: boolean;
   onToggleFocus?: () => void;
+  /** Open the review walk (D9) - shown only on pages with unvouched claims. */
+  onReview?: () => void;
+  /** How many unvouched claims the current page carries - the pill's count. */
+  reviewCount?: number;
 }): JSX.Element {
   return (
     <header className="topbar">
@@ -63,6 +69,18 @@ export function TopBar({
             </div>
           ))}
         </dl>
+        {onReview && reviewCount > 0 && (
+          <button
+            type="button"
+            className="review-trigger"
+            onClick={onReview}
+            title={REVIEW.enterHint}
+          >
+            <span className="review-trigger-text">{REVIEW.enter}</span>
+            <span className="review-trigger-count">{reviewCount}</span>
+            <kbd>R</kbd>
+          </button>
+        )}
         <button type="button" className="cmdk-trigger" onClick={onOpenCmdk}>
           <span className="cmdk-trigger-text">Search</span>
           <kbd>{SEARCH_KEY}</kbd>
