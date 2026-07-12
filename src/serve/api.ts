@@ -1,6 +1,12 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { type RankedModule, darkZones, moduleCoverage } from '../analytics/coverage';
+import {
+  type RankedModule,
+  type ValueRanked,
+  darkZones,
+  moduleCoverage,
+  valueQueue,
+} from '../analytics/coverage';
 import { moduleOf } from '../analytics/module';
 import type { FileGraph } from '../analytics/references';
 import type { RefRow } from '../build/db';
@@ -480,6 +486,21 @@ export function darkZonesFeed(
   return darkZones(repoRoot, index, config);
 }
 
+// ── /api/value-queue (D10 - the ask queue, ranked by value not darkness) ───────
+
+/**
+ * The value-ranked ask queue (D10): where explaining pays off *most* next -
+ * reference in-degree × churn × uncertainty, each factor exposed so the row can
+ * word its own "why now". Pure over the index; deterministic.
+ */
+export function valueQueueFeed(
+  repoRoot: string,
+  index: ArthaIndex,
+  config: ArthaConfig,
+): ValueRanked[] {
+  return valueQueue(repoRoot, index, config);
+}
+
 // ── /api/module/:id ───────────────────────────────────────────────────────────
 
 /** One fact as it touches a module: what it is, its standing, and the join. */
@@ -548,7 +569,8 @@ export function moduleDetail(
   config: ArthaConfig,
   module: string,
 ): ModuleDetail | null {
-  const ranked = darkZones(repoRoot, index, config);
+  // Rank by *value* (D10) so the page's "queue position" matches the ask queue.
+  const ranked = valueQueue(repoRoot, index, config);
   const universe = moduleUniverse(repoRoot, index, config);
   for (const r of ranked) universe.add(r.module);
   if (!universe.has(module)) return null;

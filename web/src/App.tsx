@@ -11,6 +11,7 @@ import {
   type RankedModule,
   type RefEdge,
   type Suggestion,
+  type ValueRanked,
   type VouchedPoint,
   certify,
   getCatalog,
@@ -23,6 +24,7 @@ import {
   getModuleBoard,
   getRefs,
   getSuggest,
+  getValueQueue,
   getVouchedHistory,
   linkPin,
   saveEntry,
@@ -71,6 +73,9 @@ export function App(): JSX.Element {
   );
   const [map, setMap] = useState<MapFeed | null>(null);
   const [zones, setZones] = useState<RankedModule[]>([]);
+  // The value-ranked ask queue (D10) - distinct from `zones` (the darkness score
+  // the atlas terrain + KPIs read); this is "where explaining pays off next".
+  const [queue, setQueue] = useState<ValueRanked[]>([]);
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
   const [refs, setRefs] = useState<RefEdge[]>([]);
   const [history, setHistory] = useState<VouchedPoint[]>([]);
@@ -115,6 +120,9 @@ export function App(): JSX.Element {
     getDarkZones()
       .then(setZones)
       .catch(() => setZones([]));
+    getValueQueue()
+      .then(setQueue)
+      .catch(() => setQueue([]));
     getCatalog()
       .then(setCatalog)
       .catch(() => setCatalog({ concepts: [], flows: [] }));
@@ -287,15 +295,17 @@ export function App(): JSX.Element {
   // (and the open capability detail, whose route key hasn't changed) so the map
   // redraws and the just-certified item glows without a reload.
   const refresh = useCallback(async () => {
-    const [m, c, z, h] = await Promise.allSettled([
+    const [m, c, z, q, h] = await Promise.allSettled([
       getMap(),
       getCatalog(),
       getDarkZones(),
+      getValueQueue(),
       getVouchedHistory(),
     ]);
     if (m.status === 'fulfilled') setMap(m.value);
     if (c.status === 'fulfilled') setCatalog(c.value);
     if (z.status === 'fulfilled') setZones(z.value);
+    if (q.status === 'fulfilled') setQueue(q.value);
     if (h.status === 'fulfilled') setHistory(h.value);
     setModuleDetails(new Map());
     setModuleBoards(new Map());
@@ -457,7 +467,7 @@ export function App(): JSX.Element {
       case 'observatory':
         return <Observatory feed={map} history={history} />;
       case 'queue':
-        return <QueuePage zones={zones} cold={map.cold} />;
+        return <QueuePage queue={queue} cold={map.cold} />;
       case 'module': {
         const detail = moduleDetails.get(route.id);
         if (detail === null) return <NotFound label={route.id} />;

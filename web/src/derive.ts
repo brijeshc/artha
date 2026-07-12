@@ -14,9 +14,10 @@ import type {
   ModuleDetail,
   ModuleFact,
   RefEdge,
+  ValueRanked,
   VouchedPoint,
 } from './api';
-import { KPI } from './copy';
+import { KPI, QUEUE } from './copy';
 import { type TreemapRect, treemap } from './treemap';
 
 export type CapabilityKind = 'concept' | 'flow';
@@ -706,6 +707,31 @@ export function vouchedBurnup(points: VouchedPoint[]): BurnPoint[] {
     running += byDate.get(date) ?? 0;
     return { date, count: running };
   });
+}
+
+/**
+ * The "why now" for a value-queue row (D10): the same three factors the value
+ * score is built from, worded so the row states in plain language *why it earned
+ * its rank* - what depends on it (agent consumption), whether it moves (churn),
+ * and what meaning is missing (uncertainty). Read in a fixed order: leverage,
+ * then movement, then the gap. The leverage and movement clauses are omitted when
+ * they don't apply (reach/churn 0); the gap clause always names the ask, so every
+ * row carries at least one honest reason. Same discipline as the D5 evidence why.
+ *
+ * The gap clause reports drift *before* emptiness: a module with a once-vouched
+ * fact that has since drifted (`staleFacts > 0`) reads "…drifted", never "nothing
+ * vouched here yet" - the "yet" would be a lie (it *was* vouched) and would bury
+ * the more urgent signal, that standing meaning broke. Only a module nobody ever
+ * vouched (`certifiedFacts === 0 && staleFacts === 0`) is truly un-vouched.
+ */
+export function whyNow(v: ValueRanked): string[] {
+  const reasons: string[] = [];
+  if (v.reach > 0) reasons.push(QUEUE.why.reach(v.reach));
+  if (v.churn > 0) reasons.push(QUEUE.why.churn(v.churn));
+  if (v.staleFacts > 0) reasons.push(QUEUE.why.stale(v.staleFacts));
+  else if (v.certifiedFacts === 0) reasons.push(QUEUE.why.unvouched);
+  else reasons.push(QUEUE.why.partial);
+  return reasons;
 }
 
 function sum(ns: number[]): number {

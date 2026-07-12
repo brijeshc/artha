@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { darkZones, moduleCoverage, scoreModule } from '../../src/analytics/coverage';
+import { darkZones, moduleCoverage, scoreModule, valueQueue } from '../../src/analytics/coverage';
 import { moduleOf } from '../../src/analytics/module';
 import { defaultConfig } from '../../src/config/config';
 import type { ArthaIndex } from '../../src/mcp/query';
@@ -183,5 +183,62 @@ describe('darkZones', () => {
     expect(ranked.every((r) => r.score === 0)).toBe(true);
     // high-churn leads among equally-dark (score-0) modules
     expect(ranked[0]?.module).toBe('src/hot');
+  });
+});
+
+describe('valueQueue (D10 - value, not darkness)', () => {
+  beforeEach(() => {
+    repo = mkdtempSync(join(tmpdir(), 'artha-vq-'));
+    git(['init', '-q']);
+    git(['config', 'user.email', 'test@example.com']);
+    git(['config', 'user.name', 'Test']);
+  });
+  afterEach(() => rmSync(repo, { recursive: true, force: true }));
+
+  const vq = (index: ArthaIndex) => valueQueue(repo, index, defaultConfig(), { now: NOW });
+
+  it('lifts a foundational (many-imported) dark module above an equally-churned leaf', () => {
+    churnModule('core', 2);
+    churnModule('leaf', 2);
+    // three distinct modules import core; nothing imports leaf.
+    const index = fakeIndex({
+      refs: [
+        { from_module: 'src/a', to_module: 'src/core', count: 5 },
+        { from_module: 'src/b', to_module: 'src/core', count: 1 },
+        { from_module: 'src/c', to_module: 'src/core', count: 1 },
+        { from_module: 'src/core', to_module: 'src/core', count: 9 }, // self-edge ignored
+      ],
+    });
+
+    const ranked = vq(index);
+    const core = ranked.find((r) => r.module === 'src/core');
+    const leaf = ranked.find((r) => r.module === 'src/leaf');
+    // reach = distinct importers (self-edge excluded) = 3
+    expect(core?.reach).toBe(3);
+    expect(leaf?.reach).toBe(0);
+    // both dark + equally churned, but core is pulled far more → it leads
+    expect(core?.value).toBeGreaterThan(leaf?.value ?? 0);
+    expect(ranked.indexOf(core ?? ranked[0])).toBeLessThan(ranked.indexOf(leaf ?? ranked[0]));
+    // deterministic
+    expect(vq(index)).toEqual(ranked);
+  });
+
+  it('sinks a well-vouched module: low uncertainty → low value (same churn, no reach)', () => {
+    churnModule('done', 3);
+    churnModule('dark', 3); // equal churn, so uncertainty is the only differentiator
+    const index = fakeIndex({
+      // three certified facts on `done` → deep coverage → low uncertainty
+      facts: ['a', 'b', 'c'].map((n) => fact(`concept.done_${n}`, 'certified')),
+      pins: ['a', 'b', 'c'].map((n) => pin(`concept.done_${n}`, `src/done/${n}.ts#${n}`)),
+    });
+
+    const ranked = vq(index);
+    const done = ranked.find((r) => r.module === 'src/done');
+    const dark = ranked.find((r) => r.module === 'src/dark');
+    // the vouched module is far less uncertain than the dark one…
+    expect(done?.uncertainty).toBeLessThan(dark?.uncertainty ?? 1);
+    // …so at equal churn it sinks below the still-dark module
+    expect(dark?.value).toBeGreaterThan(done?.value ?? 0);
+    expect(ranked[0]?.module).toBe('src/dark');
   });
 });

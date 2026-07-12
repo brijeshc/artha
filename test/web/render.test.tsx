@@ -12,6 +12,7 @@ import type {
   RankedModule,
   RefEdge,
   Suggestion,
+  ValueRanked,
   VouchedPoint,
 } from '../../web/src/api';
 import { GAP_Y, boardLayout, fileBoardLayout } from '../../web/src/board';
@@ -47,6 +48,7 @@ import {
   moduleReviewClaims,
   shortName,
   vouchedBurnup,
+  whyNow,
 } from '../../web/src/derive';
 import { roughLine, roughRect, seedFrom } from '../../web/src/rough';
 import { parseRoute, routeHref } from '../../web/src/router';
@@ -346,6 +348,37 @@ describe('derive', () => {
     // `src/billing-x` must not match `src/billing` (prefix ends at a separator)
     expect(moduleOfPath('src/billing-x/a.ts', ['src/billing'])).toBeNull();
     expect(moduleOfPath('lib/util.ts', ['src/billing'])).toBeNull();
+  });
+
+  it('words a value-queue row’s "why now" from its factors (D10)', () => {
+    const base = { module: 'm', score: 0, coverage: 0, freshness: 1, value: 1, uncertainty: 1 };
+    // a busy, foundational, unvouched module: leverage · movement · the gap
+    expect(whyNow({ ...base, churn: 30, reach: 3, certifiedFacts: 0, staleFacts: 0 })).toEqual([
+      '3 modules depend on it',
+      '30 recent changes',
+      'nothing vouched here yet',
+    ]);
+    // a single importer agrees the verb: "1 module depends on it", not "depend"
+    expect(whyNow({ ...base, churn: 4, reach: 1, certifiedFacts: 0, staleFacts: 0 })).toEqual([
+      '1 module depends on it',
+      '4 recent changes',
+      'nothing vouched here yet',
+    ]);
+    // drift is a louder uncertainty than "partly vouched"
+    expect(whyNow({ ...base, churn: 2, reach: 0, certifiedFacts: 3, staleFacts: 1 })).toEqual([
+      '2 recent changes',
+      '1 vouched fact drifted',
+    ]);
+    // drift also outranks emptiness: a module whose only vouched fact has drifted
+    // reads "…drifted", never "nothing vouched here yet" (the "yet" would be a lie).
+    expect(whyNow({ ...base, churn: 4, reach: 0, certifiedFacts: 0, staleFacts: 1 })).toEqual([
+      '4 recent changes',
+      '1 vouched fact drifted',
+    ]);
+    // reach 0 omits the leverage clause; some vouched, none drifted → partial
+    expect(whyNow({ ...base, churn: 0, reach: 0, certifiedFacts: 2, staleFacts: 0 })).toEqual([
+      'only partly vouched',
+    ]);
   });
 });
 
@@ -1432,18 +1465,54 @@ describe('CatalogPage', () => {
   });
 });
 
-describe('QueuePage', () => {
-  it('ranks dark zones with churn bars and standings', () => {
-    const html = markup(<QueuePage zones={zones} cold={false} />);
+describe('QueuePage (value-ranked, D10)', () => {
+  // A value-ranked queue: a busy, foundational, unvouched module leads; a
+  // partly-vouched-but-drifted one follows.
+  const valueZones: ValueRanked[] = [
+    {
+      module: 'src/checkout',
+      score: 0,
+      churn: 30,
+      coverage: 0,
+      freshness: 1,
+      certifiedFacts: 0,
+      staleFacts: 0,
+      reach: 3,
+      uncertainty: 1,
+      value: (1 + 3) * (1 + 30) * 1,
+    },
+    {
+      module: 'src/billing',
+      score: 0.4,
+      churn: 8,
+      coverage: 0.5,
+      freshness: 0.5,
+      certifiedFacts: 1,
+      staleFacts: 1,
+      reach: 1,
+      uncertainty: 0.75,
+      value: (1 + 1) * (1 + 8) * 0.75,
+    },
+  ];
+
+  it('ranks by value and states each row’s "why now" in words (D10)', () => {
+    const html = markup(<QueuePage queue={valueZones} cold={false} />);
+    // value order: checkout (busy, foundational, unvouched) leads billing
+    expect(html.indexOf('src/checkout')).toBeLessThan(html.indexOf('src/billing'));
     expect(html).toContain('01');
-    expect(html).toContain('src/legacy');
-    expect(html).toContain('unexplained');
-    expect(html).toContain('partly explained');
-    expect(html).toContain(routeHref({ view: 'module', id: 'src/legacy' }));
+    // the why-now clauses, worded from the factors (reach · churn · the gap)
+    expect(html).toContain('3 modules depend on it'); // reach (agent-consumption)
+    expect(html).toContain('30 recent changes'); // churn
+    expect(html).toContain('nothing vouched here yet'); // the unvouched gap
+    // the second row's gap is drift, not emptiness (it has a certified-but-stale fact)
+    expect(html).toContain('1 vouched fact drifted');
+    expect(html).toContain(routeHref({ view: 'module', id: 'src/checkout' }));
+    // the reframed gloss makes the value ranking explicit, not "darkest first"
+    expect(html).toContain('Where explaining pays off next');
   });
 
   it('empty queue is a statement, not an error', () => {
-    const html = markup(<QueuePage zones={[]} cold={false} />);
+    const html = markup(<QueuePage queue={[]} cold={false} />);
     expect(html).toContain('Nothing is dark');
   });
 });

@@ -259,7 +259,7 @@ export interface VouchedPoint {
   name: string | null;
 }
 
-/** Ranked dark-zone (the ask-queue, T13). `score` lower = darker. */
+/** Ranked dark-zone (the darkness score, T13). `score` lower = darker. */
 export interface RankedModule {
   module: string;
   score: number;
@@ -268,6 +268,17 @@ export interface RankedModule {
   freshness: number;
   certifiedFacts: number;
   staleFacts: number;
+}
+
+/** A module in the value-ranked ask queue (D10): where explaining pays off next,
+ * with the three factors exposed so the row can word its "why now". */
+export interface ValueRanked extends RankedModule {
+  /** Agent-consumption proxy: how many modules import this one (reference in-degree). */
+  reach: number;
+  /** Uncertainty ∈ (0,1]: 1 - vouched depth; a dark module ~1, a vouched one ~0. */
+  uncertainty: number;
+  /** The value score = (1 + reach) × (1 + churn) × uncertainty; higher = sooner. */
+  value: number;
 }
 
 async function getJson<T>(path: string): Promise<T> {
@@ -282,6 +293,12 @@ export function getMap(): Promise<MapFeed> {
 
 export function getDarkZones(): Promise<RankedModule[]> {
   return getJson<RankedModule[]>('api/dark-zones');
+}
+
+/** The value-ranked ask queue (D10): where explaining pays off next, each row
+ * carrying the reach/churn/uncertainty factors its "why now" is worded from. */
+export function getValueQueue(): Promise<ValueRanked[]> {
+  return getJson<ValueRanked[]>('api/value-queue');
 }
 
 export function getCatalog(): Promise<Catalog> {

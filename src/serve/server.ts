@@ -17,6 +17,7 @@ import {
   moduleDetail,
   refsFeed,
   search,
+  valueQueueFeed,
   vouchedHistory,
 } from './api';
 import { evidenceFor } from './evidence';
@@ -139,6 +140,10 @@ async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void>
     }
     if (path === '/api/dark-zones') {
       sendJson(res, 200, darkZonesFeed(ctx.repoRoot, index, ctx.config));
+      return;
+    }
+    if (path === '/api/value-queue') {
+      sendJson(res, 200, valueQueueFeed(ctx.repoRoot, index, ctx.config));
       return;
     }
     if (path === '/api/catalog') {

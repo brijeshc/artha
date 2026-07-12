@@ -148,3 +148,67 @@ export function darkZones(
   ranked.sort((a, b) => a.score - b.score || b.churn - a.churn || a.module.localeCompare(b.module));
   return ranked;
 }
+
+/**
+ * A module ranked for the **value** queue (D10), with the three factors that
+ * decide where explaining pays off next exposed so the UI can word its "why now".
+ */
+export interface ValueRanked extends RankedModule {
+  /**
+   * Agent-consumption proxy (D10 "what agents actually pull over MCP"): the
+   * module's **reference in-degree** - how many distinct modules import it, i.e.
+   * how often it is pulled into an agent's context as a dependency. A
+   * deterministic, offline stand-in until real MCP pull telemetry exists;
+   * isolated here so that telemetry can replace it without touching the formula.
+   */
+  reach: number;
+  /**
+   * Uncertainty ∈ (0,1] (D10 "where the machine is least sure"): `1 - vouched
+   * depth` (coverage × freshness). A dark module sits near 1; a well-vouched,
+   * un-drifted one approaches 0, so it sinks in the queue.
+   */
+  uncertainty: number;
+  /**
+   * The value score: `(1 + reach) × (1 + churn) × uncertainty`. Higher = a bigger
+   * payoff from explaining it now. The `1 +` guards keep a single zero factor
+   * (a leaf module nobody imports, a module with no recent churn) from collapsing
+   * the product, so every factor contributes rather than gating.
+   */
+  value: number;
+}
+
+/**
+ * The **value-ranked** ask queue (D10): the same module universe as
+ * {@link darkZones}, reordered by **agent-consumption × churn × uncertainty**
+ * (what agents pull over MCP, where code moves, where the machine is least sure)
+ * so the top of the queue is where explaining pays off *most*, not merely where
+ * it is darkest. Pure over the index (churn + coverage + the reference graph);
+ * deterministic - sorted by value descending, ties broken by churn then name.
+ */
+export function valueQueue(
+  repoRoot: string,
+  index: ArthaIndex,
+  config: ArthaConfig,
+  options: DarkZoneOptions = {},
+): ValueRanked[] {
+  // Reference in-degree: distinct importers per module (self-edges excluded).
+  const reach = new Map<string, number>();
+  for (const ref of index.refs) {
+    if (ref.from_module === ref.to_module) continue;
+    reach.set(ref.to_module, (reach.get(ref.to_module) ?? 0) + 1);
+  }
+
+  const valued = darkZones(repoRoot, index, config, options).map((r): ValueRanked => {
+    const reachN = reach.get(r.module) ?? 0;
+    const uncertainty = 1 - r.coverage * r.freshness;
+    return {
+      ...r,
+      reach: reachN,
+      uncertainty,
+      value: (1 + reachN) * (1 + r.churn) * uncertainty,
+    };
+  });
+
+  valued.sort((a, b) => b.value - a.value || b.churn - a.churn || a.module.localeCompare(b.module));
+  return valued;
+}

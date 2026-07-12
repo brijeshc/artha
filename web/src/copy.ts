@@ -208,11 +208,23 @@ export const COLD = {
 
 export const QUEUE = {
   title: 'Dark zones',
+  // D10: ranked by *value*, not darkness - agent-consumption × churn ×
+  // uncertainty (what agents pull, where code moves, where the machine is least
+  // sure), so the top is where explaining pays off most, not merely the darkest.
   gloss:
-    'Modules with the most unexplained change, riskiest first. Each one is a place a newcomer - or an AI agent - is flying blind.',
+    'Where explaining pays off next, not just the darkest: ranked by what agents pull for context, where code keeps moving, and where the least is vouched. Each row says why it is here.',
   coldGloss:
-    'Nothing is explained yet, so every changing module is dark. Start at the top: the busiest module is where meaning pays off first.',
+    'Nothing is vouched yet, so every changing module is worth explaining. Ranked by value: the code agents lean on most, moving the most, leads.',
   empty: 'Nothing is dark - every changing module carries certified meaning. (Rare. Enjoy it.)',
+  /** The worded "why now" per row (D10) - the value factors in plain language. */
+  whyLabel: 'why now',
+  why: {
+    reach: (n: number): string => `${n} module${n === 1 ? ' depends' : 's depend'} on it`,
+    churn: (n: number): string => `${n} recent change${n === 1 ? '' : 's'}`,
+    unvouched: 'nothing vouched here yet',
+    stale: (n: number): string => `${n} vouched fact${n === 1 ? '' : 's'} drifted`,
+    partial: 'only partly vouched',
+  },
 } as const;
 
 export const CATALOG = {

@@ -1859,10 +1859,10 @@ a.fact-line:hover {
 
 .queue-row {
   display: grid;
-  grid-template-columns: 34px minmax(140px, 1fr) minmax(120px, 220px) auto;
+  grid-template-columns: 34px minmax(120px, 0.9fr) minmax(200px, 1.7fr) minmax(130px, 200px);
   align-items: center;
   gap: 14px;
-  padding: 9px 8px 9px 2px;
+  padding: 10px 8px 10px 2px;
   border-bottom: 1px solid var(--line);
   transition: background var(--fast);
 }
@@ -1905,11 +1905,26 @@ a.fact-line:hover {
   min-width: 34px;
   text-align: right;
 }
-.queue-standing {
+/* the worded "why now" (D10): the value factors in plain language, each a quiet
+ * chip so the ranking explains itself rather than hiding behind a score. */
+.queue-why {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  justify-self: end;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.why-chip {
+  font-size: 11px;
+  color: var(--ink-2);
+  padding: 2px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  white-space: nowrap;
+}
+/* the meaning-gap chip (always the last) reads a touch louder - it names the ask */
+.why-chip:last-child {
+  color: var(--ink);
+  border-color: rgba(158, 196, 188, 0.34);
 }
 
 /* ── Module page ───────────────────────────────────────────────────────────── */
