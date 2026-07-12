@@ -182,6 +182,16 @@ describe('conceptDetail', () => {
     expect(conceptDetail(index, 'flow.checkout', config)).toBeNull();
     expect(conceptDetail(index, 'concept.nope', config)).toBeNull();
   });
+
+  it('carries the human delta band (D6): notes when written, null when not', () => {
+    const withNotes = fakeIndex({
+      facts: [fact('concept.sub', 'certified', { heading: 'Sub', notes: 'Retries stop at 3.' })],
+    });
+    expect(conceptDetail(withNotes, 'concept.sub', config)?.notes).toBe('Retries stop at 3.');
+
+    const without = fakeIndex({ facts: [fact('concept.sub', 'certified', { heading: 'Sub' })] });
+    expect(conceptDetail(without, 'concept.sub', config)?.notes).toBeNull();
+  });
 });
 
 describe('flowDetail', () => {
@@ -216,6 +226,13 @@ describe('flowDetail', () => {
     expect(detail?.steps[0]).toMatchObject({ on: 'cart submitted', do: 'validate' });
     expect(detail?.steps[0]?.pin?.symbol).toBe('src/checkout/validate.ts#validate');
     expect(detail?.steps[1]).toMatchObject({ on: null, do: 'create order', pin: null });
+  });
+
+  it('carries the human delta band (D6)', () => {
+    const index = fakeIndex({
+      facts: [fact('flow.refund', 'certified', { heading: 'Refund', notes: 'Never partial.' })],
+    });
+    expect(flowDetail(index, 'flow.refund', config)?.notes).toBe('Never partial.');
   });
 });
 

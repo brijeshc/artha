@@ -16,6 +16,8 @@ export interface Curation {
   link: (id: string, symbol: string) => Promise<void>;
   /** Upsert an entry's fields (merged; the edit un-certifies). */
   edit: (patch: { id: string } & Record<string, unknown>) => Promise<void>;
+  /** Record the delta band (D6) as human ink; additive, never un-certifies. */
+  setNotes: (id: string, notes: string) => Promise<void>;
 }
 
 /** The "vouch for this" action - hidden once an entry is already certified. */

@@ -6,7 +6,7 @@ import { parse as parseYaml } from 'yaml';
 import { openIndex } from '../../src/build/db';
 import { defaultConfig } from '../../src/config/config';
 import type { ResolvedSymbol, SymbolResolver } from '../../src/resolver/SymbolResolver';
-import { addPin, certifyEntry, commitWrite, upsertEntry } from '../../src/serve/write';
+import { addPin, certifyEntry, commitWrite, setNotes, upsertEntry } from '../../src/serve/write';
 
 // T17 write layer, exercised over a real `.artha/` tree on disk - every mutation
 // is a plain YAML file (a git diff), and validation/build discipline is proven by
@@ -216,6 +216,54 @@ describe('upsertEntry (edit)', () => {
     const entry = readEntry(path);
     expect(entry.status).toBe('proposed');
     expect(entry.certified_by).toBeUndefined();
+  });
+});
+
+describe('setNotes (the delta band, D6)', () => {
+  const seedCertifiedSub = () =>
+    seed('concepts', 'sub', {
+      id: 'concept.sub',
+      kind: 'concept',
+      status: 'certified',
+      name: 'Subscription',
+      summary: 'Paid recurring access.',
+      certified_by: 'ada',
+      certified_at: '2026-06-01',
+      pins: [{ symbol: 'src/billing/Sub.ts#Sub' }],
+    });
+
+  it('records human ink WITHOUT un-certifying (additive, unlike an edit)', () => {
+    const path = seedCertifiedSub();
+    const out = setNotes(repo, 'concept.sub', '  Retries stop after 3 attempts.  ');
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    // the vouched claim is untouched - the delta is layered on top
+    expect(out.status).toBe('certified');
+
+    const entry = readEntry(path);
+    expect(entry.notes).toBe('Retries stop after 3 attempts.'); // trimmed
+    expect(entry.status).toBe('certified');
+    expect(entry.certified_by).toBe('ada');
+    expect(entry.certified_at).toBe('2026-06-01');
+    // additive: the pins the UI never sent survive
+    expect(entry.pins).toEqual([{ symbol: 'src/billing/Sub.ts#Sub' }]);
+  });
+
+  it('clears the field entirely when given an empty string', () => {
+    const path = seedCertifiedSub();
+    setNotes(repo, 'concept.sub', 'temporary note');
+    expect(readEntry(path).notes).toBe('temporary note');
+    const out = setNotes(repo, 'concept.sub', '   ');
+    expect(out.ok).toBe(true);
+    expect(readEntry(path).notes).toBeUndefined(); // omitted, not a blank string
+  });
+
+  it('404s an unknown entry and refuses an inferred (un-materialized) id', () => {
+    expect(setNotes(repo, 'concept.ghost', 'x')).toMatchObject({ ok: false, code: 404 });
+    expect(setNotes(repo, 'inferred:concept:src/x.ts#Y', 'x')).toMatchObject({
+      ok: false,
+      code: 404,
+    });
   });
 });
 

@@ -23,6 +23,7 @@ CREATE TABLE artha_facts (
   status        TEXT NOT NULL,
   heading       TEXT,
   body          TEXT,
+  notes         TEXT,
   severity      TEXT,
   why           TEXT,
   supersedes    TEXT,
@@ -124,6 +125,8 @@ export interface FactRow {
   status: string;
   heading: string | null;
   body: string | null;
+  /** Human-authored delta (D6): "what the code can't say"; null until written. */
+  notes: string | null;
   severity: string | null;
   why: string | null;
   supersedes: string | null;
@@ -293,8 +296,8 @@ export function writeIndex(dbPath: string, data: IndexData): void {
 
     const fact = db.prepare(
       `INSERT INTO artha_facts
-        (id, kind, status, heading, body, severity, why, supersedes, certified_by, certified_at, source_path)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, kind, status, heading, body, notes, severity, why, supersedes, certified_by, certified_at, source_path)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const fts = db.prepare('INSERT INTO artha_fts (id, heading, body) VALUES (?, ?, ?)');
     for (const r of data.facts) {
@@ -304,6 +307,7 @@ export function writeIndex(dbPath: string, data: IndexData): void {
         r.status,
         r.heading,
         r.body,
+        r.notes,
         r.severity,
         r.why,
         r.supersedes,
@@ -311,7 +315,9 @@ export function writeIndex(dbPath: string, data: IndexData): void {
         r.certified_at,
         r.source_path,
       );
-      fts.run(r.id, r.heading ?? '', r.body ?? '');
+      // Fold the human delta into the FTS body (not the `body` column) so search
+      // finds "that warning about the gateway" while the retrieval prose stays pure.
+      fts.run(r.id, r.heading ?? '', [r.body, r.notes].filter(Boolean).join('\n'));
     }
 
     const pin = db.prepare(

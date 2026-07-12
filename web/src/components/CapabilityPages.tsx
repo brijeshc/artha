@@ -1,8 +1,9 @@
 import type { ConceptDetail, FlowDetail, PinView, Suggestion } from '../api';
-import { CURATE, DETAIL, ROUTE } from '../copy';
+import { CURATE, DELTA, DETAIL, ROUTE } from '../copy';
 import { moduleOfPath, shortName } from '../derive';
 import { routeHref } from '../router';
 import { CertifyButton, type Curation, EditFields, LinkCode, SuggestedCode } from './Curate';
+import { DeltaBand } from './Delta';
 import { EvidenceReveal } from './Evidence';
 import { StateMachine } from './StateMachine';
 import { KindTag, SectionHead, StatusBadge } from './Status';
@@ -52,9 +53,12 @@ export function ConceptPage({
               <tbody>
                 {detail.states.map((s) => (
                   <tr key={s.name}>
+                    {/* State names are read from code (machine); the effect and the
+                        invariant are human intent - human ink, or an honest "not
+                        read from code" so the reader can tell which is which (D6). */}
                     <td className="mono state-name">{s.name}</td>
-                    <td>{s.effect ?? <span className="dim">-</span>}</td>
-                    <td>{s.invariant ?? <span className="dim">-</span>}</td>
+                    <StateCell value={s.effect} />
+                    <StateCell value={s.invariant} />
                   </tr>
                 ))}
               </tbody>
@@ -65,15 +69,28 @@ export function ConceptPage({
         )}
       </section>
 
+      <DeltaBand n="02" surface="concept" notes={detail.notes} id={detail.id} curation={curation} />
+
       <PinsSection
-        n="02"
+        n="03"
         title={DETAIL.pinsHead}
         pins={detail.pins}
         modules={detail.modules}
         linkTo={{ id: detail.id, curation, suggestions }}
       />
-      <RelatedSection n="03" related={detail.related} names={names} />
+      <RelatedSection n="04" related={detail.related} names={names} />
     </div>
+  );
+}
+
+/** A state's effect/invariant cell: human intent read as *human ink* when filled,
+ * or an honest "not read from code" when the human hasn't recorded it yet - never
+ * a bare dash, so the per-field provenance (D6) is always legible. */
+function StateCell({ value }: { value: string | null }): JSX.Element {
+  return value ? (
+    <td className="human-ink">{value}</td>
+  ) : (
+    <td className="state-empty">{DELTA.notFromCode}</td>
   );
 }
 
@@ -142,7 +159,9 @@ export function FlowPage({
         )}
       </section>
 
-      <RelatedSection n="03" related={detail.related} names={names} />
+      <DeltaBand n="03" surface="flow" notes={detail.notes} id={detail.id} curation={curation} />
+
+      <RelatedSection n="04" related={detail.related} names={names} />
     </div>
   );
 }

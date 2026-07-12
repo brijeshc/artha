@@ -3297,18 +3297,93 @@ a.fact-line:hover {
   margin: -2px 0 10px;
 }
 
-/* the delta band (D6): human ink over machine print - visually its own slot,
- * an invitation to add what the code cannot hold. */
+/* the delta band (D6): human ink over machine print - its own visually distinct
+ * slot for what the code cannot hold. Empty, it is a dashed *invitation*; filled,
+ * it becomes a solid authored panel whose lines read as human ink. */
 .delta-band {
   border: 1px dashed var(--line-2);
   border-radius: 3px;
   padding: 14px 16px;
   background: rgba(158, 196, 188, 0.03);
 }
+.delta-band.filled {
+  border-style: solid;
+  background: var(--night-2);
+}
 .delta-body {
   margin: 6px 0 0;
   color: var(--ink-2);
   max-width: 64ch;
+}
+.delta-ink {
+  margin-top: 8px;
+}
+.delta-line {
+  margin: 0 0 7px;
+  max-width: 64ch;
+}
+.delta-line:last-of-type {
+  margin-bottom: 0;
+}
+/* human ink: full-strength and a touch heavier - a person's voice, plainly
+ * distinct from the muted, cooler machine prose. No new hue (D2). */
+.human-ink {
+  color: var(--ink);
+  font-weight: 500;
+}
+.delta-attribution {
+  margin: 11px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+}
+.delta-add,
+.delta-edit {
+  margin-top: 12px;
+}
+.delta-textarea {
+  min-height: 96px;
+  max-width: 64ch;
+}
+
+/* per-field provenance in the states table (D6): state names are read from code
+ * (phosphor mono); a filled effect/invariant is human ink; an empty one says so
+ * honestly rather than showing a bare dash, so the reader can always tell which
+ * is which. */
+.states-table td.human-ink {
+  color: var(--ink);
+  font-weight: 500;
+}
+.states-table td.state-empty {
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+/* the module page's delta band: a compact human-ink counterpart sitting directly
+ * under the machine lead - the two lights, paired. */
+.module-delta {
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border-left: 2px solid var(--line-2);
+  border-radius: 3px;
+  background: rgba(158, 196, 188, 0.03);
+  max-width: 64ch;
+}
+.module-delta.filled {
+  border-left-color: var(--ink-3);
+  background: var(--night-2);
+}
+.module-delta-head {
+  margin: 0 0 4px;
+  font-size: 9.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.module-delta .delta-body,
+.module-delta .delta-line {
+  margin: 0;
 }
 
 /* an inferred flow skeleton's fan-out: the areas it reaches, read from imports.

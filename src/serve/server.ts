@@ -23,7 +23,7 @@ import { evidenceFor } from './evidence';
 import { materializeInferred } from './materialize';
 import { suggestPins } from './suggest';
 import { repoResolver, repoStructure, searchSymbols, symbolCatalog } from './symbols';
-import { addPin, certifyEntry, commitWrite, upsertEntry } from './write';
+import { addPin, certifyEntry, commitWrite, setNotes, upsertEntry } from './write';
 
 export interface ServeOptions {
   repoRoot: string;
@@ -206,11 +206,12 @@ async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void>
 }
 
 /**
- * The T17 curation writes: **certify** · **link** (pin) · **edit**. Each mutates
- * one `.artha/*.yaml` and rebuilds the index so the next read reflects it (the
- * map redraws); a write that would break the build is rolled back. Writes are
- * serialized (`ctx.writeLock`) so concurrent tabs can't interleave a rebuild.
- * Read endpoints stay GET-only, so `POST /api/map` is a 405.
+ * The curation writes: **certify** · **link** (pin) · **edit** (T17) · **notes**
+ * (D6, the delta band). Each mutates one `.artha/*.yaml` and rebuilds the index
+ * so the next read reflects it (the map redraws); a write that would break the
+ * build is rolled back. Writes are serialized (`ctx.writeLock`) so concurrent
+ * tabs can't interleave a rebuild. Read endpoints stay GET-only, so `POST
+ * /api/map` is a 405.
  *
  * Certify/edit accept an **inferred id** too (`inferred:…`): the machine layer is
  * a regenerable cache with no YAML, so vouching/editing one first materializes it
@@ -224,7 +225,12 @@ async function handleWrite(
   ctx: Ctx,
 ): Promise<void> {
   const path = url.pathname;
-  if (path !== '/api/certify' && path !== '/api/pin' && path !== '/api/entry') {
+  if (
+    path !== '/api/certify' &&
+    path !== '/api/pin' &&
+    path !== '/api/entry' &&
+    path !== '/api/notes'
+  ) {
     sendJson(res, 405, { error: 'method not allowed' });
     return;
   }
@@ -272,6 +278,11 @@ async function handleWrite(
         // it ever reaches disk (the on-disk YAML stays buildable).
         const resolver = await createTreeSitterResolver(ctx.repoRoot);
         return addPin(ctx.repoRoot, id, asString(body.symbol), resolver);
+      }
+      if (path === '/api/notes') {
+        // The delta band (D6): record "what the code can't say" as human ink.
+        // Additive - recording it never re-opens a certification (see setNotes).
+        return setNotes(ctx.repoRoot, id, asString(body.notes));
       }
       // Editing an inferred id materializes it as a proposed draft with the
       // correction applied (D8: correct the machine draft, don't compose blank).

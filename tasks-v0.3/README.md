@@ -13,7 +13,8 @@ Contradiction detection remains in v0.3, but as a near-byproduct: once inferred 
 **23d-1 is done (2026-07-09)** - evidence revealed (D5): every pin reveals its exact source lines one click away.
 **23d-2 is done (2026-07-09)** - vouch-by-reading (D9 core + OQ-A): an inferred concept/flow can be vouched or corrected in place, materializing into a real `.artha/` entry with `derived_from` provenance - the moonlight layer is now actionable, not just readable.
 **23d-3 is done (2026-07-11)** - the review walk (D9): press `R` (or a top-bar Review pill) on any module/capability page to sweep its unvouched claims one at a time - claim left, code right, one keystroke to vouch or correct - page-scoped, never a global queue, and needing no new backend.
-Then the delta band (D6) + value-ranked queue (D10) finish 23d, then 21b (LLM synthesis + verification) and 23e (craft debt).
+**23d-4 is done (2026-07-12)** - the delta band (D6): every capability/module page carries a distinct "What the code can't say" slot for the business rules, constraints, history, and warnings no code holds, rendered as human ink over the machine's print; a new additive `notes` field (`POST /api/notes`) records it without un-certifying the vouched claim, and the states table now marks per-field provenance ("not read from code" instead of a bare dash).
+Then the value-ranked queue (D10) finishes 23d, then 21b (LLM synthesis + verification) and 23e (craft debt).
 
 | #   | Task | Depends on | One-line summary |
 |-----|------|------------|------------------|

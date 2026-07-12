@@ -51,6 +51,15 @@ export interface BaseEntry {
    */
   derived_from?: string;
   /**
+   * The delta band (D6): human ink over machine print. Free-prose the *code
+   * cannot hold* - business rules, constraints, history, the warning someone
+   * left - kept apart from the machine-read `summary`/`states` so the reader can
+   * always tell which is which. Purely additive: unlike an `edit`, recording the
+   * delta never re-opens a certification (the vouched claim is unchanged; this is
+   * knowledge layered on top). Absent until a human writes it.
+   */
+  notes?: string;
+  /**
    * Absolute path of the `.artha/*.yaml` this entry was loaded from. Populated
    * by the loader at read time; never part of the schema and never written
    * back to disk by the dumper.

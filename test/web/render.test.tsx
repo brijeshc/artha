@@ -66,6 +66,7 @@ const noopCuration = {
   certify: async () => {},
   link: async () => {},
   edit: async () => {},
+  setNotes: async () => {},
 };
 
 function markup(el: JSX.Element): string {
@@ -621,6 +622,7 @@ describe('flow routes on the board', () => {
     ],
     related: [],
     modules: ['src/billing', 'src/payments'],
+    notes: null,
   };
 
   it('collapses consecutive same-module steps into stations; unlinked steps draw nothing', () => {
@@ -997,6 +999,16 @@ describe('ModulePage (engineer lens, 16c)', () => {
     expect(html).toContain('src/billing/stripe.ts#client');
   });
 
+  it('frames the human delta (D6): the module-scope counterpart to the machine lead', () => {
+    const html = markup(
+      <ModulePage detail={detail} capabilityOf={capabilityOf} curation={noopCuration} />,
+    );
+    // a module is not an entry, so the band points at the why (1 decision + 1 rule = 2)
+    expect(html).toContain('module-delta filled');
+    expect(html).toContain('What the code can’t say');
+    expect(html).toContain('2 things here the code can’t say');
+  });
+
   it('a dark module says so and funnels into the queue', () => {
     const darkDetail: ModuleDetail = {
       ...detail,
@@ -1017,6 +1029,8 @@ describe('ModulePage (engineer lens, 16c)', () => {
     expect(html).toContain('#1'); // its queue position
     // even a dark module shows how it's wired in code (structure survives no meaning)
     expect(html).toContain('Wired to');
+    // a pure cold module skips the delta band - the dark-empty funnel already speaks to it
+    expect(html).not.toContain('module-delta');
   });
 
   it('shows what the module is wired to, with links and coupling counts (T17b)', () => {
@@ -1083,6 +1097,8 @@ describe('ConceptPage', () => {
     ],
     related: ['decision.no_float_money', 'flow.refund'],
     modules: ['src/billing'],
+    notes:
+      'Invoices are immutable once issued - void, never delete.\nAmounts are always in minor units (cents).',
   };
 
   it('draws the machine (node per state, edge per transition) plus the table', () => {
@@ -1109,6 +1125,27 @@ describe('ConceptPage', () => {
     expect(html).toContain(
       `class="pin-link" href="${routeHref({ view: 'module', id: 'src/billing' })}"`,
     );
+  });
+
+  it('carries the delta band as human ink when written (D6), a filled distinct slot', () => {
+    const html = markup(<ConceptPage detail={detail} names={new Map()} curation={noopCuration} />);
+    expect(html).toContain('What the code can’t say'); // the one distinct slot
+    expect(html).toContain('cap-section delta-band filled'); // authored, not the dashed invite
+    expect(html).toContain('delta-line human-ink'); // typographically distinct from machine prose
+    expect(html).toContain('Invoices are immutable once issued'); // first delta line
+    expect(html).toContain('Amounts are always in minor units (cents).'); // second delta line
+    expect(html).toContain('recorded by your team'); // provenance attribution
+    expect(html).toContain('Edit the delta'); // additive editor (has content → "Edit")
+  });
+
+  it('marks per-field provenance in the states table (D6): human ink vs "not read from code"', () => {
+    const html = markup(<ConceptPage detail={detail} names={new Map()} curation={noopCuration} />);
+    // a filled effect/invariant is the human's intent - human ink
+    expect(html).toContain('class="human-ink">not yet sent');
+    expect(html).toContain('class="human-ink">amount is positive');
+    // an empty cell is honest about it, never a bare dash (draft-inv, open-eff, paid-inv)
+    expect(count(html, /class="state-empty">not read from code/g)).toBe(3);
+    expect(html).not.toContain('<td><span class="dim">-</span></td>');
   });
 });
 
@@ -1139,6 +1176,7 @@ describe('FlowPage', () => {
     ],
     related: [],
     modules: ['src/refunds'],
+    notes: null,
   };
 
   it('renders the ladder with linked and hollow rungs and the coverage count', () => {
@@ -1167,6 +1205,16 @@ describe('FlowPage', () => {
       ),
     ).toBe(2);
   });
+
+  it('shows the delta band as an invitation when no human ink is recorded (D6)', () => {
+    // this flow's notes are null
+    const html = markup(<FlowPage detail={detail} names={new Map()} curation={noopCuration} />);
+    expect(html).toContain('What the code can’t say'); // the slot is always present
+    expect(html).toContain('class="cap-section delta-band"'); // the dashed invite, not filled
+    expect(html).not.toContain('delta-band filled');
+    expect(html).toContain('The steps above are read from code'); // the flow-specific invitation
+    expect(html).toContain('Add the delta'); // the additive editor affordance (no content yet)
+  });
 });
 
 describe('curation affordances (T17)', () => {
@@ -1183,6 +1231,7 @@ describe('curation affordances (T17)', () => {
     pins: [],
     related: [],
     modules: [],
+    notes: null,
   });
 
   it('a proposed capability offers certify, link, and edit', () => {
@@ -1219,6 +1268,7 @@ describe('curation affordances (T17)', () => {
       steps: [],
       related: [],
       modules: [],
+      notes: null,
     };
     const html = markup(<FlowPage detail={emptyFlow} names={new Map()} curation={noopCuration} />);
     expect(html).toContain('Entry points');
@@ -1306,6 +1356,7 @@ describe('suggested code (T17b)', () => {
     pins: [],
     related: [],
     modules: [],
+    notes: null,
   };
 
   it('offers ranked, explainable one-click pins under the pins list', () => {
@@ -1339,6 +1390,7 @@ describe('suggested code (T17b)', () => {
       steps: [],
       related: [],
       modules: [],
+      notes: null,
     };
     const html = markup(
       <FlowPage
@@ -2009,6 +2061,7 @@ describe('review walk (D9, 23d-3)', () => {
       pins: [pin('src/billing/refund.ts#issueRefund')],
       related: [],
       modules: ['src/billing'],
+      notes: null,
     };
     const claims = capabilityReviewClaims(proposed);
     expect(claims).toHaveLength(1);

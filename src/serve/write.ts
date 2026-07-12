@@ -189,6 +189,44 @@ export function upsertEntry(repoRoot: string, patch: unknown): WriteOutcome {
   return { ok: true, id, status: 'proposed', path, priorContent, created: existing === undefined };
 }
 
+/**
+ * Record the delta band (D6): the human ink an entry's `notes` field holds -
+ * "what the code can't say". **Additive, like {@link addPin}**: it merges only
+ * `notes` and leaves the standing untouched, so recording the delta on a
+ * *certified* concept keeps it certified (the vouched claim - its states, its
+ * summary - is unchanged; this is knowledge layered on top, not a correction of
+ * it). Passing an empty string clears the field. Re-validated through T02; an
+ * inferred id has no YAML, so it is refused (materialize it first by vouching).
+ */
+export function setNotes(repoRoot: string, id: string, notes: string): WriteOutcome {
+  const arthaDir = join(repoRoot, '.artha');
+  let entry: ArthaEntry | undefined;
+  try {
+    entry = findEntry(arthaDir, id);
+  } catch (error) {
+    return { ok: false, code: 422, error: msg(error) };
+  }
+  if (!entry) return { ok: false, code: 404, error: `no entry '${id}'` };
+  if (entry.source_path === undefined) {
+    return { ok: false, code: 422, error: `entry '${id}' has no source file on disk` };
+  }
+
+  const trimmed = notes.trim();
+  const path = entry.source_path;
+  const priorContent = readMaybe(path);
+  // Empty clears the field entirely (omit it) rather than persisting a blank
+  // string; otherwise attach the trimmed delta. Everything else is preserved.
+  const { notes: _prior, ...rest } = entry as ArthaEntry & { notes?: string };
+  void _prior;
+  const next = (trimmed === '' ? rest : { ...rest, notes: trimmed }) as ArthaEntry;
+
+  const result = validateEntry(withoutSourcePath(next));
+  if (!result.ok) return invalid(result.errors);
+
+  writeEntry(next, path);
+  return { ok: true, id, status: next.status, path, priorContent, created: false };
+}
+
 // ── transactional commit (write → rebuild → roll back on failure) ──────────────
 
 export interface CommitDeps {

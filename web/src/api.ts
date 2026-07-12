@@ -53,6 +53,8 @@ export interface ConceptDetail {
   pins: PinView[];
   related: string[];
   modules: string[];
+  /** The human delta band (D6): what the code can't say; null until written. */
+  notes: string | null;
 }
 
 export interface FlowStepView {
@@ -73,6 +75,8 @@ export interface FlowDetail {
   steps: FlowStepView[];
   related: string[];
   modules: string[];
+  /** The human delta band (D6): what the code can't say; null until written. */
+  notes: string | null;
 }
 
 export interface SearchHit {
@@ -400,4 +404,11 @@ export function linkPin(id: string, symbol: string): Promise<WriteResult> {
 /** Upsert an entry's fields (merged over the existing entry); edits un-certify. */
 export function saveEntry(patch: { id: string } & Record<string, unknown>): Promise<WriteResult> {
   return postJson<WriteResult>('api/entry', patch);
+}
+
+/** Record the delta band (D6) - "what the code can't say" - as human ink. Additive:
+ * unlike saveEntry, recording the delta never re-opens a certification. An empty
+ * string clears it. */
+export function saveNotes(id: string, notes: string): Promise<WriteResult> {
+  return postJson<WriteResult>('api/notes', { id, notes });
 }

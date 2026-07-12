@@ -4,6 +4,7 @@ import { type CapabilityEntry, shortName } from '../derive';
 import { routeHref } from '../router';
 import { CapCard } from './CapCard';
 import { CertifyButton, type Curation } from './Curate';
+import { ModuleDelta } from './Delta';
 import { InferredCard } from './Inferred';
 import { ModuleBoardViewport } from './ModuleBoard';
 import { KindTag, SectionHead, StatusBadge } from './Status';
@@ -90,6 +91,14 @@ export function ModulePage({
         <p className="module-lead moon-prose" aria-label={INFERRED.moduleCardHead}>
           {card.summary}
         </p>
+      )}
+
+      {/* The delta band (D6): the human-ink counterpart to the machine lead - what
+          the code can't say. A module is not an entry, so it points at the why
+          (decisions + invariants) rather than editing a field. Skipped only on a
+          pure cold module, which the dark-empty funnel below already speaks to. */}
+      {(hasCertified || hasInferred) && (
+        <ModuleDelta whyCount={detail.decisions.length + detail.rules.length} />
       )}
 
       {/* The descent: the module drawn as its own blackboard of files, so a

@@ -169,6 +169,8 @@ export interface ConceptDetail {
   pins: PinView[];
   related: string[];
   modules: string[];
+  /** The human delta band (D6): what the code can't say; null until a human writes it. */
+  notes: string | null;
 }
 
 export interface FlowStepView {
@@ -189,6 +191,8 @@ export interface FlowDetail {
   steps: FlowStepView[];
   related: string[];
   modules: string[];
+  /** The human delta band (D6): what the code can't say; null until a human writes it. */
+  notes: string | null;
 }
 
 export function conceptDetail(
@@ -217,6 +221,7 @@ export function conceptDetail(
     pins: pinViews(index, id),
     related: relatedOf(index, id),
     modules: modulesOf(index, id, config.sourceRoots),
+    notes: fact.notes,
   };
 }
 
@@ -247,6 +252,7 @@ export function flowDetail(index: ArthaIndex, id: string, config: ArthaConfig): 
     })),
     related: relatedOf(index, id),
     modules: modulesOf(index, id, config.sourceRoots),
+    notes: fact.notes,
   };
 }
 

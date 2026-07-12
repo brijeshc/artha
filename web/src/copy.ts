@@ -267,6 +267,39 @@ export const SUGGEST = {
   } as Record<string, string>,
 } as const;
 
+/** The delta band (D6): human ink over machine print. Every capability/module
+ * page carries one distinct "what the code can't say" slot - the business rules,
+ * constraints, history, and warnings no code can hold. Recording it is additive:
+ * it never re-opens a certification (the vouched claim is unchanged). */
+export const DELTA = {
+  head: 'What the code can’t say',
+  /** The invitation shown when nothing is recorded yet - per surface, so the
+   * empty slot still reads as an inviting prompt, never a dead "-". */
+  invite: {
+    concept:
+      'The states above are read from code. Why they exist, the rules that must always hold, and the warning someone should have left - that part is only yours to add.',
+    flow: 'The steps above are read from code. The business rules, the edge cases, and why it works this way live only in someone’s head until you write them here.',
+    module:
+      'What this module is for, the constraints on changing it, and the history behind it are not in the code. That part is only yours to add.',
+  } as Record<string, string>,
+  /** Marks the band's content as human-authored, distinct from machine prose. */
+  attribution: 'recorded by your team',
+  add: 'Add the delta',
+  edit: 'Edit the delta',
+  placeholder:
+    'business rules · constraints · history · a warning the next person needs - one thought per line',
+  save: 'Save',
+  saving: 'Saving…',
+  cancel: 'Cancel',
+  /** Additive, so no "returns to proposed" caveat - the standing is untouched. */
+  note: 'Saved as human ink beside the machine’s reading - it does not change the certification.',
+  /** The module page's delta band points at where the human "why" already lives. */
+  moduleWhy: (n: number): string =>
+    `Your team has recorded ${n} thing${n === 1 ? '' : 's'} here the code can’t say - the why below.`,
+  /** An empty state-table cell (D6 provenance): honest, not a bare dash. */
+  notFromCode: 'not read from code',
+} as const;
+
 export const DETAIL = {
   conceptLede:
     'The diagram is this concept’s whole life: every state it can be in, and every event that moves it.',

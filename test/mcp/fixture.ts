@@ -4,6 +4,7 @@ function fact(row: Partial<FactRow> & Pick<FactRow, 'id' | 'kind' | 'status'>): 
   return {
     heading: null,
     body: null,
+    notes: null,
     severity: null,
     why: null,
     supersedes: null,

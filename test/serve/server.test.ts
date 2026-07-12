@@ -33,6 +33,7 @@ function indexWith(headings: string[]): IndexData {
       status: 'certified',
       heading: h,
       body: `summary of ${h}`,
+      notes: null,
       severity: null,
       why: null,
       supersedes: null,
@@ -288,6 +289,38 @@ describe('artha serve — curation writes (T17)', () => {
 
     const bad = await post(url, '/api/entry', { id: 'concept.sub', summary: 42 });
     expect(bad.status).toBe(422);
+  });
+
+  it('records the delta band via POST /api/notes WITHOUT un-certifying (D6, additive)', async () => {
+    seedConcept('sub', {
+      ...proposed('concept.sub', 'Subscription'),
+      status: 'certified',
+      certified_by: 'ada',
+      certified_at: '2026-06-01',
+    });
+    const url = await boot();
+
+    const res = await post(url, '/api/notes', {
+      id: 'concept.sub',
+      notes: 'Dunning retries stop after three attempts.',
+    });
+    expect(res.status).toBe(200);
+
+    // the human ink lands and the read reflects it - the certification is untouched
+    const detail = await getJson(url, '/api/concept/concept.sub');
+    expect(detail.notes).toBe('Dunning retries stop after three attempts.');
+    expect(detail.status).toBe('certified');
+
+    // it is a plain YAML diff on disk (still the source of truth)
+    const yaml = readFileSync(join(repo, '.artha', 'concepts', 'sub.yaml'), 'utf8');
+    expect(yaml).toContain('notes:');
+    expect(yaml).toContain('status: certified');
+
+    // clearing it removes the field, still without un-certifying
+    await post(url, '/api/notes', { id: 'concept.sub', notes: '   ' });
+    const cleared = await getJson(url, '/api/concept/concept.sub');
+    expect(cleared.notes).toBeNull();
+    expect(cleared.status).toBe('certified');
   });
 
   it('serves symbol candidates for the link picker (search-and-pick)', async () => {

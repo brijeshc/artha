@@ -26,6 +26,7 @@ import {
   getVouchedHistory,
   linkPin,
   saveEntry,
+  saveNotes,
 } from './api';
 import { AtlasViewport } from './components/Atlas';
 import { BoardViewport } from './components/Board';
@@ -324,6 +325,12 @@ export function App(): JSX.Element {
       edit: async (patch) => {
         const res = await saveEntry(patch);
         landAfterMaterialize(patch.id, res.id);
+        await refresh();
+      },
+      // The delta band (D6): additive human ink - the standing is untouched, so
+      // (unlike certify/edit) there is no page to land on, just a re-read.
+      setNotes: async (id, notes) => {
+        await saveNotes(id, notes);
         await refresh();
       },
     }),

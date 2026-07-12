@@ -77,6 +77,7 @@ function conceptYaml(): string {
     '  - { from: active, to: past_due, trigger: invoice payment failed }',
     'pins:',
     '  - symbol: src/billing/Subscription.ts#Subscription',
+    'notes: Dunning retries stop after three attempts.',
     'certified_by: brijesh',
     'certified_at: 2026-06-24',
     '',
@@ -404,10 +405,16 @@ describe('buildIndex — concepts & flows (v0.2)', () => {
     expect(report.errors).toEqual([]);
     expect(report.emitted).toBe(2);
 
-    // base fact row: heading = name, body = summary
-    const concept = rows("SELECT heading, body FROM artha_facts WHERE id = 'concept.subscription'");
+    // base fact row: heading = name, body = summary, notes = the human delta (D6)
+    const concept = rows(
+      "SELECT heading, body, notes FROM artha_facts WHERE id = 'concept.subscription'",
+    );
     expect(concept[0]?.heading).toBe('Subscription');
     expect(concept[0]?.body).toContain('entitlement source of truth');
+    expect(concept[0]?.notes).toBe('Dunning retries stop after three attempts.');
+    // the delta is folded into the FTS body so search finds it (not the body column)
+    const deltaHits = rows("SELECT id FROM artha_fts WHERE artha_fts MATCH 'dunning'");
+    expect(deltaHits.map((r) => r.id)).toContain('concept.subscription');
 
     // state machine, in authored order
     const states = rows(

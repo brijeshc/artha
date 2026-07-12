@@ -206,6 +206,7 @@ function toIndexData(
       status: entry.status,
       heading: entry.kind === 'decision' ? entry.title : entry.name,
       body: bodyText(entry),
+      notes: entry.notes ?? null,
       severity: entry.kind === 'invariant' ? (entry.severity ?? config.defaultSeverity) : null,
       why: entry.kind === 'invariant' ? (entry.why ?? null) : null,
       supersedes: entry.kind === 'decision' ? (entry.supersedes ?? null) : null,

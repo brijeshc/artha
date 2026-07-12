@@ -22,6 +22,7 @@ export function fact(id: string, status: string, over: Partial<FactRow> = {}): F
     status,
     heading: null,
     body: null,
+    notes: null,
     severity: null,
     why: null,
     supersedes: null,
