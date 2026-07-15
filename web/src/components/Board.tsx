@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Catalog, MapFeed, RefEdge } from '../api';
+import { type Catalog, type MapFeed, type RefEdge, getBoardLayout, saveBoardLayout } from '../api';
 import { type BoardNode, areaProvinces, boardLayout, borderPoint } from '../board';
 import { BOARD, BOARD_LEGEND, ROUTE } from '../copy';
 import { type FlowTrace, capabilitiesByModule, isMoonlit, shortName } from '../derive';
@@ -326,11 +326,42 @@ export function BoardViewport(props: {
   scaleRef.current = scale;
   const getScale = useCallback(() => scaleRef.current, []);
 
+  // The team's committed board (23e), if there is one - your drags sit on top.
+  const [team, setTeam] = useState<BoardOverrides>({});
+  const [shareState, setShareState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  useEffect(() => {
+    let live = true;
+    getBoardLayout()
+      .then((r) => live && setTeam(r.modules))
+      // No committed layout is the normal case, not an error worth a banner.
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
   const { overrides, hasHandLayout, onPointerDown, suppressNav, tidy } = useBoardDrag(
     'artha.board.layout.v1',
     getScale,
+    team,
   );
   const { nodes, width, height } = placedLayout(props.feed, props.refs, overrides);
+
+  // Publish the board as it stands - every box, not just the ones you moved -
+  // because what a teammate should open is the arrangement you are looking at,
+  // not a patch over an auto layout that may shift under them.
+  const share = useCallback(async () => {
+    setShareState('saving');
+    const seats = Object.fromEntries(nodes.map((n) => [n.module, { x: n.x, y: n.y }]));
+    try {
+      const r = await saveBoardLayout(seats);
+      setTeam(r.modules);
+      tidy(); // your seats are the team's now; nothing of yours is unpublished
+      setShareState('saved');
+    } catch {
+      setShareState('failed');
+    }
+  }, [nodes, tidy]);
 
   useEffect(() => {
     const vp = viewportRef.current;
@@ -423,9 +454,32 @@ export function BoardViewport(props: {
           </button>
         )}
         {hasHandLayout && (
-          <button type="button" className="board-ctl" onClick={tidy} title={BOARD.tidyHint}>
+          <button
+            type="button"
+            className="board-ctl"
+            onClick={tidy}
+            title={Object.keys(team).length > 0 ? BOARD.tidyHintTeam : BOARD.tidyHint}
+          >
             {BOARD.tidy}
           </button>
+        )}
+        {hasHandLayout && (
+          <button
+            type="button"
+            className="board-ctl board-share"
+            onClick={share}
+            disabled={shareState === 'saving'}
+            title={BOARD.shareHint}
+          >
+            {BOARD.share}
+          </button>
+        )}
+        {shareState !== 'idle' && shareState !== 'saving' && (
+          // <output> is the status live-region, semantically - a screen reader
+          // hears the result of the save without being sent anywhere.
+          <output className={shareState === 'saved' ? 'board-shared' : 'board-shared failed'}>
+            {shareState === 'saved' ? BOARD.shared : BOARD.shareFailed}
+          </output>
         )}
       </div>
       {trace && <RouteCard trace={trace} clearHref="#/" />}

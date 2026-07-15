@@ -84,7 +84,16 @@ export const OBSERVATORY = {
 export const BOARD = {
   hint: 'Drag a box to arrange the board - your layout sticks. An arrow reads "depends on".',
   tidy: 'Tidy the board',
-  tidyHint: 'Re-lay every box automatically and forget the hand-placed positions.',
+  tidyHint: 'Re-lay every box automatically and forget the positions you moved.',
+  /** Same button, when the team has committed a board to fall back to. */
+  tidyHintTeam: 'Forget the boxes you moved and go back to the team’s board.',
+  // Sharing the board (23e): a hand-arranged blackboard dies in one browser
+  // unless it can be committed.
+  share: 'Save for the team',
+  shareHint:
+    'Commit this arrangement to .artha/board.yaml, so everyone who opens the board sees the one you just built. Lands as an ordinary git diff.',
+  shared: 'Saved for the team',
+  shareFailed: 'Could not save the layout - the board is still yours.',
   more: 'more',
   zoomIn: 'Zoom the board in (Ctrl + scroll works too)',
   zoomOut: 'Zoom the board out (Ctrl + scroll works too)',

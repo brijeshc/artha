@@ -2,7 +2,7 @@
 
 A living, two-page summary.
 For the full detail, see [PROGRESS.md](PROGRESS.md) (the running log) and [tasks-v0.3/README.md](tasks-v0.3/README.md) (the current task index).
-Last updated: 2026-07-16 (23e-2).
+Last updated: 2026-07-16 (23e-3).
 
 ## What we are building
 
@@ -44,7 +44,7 @@ Two rules hold everywhere:
 
 **v0.1 and v0.2 are done. v0.3 is roughly two-thirds done.**
 The whole loop works end to end today: index a repo, read the map, vouch the machine's read, add what it missed, serve it to an agent.
-430 tests pass across 33 files, typecheck and lint clean.
+440 tests pass across 34 files, typecheck and lint clean.
 
 You can see it right now: `npm run demo` builds, seeds a fake shop repo, and serves the dashboard at http://127.0.0.1:4173.
 
@@ -82,7 +82,7 @@ The import graph and pin suggestions are fully automatic.
 - **21c** - fully delivered except what 21b enriches.
 - **22** - the contradiction view: where the machine's read disagrees with what a human vouched.
 - **23e** - craft debt (trimmed; catalog dedup and zoom moved into 24).
-  **23e-1 and 23e-2 are done (2026-07-16)**: concept lifecycles are redrawn in the board's chalk, left-to-right, with returns routed orthogonally through a lane below the boxes - so the atlas is one continuous hand at every altitude. The board also straightens its rows now (a barycentre pass that keeps each product area whole) and outlines an area as a dashed chalk province wherever its modules genuinely sit together. A shareable committed board layout and more trace entry points remain.
+  **23e-1 to 23e-3 are done (2026-07-16)**: concept lifecycles are redrawn in the board's chalk, left-to-right, with returns routed orthogonally through a lane below the boxes - so the atlas is one continuous hand at every altitude. The board straightens its rows (a barycentre pass that keeps each product area whole) and outlines an area as a dashed chalk province wherever its modules genuinely sit together. And a hand-arranged board can now be **committed** to `.artha/board.yaml`, so it stops dying in one browser and the whole team opens the same blackboard. Only "more trace entry points" remains.
 - **T18** - the ask-the-human interview.
 - **T19 / T20** - contradiction preview and the v0.2 success test.
 
@@ -91,8 +91,8 @@ The import graph and pin suggestions are fully automatic.
 In order:
 
 1. **23e - craft debt (trimmed).**
-   State machines are now drawn in chalk (23e-1, done), and the board straightens its rows and outlines its provinces (23e-2, done).
-   The leftovers: a shareable committed board layout (`.artha/board.yaml`) so a team sees one hand-arranged board, and more trace entry points.
+   State machines are drawn in chalk (23e-1), the board straightens its rows and outlines its provinces (23e-2), and a board can be committed for the whole team (23e-3).
+   The one leftover: more trace entry points - navigator flow rows and catalog flow cards offering the trace, and inferred flow skeletons tracing in moonlight.
 
 2. **21b - AI synthesis and verification.**
    The machine layer currently describes code deterministically, which is honest but thin.

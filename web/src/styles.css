@@ -938,6 +938,26 @@ a.crumb:hover {
   color: var(--ink);
   border-color: var(--phosphor-2);
 }
+.board-ctl:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* Publishing the board is the one act here that leaves this browser, so it is
+   the one control that borrows the phosphor of a real commit. */
+.board-share {
+  border-color: var(--phosphor-2);
+  color: var(--phosphor);
+}
+.board-share:hover:not(:disabled) {
+  background: var(--phosphor-dim);
+}
+.board-shared {
+  font-size: 10.5px;
+  color: var(--phosphor);
+}
+.board-shared.failed {
+  color: var(--ember);
+}
 .board-zoom {
   font-size: 10.5px;
   color: var(--ink-3);

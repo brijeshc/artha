@@ -21,7 +21,10 @@ See [24-usability.md](24-usability.md).
 **23e-1 is done (2026-07-16)** - the lifecycle in chalk: concept state machines are redrawn in the board's own rough strokes, laid out left-to-right, with a return (a cancel, a retry) routed orthogonally through a lane under the boxes and provably clear of every box it isn't about.
 The atlas now reads as one continuous hand at every altitude: repo board → module board → lifecycle.
 A box also wears the concept's own standing now, instead of drawing every lifecycle in the phosphor of trust.
-**The gate before 21b/22/T18 is open**; the rest of 23e (board refinements, more trace entry points) is next, then 21b (LLM synthesis + verification).
+**23e-2 is done (2026-07-16)** - the board straightens its rows (a barycentre pass that keeps each product area whole) and outlines an area as a dashed chalk province wherever its modules genuinely sit together.
+**23e-3 is done (2026-07-16)** - the team's board: a hand-arranged blackboard can be committed to `.artha/board.yaml` as an ordinary git diff, so it stops dying in the one browser that made it.
+Seats answer in order - your hand, then the team's, then the automatic layout - and the file is arrangement only, never meaning: it never reaches the index, an agent, or the numbers.
+**The gate before 21b/22/T18 is open**; the last 23e item (more trace entry points) is next, then 21b (LLM synthesis + verification).
 
 | #   | Task | Depends on | One-line summary |
 |-----|------|------------|------------------|
@@ -29,7 +32,7 @@ A box also wears the concept's own standing now, instead of drawing every lifecy
 | 21b | [Inferred layer - LLM synthesis + verification](21-inferred-layer.md) | 21a, v0.1 T06 engine | opt-in, spend-capped, incremental synthesis into readable meaning; every claim cites pins; verifier gates confidence |
 | 21c | [Inferred layer - dashboard reframe](21-inferred-layer.md) | 21a (21b enriches), v0.2 T16d/T17 | two-light map (moonlight/phosphor), vouch-by-reading, the delta band, inverted interview entry |
 | 22  | Contradiction view (inferred vs certified) | 21b | the v0.3 loophole view, seeded by disagreement between the machine layer and vouched facts |
-| 23  | [Atlas elevation](23-atlas-elevation.md) | T16d, T17b, 21a | drawn linkage (wiring lens + flow routes, **23a shipped**), terrain texture, observatory charts, review mode (delivers 21c's D5/D6/D9/D10), craft debt (**23e-1 chalk lifecycles shipped**) |
+| 23  | [Atlas elevation](23-atlas-elevation.md) | T16d, T17b, 21a | drawn linkage (wiring lens + flow routes, **23a shipped**), terrain texture, observatory charts, review mode (delivers 21c's D5/D6/D9/D10), craft debt (**23e-1 chalk lifecycles, 23e-2 straightened rows + provinces, 23e-3 the team's board - all shipped**) |
 | 24  | [Usability hardening](24-usability.md) | 23a-23d shipped surface | **done 2026-07-16** - one vocabulary (vouch), honest numbers, orientation on the default view, findability, capability dedup, walk safety, reading order |
 
 ## Interplay with unfinished v0.2 tasks
@@ -41,5 +44,5 @@ A box also wears the concept's own standing now, instead of drawing every lifecy
 ## Critical path
 
 21a → 21c (structural value, fully offline) with 21b enriching both; 22 and T18 hang off 21b.
-23 runs alongside: 23a (shipped) needed nothing new from the backend; 23b/23c/23e are pure dashboard; 23d is the delivery vehicle for 21c's D5/D6/D9/D10.
+23 runs alongside: 23a (shipped) needed nothing new from the backend; 23b/23c are pure dashboard, and so is 23e apart from 23e-3's one `.artha/board.yaml` seam; 23d is the delivery vehicle for 21c's D5/D6/D9/D10.
 **24 sat in front of 21b/22/T18** (decision 2026-07-15) and **shipped 2026-07-16**: the surface is hardened; 23e's remaining craft items are next, then 21b.

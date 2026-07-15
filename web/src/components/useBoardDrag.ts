@@ -7,6 +7,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * file board (23b) - the one source of the drag/persist/tidy behaviour, keyed
  * so each board remembers its own layout. What SSR cannot do lives here; the
  * boards themselves stay pure given their positions.
+ *
+ * Three layouts can have an opinion about where a box sits, and they answer in
+ * this order (23e): **your hand** (dragged here, kept in this browser), then
+ * **the team's** (committed to `.artha/board.yaml`, passed in as `base`), then
+ * the automatic one. Your drag is yours until you publish it, and tidying
+ * forgets only what *you* moved - it drops you back on the team's board, never
+ * silently rewrites it.
  */
 
 export type BoardOverrides = Record<string, { x: number; y: number }>;
@@ -19,12 +26,14 @@ export interface DragTarget {
 }
 
 export interface BoardDrag {
+  /** Every seat that overrides the auto layout: the team's, yours on top. */
   overrides: BoardOverrides;
+  /** True when *you* have moved something that isn't published yet. */
   hasHandLayout: boolean;
   onPointerDown: (e: React.PointerEvent, target: DragTarget) => void;
   /** True if the last pointer-up ended a drag - call it to swallow the click. */
   suppressNav: () => boolean;
-  /** Forget every hand-placed seat and fall back to the auto layout. */
+  /** Forget the seats you moved; the team's board (or the auto one) returns. */
   tidy: () => void;
 }
 
@@ -37,7 +46,12 @@ function load(storeKey: string): BoardOverrides {
   }
 }
 
-export function useBoardDrag(storeKey: string, getScale?: () => number): BoardDrag {
+export function useBoardDrag(
+  storeKey: string,
+  getScale?: () => number,
+  /** The team's committed seats, if any - yours layer over these. */
+  base?: BoardOverrides,
+): BoardDrag {
   const [overrides, setOverrides] = useState<BoardOverrides>(() =>
     typeof window === 'undefined' ? {} : load(storeKey),
   );
@@ -118,7 +132,9 @@ export function useBoardDrag(storeKey: string, getScale?: () => number): BoardDr
   }, [storeKey]);
 
   return {
-    overrides,
+    overrides: base ? { ...base, ...overrides } : overrides,
+    // Only your own unpublished moves count: a board sitting on the team's
+    // layout has nothing for *you* to tidy away.
     hasHandLayout: Object.keys(overrides).length > 0,
     onPointerDown,
     suppressNav,

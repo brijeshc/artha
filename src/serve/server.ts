@@ -20,6 +20,7 @@ import {
   valueQueueFeed,
   vouchedHistory,
 } from './api';
+import { type BoardSeats, readBoardSeats, writeBoardSeats } from './boardSeats';
 import { evidenceFor } from './evidence';
 import { materializeInferred } from './materialize';
 import { suggestPins } from './suggest';
@@ -111,6 +112,13 @@ async function handle(req: IncomingMessage, res: ServerResponse, ctx: Ctx): Prom
         const ref = url.searchParams.get('ref') ?? '';
         const view = ref ? evidenceFor(await repoResolver(ctx.repoRoot), ref) : null;
         view ? sendJson(res, 200, view) : sendJson(res, 404, { error: `cannot resolve ${ref}` });
+        return;
+      }
+      // The team's board layout (23e) is arrangement, not meaning - it lives in
+      // `.artha/board.yaml` and never reaches the index, so it is read straight
+      // off disk like the two above.
+      if (url.pathname === '/api/board-layout') {
+        sendJson(res, 200, { modules: readBoardSeats(ctx.repoRoot) });
         return;
       }
       await handleApi(url, res, ctx);
@@ -234,7 +242,8 @@ async function handleWrite(
     path !== '/api/certify' &&
     path !== '/api/pin' &&
     path !== '/api/entry' &&
-    path !== '/api/notes'
+    path !== '/api/notes' &&
+    path !== '/api/board-layout'
   ) {
     sendJson(res, 405, { error: 'method not allowed' });
     return;
@@ -255,6 +264,20 @@ async function handleWrite(
     body = await readJsonBody(req);
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    return;
+  }
+
+  // The board layout is arrangement, not meaning: no fact changes, so there is
+  // no index to rebuild and nothing for a transaction to roll back. It still
+  // takes the write lock, so two tabs can't interleave the one file.
+  if (path === '/api/board-layout') {
+    const seats = asSeats(body.modules);
+    if (!seats) {
+      sendJson(res, 400, { error: 'modules must be a map of module → {x, y}' });
+      return;
+    }
+    await ctx.writeLock(async () => writeBoardSeats(ctx.repoRoot, seats));
+    sendJson(res, 200, { ok: true, modules: readBoardSeats(ctx.repoRoot) });
     return;
   }
 
@@ -362,6 +385,22 @@ function createWriteLock(): <T>(fn: () => Promise<T>) => Promise<T> {
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+/** A posted board layout, or `null` if it isn't one. An absent/empty `modules`
+ * is a legitimate layout - it means "the team has none", which clears the file. */
+function asSeats(value: unknown): BoardSeats | null {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) return null;
+  const seats: BoardSeats = {};
+  for (const [module, seat] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof seat !== 'object' || seat === null) return null;
+    const { x, y } = seat as Record<string, unknown>;
+    if (typeof x !== 'number' || typeof y !== 'number') return null;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    seats[module] = { x, y };
+  }
+  return seats;
 }
 
 /** Open the index for one read (materializing a vouched inferred fact needs the

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -144,6 +144,57 @@ describe('artha serve', () => {
 
     // path traversal stays contained (raw %2f so fetch doesn't normalize it away)
     expect((await fetch(`${server.url}/..%2f..%2fpackage.json`)).status).toBe(403);
+  });
+
+  it('commits the team board layout and serves it back (23e)', async () => {
+    writeIndex(dbPath(), indexWith(['Invoice']));
+    const url = await boot();
+
+    // nobody has committed one yet
+    expect(await (await fetch(`${url}/api/board-layout`)).json()).toEqual({ modules: {} });
+
+    const post = await fetch(`${url}/api/board-layout`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ modules: { 'src/billing': { x: 40, y: 80 } } }),
+    });
+    expect(post.status).toBe(200);
+
+    // it lands as a real, reviewable file - and every reader now opens it
+    const yaml = readFileSync(join(repo, '.artha', 'board.yaml'), 'utf8');
+    expect(yaml).toContain('src/billing');
+    expect(await (await fetch(`${url}/api/board-layout`)).json()).toEqual({
+      modules: { 'src/billing': { x: 40, y: 80 } },
+    });
+
+    // an empty layout is how a team says "lay it out yourselves"
+    await fetch(`${url}/api/board-layout`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ modules: {} }),
+    });
+    expect(existsSync(join(repo, '.artha', 'board.yaml'))).toBe(false);
+  });
+
+  it('refuses a board layout that is not seats, and one that skips the JSON guard', async () => {
+    writeIndex(dbPath(), indexWith(['Invoice']));
+    const url = await boot();
+
+    const bad = await fetch(`${url}/api/board-layout`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ modules: { 'src/billing': { x: 'left', y: 80 } } }),
+    });
+    expect(bad.status).toBe(400);
+
+    // the same cross-site guard the fact writes have
+    const plain = await fetch(`${url}/api/board-layout`, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain' },
+      body: JSON.stringify({ modules: {} }),
+    });
+    expect(plain.status).toBe(415);
+    expect(existsSync(join(repo, '.artha', 'board.yaml'))).toBe(false);
   });
 
   it('404s an unknown concept and rejects non-GET', async () => {

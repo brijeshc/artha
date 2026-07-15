@@ -345,6 +345,19 @@ export function getVouchedHistory(): Promise<VouchedPoint[]> {
   return getJson<VouchedPoint[]>('api/vouched-history');
 }
 
+/** module → where the team agreed it sits on the board (23e), from
+ * `.artha/board.yaml`; `{}` when the team has never committed one. */
+export type BoardSeats = Record<string, { x: number; y: number }>;
+
+export function getBoardLayout(): Promise<{ modules: BoardSeats }> {
+  return getJson<{ modules: BoardSeats }>('api/board-layout');
+}
+
+/** Commit this arrangement as the team's (23e). An empty map clears the file. */
+export function saveBoardLayout(modules: BoardSeats): Promise<{ ok: true; modules: BoardSeats }> {
+  return postJson<{ ok: true; modules: BoardSeats }>('api/board-layout', { modules });
+}
+
 /** Ranked, explainable pin suggestions for an entry (T17b); confirm one via linkPin. */
 export function getSuggest(id: string): Promise<Suggestion[]> {
   return getJson<Suggestion[]>(`api/suggest?id=${encodeURIComponent(id)}`);
