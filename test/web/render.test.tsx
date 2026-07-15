@@ -16,7 +16,7 @@ import type {
   ValueRanked,
   VouchedPoint,
 } from '../../web/src/api';
-import { GAP_Y, boardLayout, fileBoardLayout } from '../../web/src/board';
+import { GAP_Y, boardLayout, fileBoardLayout, stateLayout } from '../../web/src/board';
 import { Atlas } from '../../web/src/components/Atlas';
 import { Board, BoardViewport, RouteCard } from '../../web/src/components/Board';
 import { CapCard } from '../../web/src/components/CapCard';
@@ -552,6 +552,175 @@ describe('boardLayout', () => {
       for (let j = i + 1; j < layout.nodes.length; j++) {
         const a = layout.nodes[i];
         const b = layout.nodes[j];
+        const apart = a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+        expect(apart).toBe(true);
+      }
+  });
+});
+
+describe('stateLayout (the lifecycle in chalk, 23e)', () => {
+  const t = (from: string, to: string, trigger: string) => ({ from, to, trigger });
+  const at = (l: ReturnType<typeof stateLayout>, name: string) => {
+    const n = l.nodes.find((x) => x.name === name);
+    if (!n) throw new Error(`no state ${name}`);
+    return n;
+  };
+
+  it('runs the life left-to-right: no state sits left of what leads into it', () => {
+    const l = stateLayout(
+      ['cart', 'placed', 'paid'],
+      [
+        t('cart', 'placed', 'checkout'),
+        t('placed', 'paid', 'payment lands'),
+        t('cart', 'paid', 'paid at once'),
+      ],
+    );
+    expect(at(l, 'cart').layer).toBe(0); // the start of the life is leftmost
+    expect(at(l, 'placed').layer).toBe(1);
+    expect(at(l, 'paid').layer).toBe(2); // the longest path wins, not the shortcut
+    expect(at(l, 'placed').x).toBeGreaterThan(at(l, 'cart').x);
+    expect(at(l, 'paid').x).toBeGreaterThan(at(l, 'placed').x);
+  });
+
+  it('routes a way back through a lane under the boxes, never as a forward arrow', () => {
+    const l = stateLayout(
+      ['cart', 'placed', 'cancelled'],
+      [
+        t('cart', 'placed', 'checkout'),
+        t('placed', 'cancelled', 'cancel'),
+        t('cancelled', 'cart', 'retry'),
+      ],
+    );
+    const kind = new Map(l.edges.map((e) => [e.trigger, e.kind]));
+    expect(kind.get('checkout')).toBe('forward');
+    expect(kind.get('cancel')).toBe('forward');
+    expect(kind.get('retry')).toBe('return'); // it leads back onto the path it came from
+    // the lane clears every box, so the way back never cuts across the life
+    const lowest = Math.max(...l.nodes.map((n) => n.y + n.h));
+    expect(l.laneY).toBeGreaterThan(lowest);
+    expect(l.height).toBeGreaterThanOrEqual(l.laneY);
+  });
+
+  it('keeps the order the code declares, never the alphabet', () => {
+    // nothing links these, so they share the first column and stack in source order
+    const l = stateLayout(['zeta', 'alpha', 'mid'], []);
+    expect(l.nodes.map((n) => n.name)).toEqual(['zeta', 'alpha', 'mid']);
+  });
+
+  it('a lifecycle that loops all the way round still reads from the declared start', () => {
+    // every state has a way in, so the board's own engine would seat them all in
+    // one column - the lifecycle breaks the cycle instead and keeps reading
+    const l = stateLayout(
+      ['open', 'closed'],
+      [t('open', 'closed', 'close'), t('closed', 'open', 'reopen')],
+    );
+    expect(at(l, 'open').layer).toBe(0);
+    expect(at(l, 'closed').layer).toBe(1);
+    expect(l.edges.find((e) => e.trigger === 'reopen')?.kind).toBe('return');
+  });
+
+  it('nests the returns: a short way back hugs the boxes, a long one swings out below', () => {
+    const l = stateLayout(
+      ['a', 'b', 'c', 'd'],
+      [
+        t('a', 'b', '1'),
+        t('b', 'c', '2'),
+        t('c', 'd', '3'),
+        t('d', 'a', 'the long way back'),
+        t('c', 'b', 'one step back'),
+      ],
+    );
+    const lane = new Map(
+      l.edges.filter((e) => e.kind === 'return').map((e) => [e.trigger, e.lane]),
+    );
+    expect(lane.get('one step back')).toBe(0); // nearest lane
+    expect(lane.get('the long way back')).toBe(1); // swings out under it
+  });
+
+  it('is deterministic - reordering the transitions never moves a box', () => {
+    const states = ['a', 'b', 'c'];
+    const one = stateLayout(states, [t('a', 'b', 'x'), t('b', 'c', 'y'), t('c', 'a', 'z')]);
+    const two = stateLayout(states, [t('c', 'a', 'z'), t('b', 'c', 'y'), t('a', 'b', 'x')]);
+    expect(one.nodes).toEqual(two.nodes);
+  });
+
+  it('steps a way back around a state stacked under its own - it crosses nothing', () => {
+    // the demo's own shape: past_due and canceled share a column, so a straight
+    // drop out of past_due would run right through canceled
+    const l = stateLayout(
+      ['trialing', 'active', 'past_due', 'canceled'],
+      [
+        t('trialing', 'active', 'first payment succeeds'),
+        t('active', 'past_due', 'payment fails'),
+        t('past_due', 'active', 'retry succeeds'),
+        t('active', 'canceled', 'user cancels'),
+      ],
+    );
+    const back = l.edges.find((e) => e.trigger === 'retry succeeds');
+    if (!back) throw new Error('no return edge');
+    expect(back.kind).toBe('return');
+    // every leg is orthogonal, and none of them touches a box it isn't about
+    for (let i = 1; i < back.points.length; i++) {
+      const a = back.points[i - 1];
+      const b = back.points[i];
+      expect(a.x === b.x || a.y === b.y).toBe(true);
+    }
+    expectClearOfBoxes(l, back, ['past_due', 'active']);
+  });
+
+  it('keeps every return clear of every box it is not about', () => {
+    // a column three deep with returns reaching over it from both ends
+    const l = stateLayout(
+      ['start', 'one', 'two', 'three', 'done'],
+      [
+        t('start', 'one', 'go'),
+        t('start', 'two', 'skip'),
+        t('start', 'three', 'jump'),
+        t('one', 'done', 'finish'),
+        t('one', 'start', 'back to the start'),
+        t('three', 'one', 'try again'),
+      ],
+    );
+    for (const e of l.edges.filter((x) => x.kind === 'return'))
+      expectClearOfBoxes(l, e, [e.from, e.to]);
+  });
+
+  /** No leg of the route may pass through a box other than the two it joins. */
+  const expectClearOfBoxes = (
+    l: ReturnType<typeof stateLayout>,
+    e: ReturnType<typeof stateLayout>['edges'][number],
+    ends: string[],
+  ) => {
+    for (const n of l.nodes) {
+      if (ends.includes(n.name)) continue;
+      for (let i = 1; i < e.points.length; i++) {
+        const a = e.points[i - 1];
+        const b = e.points[i];
+        const hits =
+          Math.min(a.x, b.x) < n.x + n.w &&
+          Math.max(a.x, b.x) > n.x &&
+          Math.min(a.y, b.y) < n.y + n.h &&
+          Math.max(a.y, b.y) > n.y;
+        expect(`${e.trigger} through ${n.name}: ${hits}`).toBe(
+          `${e.trigger} through ${n.name}: false`,
+        );
+      }
+    }
+  };
+
+  it('never overlaps two boxes', () => {
+    const l = stateLayout(
+      ['cart', 'placed', 'paid', 'cancelled'],
+      [
+        t('cart', 'placed', 'checkout'),
+        t('placed', 'paid', 'pay'),
+        t('placed', 'cancelled', 'cancel'),
+      ],
+    );
+    for (let i = 0; i < l.nodes.length; i++)
+      for (let j = i + 1; j < l.nodes.length; j++) {
+        const a = l.nodes[i];
+        const b = l.nodes[j];
         const apart = a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
         expect(apart).toBe(true);
       }
@@ -1193,7 +1362,7 @@ describe('ConceptPage', () => {
       'Invoices are immutable once issued - void, never delete.\nAmounts are always in minor units (cents).',
   };
 
-  it('draws the machine (node per state, edge per transition) plus the table', () => {
+  it('draws the lifecycle in chalk (a box per state, an arrow per transition) plus the table', () => {
     const html = markup(
       <ConceptPage
         detail={detail}
@@ -1201,8 +1370,16 @@ describe('ConceptPage', () => {
         curation={noopCuration}
       />,
     );
-    expect(count(html, /sm-node-box/g)).toBe(3);
+    expect(count(html, /class="sm-node"/g)).toBe(3);
+    // each box is a chalk frame gone over twice, the board's own hand (23e)
+    expect(count(html, /class="sm-node-box/g)).toBe(6);
     expect(count(html, /class="sm-edge /g)).toBe(3); // one <g> per transition
+    // "withdrawn" leads back onto the path it came from, so it routes as a
+    // return under the boxes - never a fourth arrow cutting across the life
+    expect(count(html, /sm-edge-forward/g)).toBe(2);
+    expect(count(html, /sm-edge-return/g)).toBe(1);
+    // the states are only as vouched as the concept that declares them
+    expect(html).toContain('sm-certified');
     expect(html).toContain('sent to customer');
     expect(html).toContain('amount is positive'); // invariant column
     expect(html).toContain('src/billing/Invoice.ts#Invoice');

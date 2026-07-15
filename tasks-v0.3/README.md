@@ -18,7 +18,10 @@ Contradiction detection remains in v0.3, but as a near-byproduct: once inferred 
 **24 is done (2026-07-16)** - a full UX audit (2026-07-15) found the app harder to follow than its data warrants; all seven slices shipped within two days.
 One vocabulary (vouch everywhere, the three-light ladder), honest numbers ("Explain next", dark = unvouched, a reachable vouched %), a default view that fits and defines itself (fit-to-view, zoom, board legend, Δ defined), findability (prefix search, clickable rule hits, arrow keys), one card per capability, a safe review walk (Enter never writes; vouch has undo), and reading-order fixes.
 See [24-usability.md](24-usability.md).
-**The gate before 21b/22/T18 is open**; next is the trimmed 23e (pure craft debt), then 21b (LLM synthesis + verification).
+**23e-1 is done (2026-07-16)** - the lifecycle in chalk: concept state machines are redrawn in the board's own rough strokes, laid out left-to-right, with a return (a cancel, a retry) routed orthogonally through a lane under the boxes and provably clear of every box it isn't about.
+The atlas now reads as one continuous hand at every altitude: repo board → module board → lifecycle.
+A box also wears the concept's own standing now, instead of drawing every lifecycle in the phosphor of trust.
+**The gate before 21b/22/T18 is open**; the rest of 23e (board refinements, more trace entry points) is next, then 21b (LLM synthesis + verification).
 
 | #   | Task | Depends on | One-line summary |
 |-----|------|------------|------------------|
@@ -26,7 +29,7 @@ See [24-usability.md](24-usability.md).
 | 21b | [Inferred layer - LLM synthesis + verification](21-inferred-layer.md) | 21a, v0.1 T06 engine | opt-in, spend-capped, incremental synthesis into readable meaning; every claim cites pins; verifier gates confidence |
 | 21c | [Inferred layer - dashboard reframe](21-inferred-layer.md) | 21a (21b enriches), v0.2 T16d/T17 | two-light map (moonlight/phosphor), vouch-by-reading, the delta band, inverted interview entry |
 | 22  | Contradiction view (inferred vs certified) | 21b | the v0.3 loophole view, seeded by disagreement between the machine layer and vouched facts |
-| 23  | [Atlas elevation](23-atlas-elevation.md) | T16d, T17b, 21a | drawn linkage (wiring lens + flow routes, **23a shipped**), terrain texture, observatory charts, review mode (delivers 21c's D5/D6/D9/D10), craft debt |
+| 23  | [Atlas elevation](23-atlas-elevation.md) | T16d, T17b, 21a | drawn linkage (wiring lens + flow routes, **23a shipped**), terrain texture, observatory charts, review mode (delivers 21c's D5/D6/D9/D10), craft debt (**23e-1 chalk lifecycles shipped**) |
 | 24  | [Usability hardening](24-usability.md) | 23a-23d shipped surface | **done 2026-07-16** - one vocabulary (vouch), honest numbers, orientation on the default view, findability, capability dedup, walk safety, reading order |
 
 ## Interplay with unfinished v0.2 tasks

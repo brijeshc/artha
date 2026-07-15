@@ -2250,13 +2250,14 @@ a.fact-line:hover {
   text-underline-offset: 3px;
 }
 
-/* ── State machine (drawn SVG, dark) ───────────────────────────────────────── */
+/* ── The lifecycle, drawn in chalk (23e) ───────────────────────────────────── */
 
+/* the same slate as the board, one altitude down */
 .state-machine-wrap {
   overflow-x: auto;
   margin: 4px 0 6px;
-  padding: 14px 10px;
-  background: var(--night-1);
+  padding: 10px 8px;
+  background: radial-gradient(ellipse at 50% 40%, #0c1514 0%, var(--night-0) 78%);
   border: 1px solid var(--line);
   border-radius: 2px;
   width: fit-content;
@@ -2267,36 +2268,59 @@ a.fact-line:hover {
   max-width: 100%;
   height: auto;
 }
+
+/* a state box: a chalk frame drawn twice, lit by the concept's standing - the
+   names are read from code, but they are only as vouched as the concept is */
 .sm-node-box {
-  fill: var(--night-2);
-  stroke: var(--phosphor-2);
-  stroke-width: 1.2;
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+.sm-node-box.echo {
+  opacity: 0.22;
+  stroke-width: 1.1;
+}
+.sm-certified .sm-node-box {
+  stroke: var(--phosphor);
+}
+.sm-stale .sm-node-box {
+  stroke: var(--ember);
 }
 .sm-node-label {
-  font-family: var(--mono);
-  font-size: 12.5px;
+  font-family: var(--chalk);
+  font-size: 14px;
   fill: var(--ink);
   text-anchor: middle;
+  dominant-baseline: middle;
 }
+
+/* every arrow is human ink: the code never holds the trigger that moves a
+   concept along, so a transition is drawn at full strength, never in chalk's
+   machine light */
 .sm-edge path {
-  stroke: var(--ink-3);
-  stroke-width: 1.3;
-  fill: none;
-}
-.sm-edge-spine path {
-  stroke: var(--phosphor-2);
+  stroke: var(--ink);
   stroke-width: 1.5;
+  stroke-linecap: round;
+  fill: none;
+  opacity: 0.8;
 }
-.sm-arrowhead {
-  fill: var(--ink-2);
+/* a way back is quieter than the life running forward - it is the exception */
+.sm-edge-return path,
+.sm-edge-self path {
+  stroke: var(--ink-2);
+  stroke-width: 1.3;
+  opacity: 0.62;
 }
 .sm-edge-label {
   font-family: var(--sans);
   font-size: 10.5px;
   fill: var(--ink-2);
+  text-anchor: middle;
   paint-order: stroke;
-  stroke: var(--night-1);
-  stroke-width: 3px;
+  stroke: var(--night-0);
+  stroke-width: 3.5px;
   stroke-linejoin: round;
 }
 .sm-extra {

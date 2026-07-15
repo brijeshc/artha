@@ -41,7 +41,11 @@ export function ConceptPage({
         />
         {hasStates ? (
           <>
-            <StateMachine states={detail.states} transitions={detail.transitions} />
+            <StateMachine
+              states={detail.states}
+              transitions={detail.transitions}
+              status={detail.status}
+            />
             <table className="data-table states-table">
               <thead>
                 <tr>
