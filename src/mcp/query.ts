@@ -200,9 +200,13 @@ function runFts(db: DatabaseSync, raw: string): Map<string, number> {
 /**
  * Turn free task text into a safe FTS5 query: alphanumeric tokens (≥2 chars),
  * each quoted so FTS operators in the prose can't break the query, OR-joined.
+ * The final token also prefix-matches (24d): a dashboard search for "ref" must
+ * already find "Refund a purchase" mid-word, and for a full task sentence the
+ * trailing word matching its own inflections ("flow"* → flows) only helps.
  */
 export function toFtsQuery(text: string): string {
   const tokens = (text.toLowerCase().match(/[a-z0-9_]+/g) ?? []).filter((t) => t.length >= 2);
   if (tokens.length === 0) return '';
-  return [...new Set(tokens)].map((t) => `"${t}"`).join(' OR ');
+  const last = tokens[tokens.length - 1];
+  return [...new Set(tokens)].map((t) => (t === last ? `"${t}"*` : `"${t}"`)).join(' OR ');
 }

@@ -1,6 +1,6 @@
 import type { MapModule, ModuleDetail, ModuleFact } from '../api';
 import { INSPECTOR, WIRED } from '../copy';
-import { type AreaStat, type CapabilityEntry, coverageBucket, shortName } from '../derive';
+import { type AreaStat, type CapabilityEntry, shortName, standingOf } from '../derive';
 import { routeHref } from '../router';
 import { KindTag, StatusBadge } from './Status';
 import { WiredTo } from './Wired';
@@ -39,7 +39,8 @@ function ModuleLook({
   content: Extract<InspectorContent, { kind: 'module' }>;
 }): JSX.Element {
   const { module, mapModule, detail } = content;
-  const bucket = mapModule ? coverageBucket(mapModule) : 'dark';
+  // The three-light ladder (24a); stale rides as a modifier, never a standing.
+  const standing = mapModule ? standingOf(mapModule) : 'unexplained';
   const facts: Array<{ head: string; items: ModuleFact[] }> = detail
     ? [
         { head: 'Capabilities', items: [...detail.concepts, ...detail.flows] },
@@ -67,15 +68,11 @@ function ModuleLook({
       <div className="inspector-stats">
         <Stat
           label="standing"
-          value={
-            <span className={`standing standing-${bucket}`}>
-              {bucket === 'dark' ? 'dark zone' : bucket}
-            </span>
-          }
+          value={<span className={`standing standing-${standing}`}>{standing}</span>}
         />
         <Stat label="churn / 90d" value={<span className="mono">{mapModule?.churn ?? '-'}</span>} />
         <Stat
-          label="certified"
+          label="facts vouched"
           value={<span className="mono">{mapModule?.certifiedFacts ?? 0}</span>}
         />
         <Stat label="stale" value={<span className="mono">{mapModule?.staleFacts ?? 0}</span>} />
@@ -172,7 +169,7 @@ function AreaLook({
       <div className="inspector-stats">
         <Stat label="vouched" value={<span className="mono">{pct}%</span>} />
         <Stat label="churn / 90d" value={<span className="mono">{stat.churn}</span>} />
-        <Stat label="certified" value={<span className="mono">{stat.certified}</span>} />
+        <Stat label="facts vouched" value={<span className="mono">{stat.certified}</span>} />
         <Stat label="dark modules" value={<span className="mono">{stat.darkModules}</span>} />
       </div>
 

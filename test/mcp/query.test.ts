@@ -58,7 +58,14 @@ describe('openArthaIndex (built)', () => {
 
 describe('toFtsQuery', () => {
   it('lowercases, de-dupes, strips punctuation, and quotes each token', () => {
-    expect(toFtsQuery('Money, money & CENTS!')).toBe('"money" OR "cents"');
+    // the final token prefix-matches (24d) - an incremental search finds
+    // "cents" while still typing "cen"
+    expect(toFtsQuery('Money, money & CENTS!')).toBe('"money" OR "cents"*');
+  });
+
+  it('prefix-matches the token being typed (24d)', () => {
+    expect(toFtsQuery('ref')).toBe('"ref"*');
+    expect(toFtsQuery('refund the char')).toBe('"refund" OR "the" OR "char"*');
   });
 
   it('drops sub-2-char tokens and yields empty for no usable tokens', () => {

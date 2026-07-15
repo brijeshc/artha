@@ -175,7 +175,7 @@ async function handleApi(url: URL, res: ServerResponse, ctx: Ctx): Promise<void>
       const q = url.searchParams.get('q') ?? '';
       // Embed the query offline for semantic search (best-effort, model-matched).
       const queryEmbedding = await embedQueryForIndex(ctx.embedder, index.embeddingModel, q);
-      sendJson(res, 200, search(index, q, queryEmbedding));
+      sendJson(res, 200, search(index, q, queryEmbedding, 20, ctx.config.sourceRoots));
       return;
     }
     const concept = matchId(path, '/api/concept/');

@@ -37,7 +37,7 @@ function load(storeKey: string): BoardOverrides {
   }
 }
 
-export function useBoardDrag(storeKey: string): BoardDrag {
+export function useBoardDrag(storeKey: string, getScale?: () => number): BoardDrag {
   const [overrides, setOverrides] = useState<BoardOverrides>(() =>
     typeof window === 'undefined' ? {} : load(storeKey),
   );
@@ -68,8 +68,11 @@ export function useBoardDrag(storeKey: string): BoardDrag {
     const onMove = (e: PointerEvent) => {
       const d = drag.current;
       if (!d) return;
-      const dx = e.clientX - d.pointerX;
-      const dy = e.clientY - d.pointerY;
+      // Pointer deltas are screen pixels; positions are board units. When the
+      // board is zoomed (24c) a screen pixel is 1/scale board units.
+      const k = getScale?.() ?? 1;
+      const dx = (e.clientX - d.pointerX) / (k > 0 ? k : 1);
+      const dy = (e.clientY - d.pointerY) / (k > 0 ? k : 1);
       if (!d.moved && Math.hypot(dx, dy) < 4) return;
       d.moved = true;
       justDragged.current = true;
@@ -97,7 +100,7 @@ export function useBoardDrag(storeKey: string): BoardDrag {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
-  }, [storeKey]);
+  }, [storeKey, getScale]);
 
   const suppressNav = useCallback(() => {
     const s = justDragged.current;

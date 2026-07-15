@@ -270,7 +270,8 @@ function BurnupChart({ burn }: { burn: BurnPoint[] }): JSX.Element {
 
 // ── per-area two-light bars ───────────────────────────────────────────────────
 
-const A = { w: 680, l: 128, r: 58, rowH: 34, barH: 16, pad: 8 };
+// r leaves room for the self-labelling "NN% vouched" readout (24b).
+const A = { w: 680, l: 128, r: 104, rowH: 34, barH: 16, pad: 8 };
 
 function AreaBarsChart({ shares }: { shares: AreaShare[] }): JSX.Element {
   if (shares.length === 0) return <p className="obs-empty">{O.areasEmpty}</p>;
@@ -320,8 +321,11 @@ function AreaBarsChart({ shares }: { shares: AreaShare[] }): JSX.Element {
               cx += seg.frac * barW;
               return rect;
             })}
+            {/* Self-labelling readout (24b): a bare number beside a stacked bar
+                reads as the bar's total - "0%" on a fully-described bar looked
+                broken. The word makes the referent visible on every row. */}
             <text className="obs-row-pct" x={A.w - A.r + 8} y={cy + 4}>
-              {Math.round(s.vouched * 100)}%
+              {Math.round(s.vouched * 100)}% vouched
             </text>
           </g>
         );

@@ -528,7 +528,7 @@ export function App(): JSX.Element {
           feed={map}
           catalog={catalog}
           stats={stats}
-          zoneCount={darkCount(map)}
+          queueCount={queue.length}
         />
         <main className={inspector ? 'canvas with-inspector' : 'canvas'}>{canvas}</main>
         {inspector}
@@ -587,10 +587,6 @@ function crumbs(route: Route, names: Map<string, string>, inferredName?: string 
         { label: names.get(route.id) ?? inferredName ?? route.id },
       ];
   }
-}
-
-function darkCount(map: MapFeed): number {
-  return map.modules.filter((m) => m.dark && m.churn > 0).length;
 }
 
 /** After a write, if the source id was an inferred (moonlight) fact, the write

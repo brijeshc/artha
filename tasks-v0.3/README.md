@@ -14,7 +14,11 @@ Contradiction detection remains in v0.3, but as a near-byproduct: once inferred 
 **23d-2 is done (2026-07-09)** - vouch-by-reading (D9 core + OQ-A): an inferred concept/flow can be vouched or corrected in place, materializing into a real `.artha/` entry with `derived_from` provenance - the moonlight layer is now actionable, not just readable.
 **23d-3 is done (2026-07-11)** - the review walk (D9): press `R` (or a top-bar Review pill) on any module/capability page to sweep its unvouched claims one at a time - claim left, code right, one keystroke to vouch or correct - page-scoped, never a global queue, and needing no new backend.
 **23d-4 is done (2026-07-12)** - the delta band (D6): every capability/module page carries a distinct "What the code can't say" slot for the business rules, constraints, history, and warnings no code holds, rendered as human ink over the machine's print; a new additive `notes` field (`POST /api/notes`) records it without un-certifying the vouched claim, and the states table now marks per-field provenance ("not read from code" instead of a bare dash).
-Then the value-ranked queue (D10) finishes 23d, then 21b (LLM synthesis + verification) and 23e (craft debt).
+**23d-5 is done (2026-07-12)** - the value queue (D10): the ask queue ranks by agent-consumption × churn × uncertainty, every row wording its own "why now". 23d is complete.
+**24 is done (2026-07-16)** - a full UX audit (2026-07-15) found the app harder to follow than its data warrants; all seven slices shipped within two days.
+One vocabulary (vouch everywhere, the three-light ladder), honest numbers ("Explain next", dark = unvouched, a reachable vouched %), a default view that fits and defines itself (fit-to-view, zoom, board legend, Δ defined), findability (prefix search, clickable rule hits, arrow keys), one card per capability, a safe review walk (Enter never writes; vouch has undo), and reading-order fixes.
+See [24-usability.md](24-usability.md).
+**The gate before 21b/22/T18 is open**; next is the trimmed 23e (pure craft debt), then 21b (LLM synthesis + verification).
 
 | #   | Task | Depends on | One-line summary |
 |-----|------|------------|------------------|
@@ -23,6 +27,7 @@ Then the value-ranked queue (D10) finishes 23d, then 21b (LLM synthesis + verifi
 | 21c | [Inferred layer - dashboard reframe](21-inferred-layer.md) | 21a (21b enriches), v0.2 T16d/T17 | two-light map (moonlight/phosphor), vouch-by-reading, the delta band, inverted interview entry |
 | 22  | Contradiction view (inferred vs certified) | 21b | the v0.3 loophole view, seeded by disagreement between the machine layer and vouched facts |
 | 23  | [Atlas elevation](23-atlas-elevation.md) | T16d, T17b, 21a | drawn linkage (wiring lens + flow routes, **23a shipped**), terrain texture, observatory charts, review mode (delivers 21c's D5/D6/D9/D10), craft debt |
+| 24  | [Usability hardening](24-usability.md) | 23a-23d shipped surface | **done 2026-07-16** - one vocabulary (vouch), honest numbers, orientation on the default view, findability, capability dedup, walk safety, reading order |
 
 ## Interplay with unfinished v0.2 tasks
 
@@ -34,3 +39,4 @@ Then the value-ranked queue (D10) finishes 23d, then 21b (LLM synthesis + verifi
 
 21a → 21c (structural value, fully offline) with 21b enriching both; 22 and T18 hang off 21b.
 23 runs alongside: 23a (shipped) needed nothing new from the backend; 23b/23c/23e are pure dashboard; 23d is the delivery vehicle for 21c's D5/D6/D9/D10.
+**24 sat in front of 21b/22/T18** (decision 2026-07-15) and **shipped 2026-07-16**: the surface is hardened; 23e's remaining craft items are next, then 21b.

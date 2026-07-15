@@ -6,6 +6,7 @@ import type {
   EvidenceView,
   FlowDetail,
   InferredFactView,
+  MapArea,
   MapFeed,
   ModuleBoardData,
   ModuleDetail,
@@ -17,7 +18,7 @@ import type {
 } from '../../web/src/api';
 import { GAP_Y, boardLayout, fileBoardLayout } from '../../web/src/board';
 import { Atlas } from '../../web/src/components/Atlas';
-import { Board, RouteCard } from '../../web/src/components/Board';
+import { Board, BoardViewport, RouteCard } from '../../web/src/components/Board';
 import { CapCard } from '../../web/src/components/CapCard';
 import { ConceptPage, FlowPage } from '../../web/src/components/CapabilityPages';
 import { CatalogPage } from '../../web/src/components/CatalogPage';
@@ -38,6 +39,7 @@ import {
   atlasLayout,
   capabilitiesByArea,
   capabilitiesByModule,
+  capabilitiesByPrimaryArea,
   capabilityEntries,
   capabilityReviewClaims,
   coverageBucket,
@@ -289,8 +291,9 @@ describe('derive', () => {
   it('derives honest KPIs: vouched depth and machine reach on separate lights (D11)', () => {
     const k = kpis(feed);
     const byKey = Object.fromEntries(k.map((x) => [x.key, x]));
-    // vouched = churn-weighted certified depth: (40·5/6 + 10·1/2 + 20·0) / 70
-    expect(byKey.vouched.value).toBe('55%');
+    // vouched = the reachable share (24b): churn in modules holding a fresh
+    // vouched fact - (40 + 10) / 70 - reaches 100% when every busy module does
+    expect(byKey.vouched.value).toBe('71%');
     // described = the machine layer's reach (src/legacy only): 20 of 70 churn -
     // it reads moonlight, never the phosphor tone of trust
     expect(byKey.described.value).toBe('29%');
@@ -305,8 +308,9 @@ describe('derive', () => {
     const stats = areaStats(feed);
     const billing = stats.find((s) => s.area.area === 'Billing & Money');
     expect(billing).toMatchObject({ churn: 50, certified: 6, stale: 1, darkModules: 0 });
-    // same honesty rule as the top bar: vouched depth, not a has-any-fact bit
-    expect(billing?.vouched).toBeCloseTo((40 * (5 / 6) + 10 * 0.5) / 50, 6);
+    // the same reachable share as the top bar (24b): both modules hold a fresh
+    // vouched fact, so the area reads fully vouched
+    expect(billing?.vouched).toBeCloseTo(1, 6);
   });
 
   it('groups capabilities under the areas their modules belong to', () => {
@@ -314,6 +318,38 @@ describe('derive', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0]?.area?.area).toBe('Billing & Money');
     expect(groups[0]?.entries.map((e) => e.name)).toEqual(['Invoice', 'Refund a purchase']);
+  });
+
+  it('places each capability once, under its primary area with "also" chips (24e)', () => {
+    // a flow spanning two areas must not become two cards
+    const twoAreas: MapArea[] = [
+      { area: 'Billing', modules: ['src/billing'], concepts: [], flows: [], dark: false },
+      { area: 'Ops', modules: ['src/payments'], concepts: [], flows: [], dark: false },
+    ];
+    const spanning: CatalogData = {
+      concepts: [],
+      flows: [
+        {
+          id: 'flow.refund',
+          name: 'Refund a purchase',
+          status: 'proposed',
+          modules: ['src/billing', 'src/payments'],
+          steps: 3,
+          linked: 2,
+        },
+      ],
+    };
+    const groups = capabilitiesByPrimaryArea(spanning, twoAreas);
+    expect(groups).toHaveLength(1); // one placement, not one per touched area
+    expect(groups[0]?.area?.area).toBe('Billing');
+    expect(groups[0]?.entries).toHaveLength(1);
+    expect(groups[0]?.entries[0]?.also).toEqual(['Ops']); // the rest named, not repeated
+    // an unplaced capability still lands in the null group
+    const unplaced = capabilitiesByPrimaryArea(
+      { concepts: [], flows: [{ ...spanning.flows[0], modules: [] }] },
+      twoAreas,
+    );
+    expect(unplaced[0]?.area).toBeNull();
   });
 
   it('shortens module paths to place-names', () => {
@@ -431,7 +467,7 @@ describe('Atlas', () => {
       ],
     };
     const html = markup(<Atlas {...base} feed={coldFeed} zones={[zones[0]]} />);
-    expect(html).toContain('0% of active code explained');
+    expect(html).toContain('0% of active code vouched');
     expect(html).toContain('cold-funnel');
     expect(html).toContain(routeHref({ view: 'module', id: 'src/legacy' }));
     expect(html).toContain('#/queue');
@@ -539,7 +575,25 @@ describe('Board', () => {
     expect(html).toContain('bnode-described'); // legacy glows moonlight, not black
     expect(html).toContain('has-stale'); // billing's ember chalk tick
     expect(html).toContain('billing'); // place-names in chalk
-    expect(html).toContain('5 certified');
+    expect(html).toContain('vouched ×5'); // one footer grammar: word, then count (24a)
+  });
+
+  it('scale shrinks the paper, never the board units (24c)', () => {
+    const widthOf = (h: string) => Number(/<svg[^>]*width="([\d.]+)"/.exec(h)?.[1]);
+    const plain = markup(<Board {...base} />);
+    const half = markup(<Board {...base} scale={0.5} />);
+    expect(widthOf(half)).toBeCloseTo(widthOf(plain) / 2, 5);
+    // the viewBox (board units) is identical - positions and hrefs are scale-free
+    const viewBox = (h: string) => /viewBox="[^"]*"/.exec(h)?.[0];
+    expect(viewBox(half)).toBe(viewBox(plain));
+  });
+
+  it('the viewport carries the legend, zoom controls, and defines Δ (24c)', () => {
+    const html = markup(<BoardViewport {...base} />);
+    expect(html).toContain('board-controls');
+    expect(html).toContain('Reading the board'); // the default view defines its words
+    expect(html).toContain('Δ = change'); // the glyph is defined on-screen
+    expect(html).toContain('board-zoom'); // the zoom readout
   });
 
   it('annotates boxes with meaning: the machine one-liner and product capabilities', () => {
@@ -842,7 +896,7 @@ describe('TopBar', () => {
     );
     expect(html).toContain('Artha');
     expect(html).toContain('src/billing');
-    expect(html).toContain('55%'); // vouched, the honest trust number
+    expect(html).toContain('71%'); // vouched, the reachable share (24b)
     expect(html).toContain('described'); // the machine layer, on its own light
     expect(html).toContain('dark zones');
     // platform-spelled shortcut: ⌘K on a Mac, Ctrl K everywhere else
@@ -866,13 +920,13 @@ describe('Navigator', () => {
         feed={feed}
         catalog={catalog}
         stats={areaStats(feed)}
-        zoneCount={1}
+        queueCount={1}
       />,
     );
     expect(html).toContain('Board'); // the default canvas since the 23a′ pivot
     expect(html).toContain('Terrain'); // the treemap, one nav item away
     expect(html).toContain('Capabilities');
-    expect(html).toContain('Dark zones');
+    expect(html).toContain('Explain next'); // the value queue's action name (24b)
     expect(html).toContain('Billing &amp; Money');
     expect(html).toContain('Invoice'); // capability by product name
     expect(html).toContain('legacy'); // solo module under "Other modules"
@@ -932,7 +986,8 @@ describe('Inspector', () => {
       />,
     );
     expect(html).toContain('billing');
-    expect(html).toContain('understood');
+    expect(html).toContain('vouched'); // the three-light ladder, not a bucket word (24a)
+    expect(html).not.toContain('understood');
     expect(html).toContain('40');
     expect(html).toContain('Invoice');
     expect(html).toContain('Money is integer minor units');
@@ -944,8 +999,8 @@ describe('Inspector', () => {
     const entries = capabilityEntries(catalog);
     const html = markup(<Inspector content={{ kind: 'area', stat, entries }} />);
     expect(html).toContain('Billing &amp; Money');
-    // vouched depth, the same honest rule as the top bar: (40·5/6 + 10·1/2) / 50
-    expect(html).toContain('77%');
+    // the reachable share, the same rule as the top bar (24b)
+    expect(html).toContain('100%');
     expect(html).toContain('vouched');
     expect(html).toContain('Invoice');
     expect(html).toContain('src/payments');
@@ -1128,7 +1183,11 @@ describe('ConceptPage', () => {
     pins: [
       { symbol: 'src/billing/Invoice.ts#Invoice', symbolId: 's1', contentHash: 'h', stale: false },
     ],
-    related: ['decision.no_float_money', 'flow.refund'],
+    // Names resolve server-side (24g); the null name exercises the id fallback.
+    related: [
+      { id: 'decision.no_float_money', name: 'No floating point for money' },
+      { id: 'flow.refund', name: null },
+    ],
     modules: ['src/billing'],
     notes:
       'Invoices are immutable once issued - void, never delete.\nAmounts are always in minor units (cents).',
@@ -1147,10 +1206,13 @@ describe('ConceptPage', () => {
     expect(html).toContain('sent to customer');
     expect(html).toContain('amount is positive'); // invariant column
     expect(html).toContain('src/billing/Invoice.ts#Invoice');
-    // related resolves to product names where known, ids elsewhere
+    // related reads in product language (24g): the server-resolved heading for
+    // the decision, the catalog name for the flow - never a raw id when a name
+    // exists anywhere
     expect(html).toContain('Refund a purchase');
-    expect(html).toContain('decision.no_float_money');
-    expect(html).toContain('certified by brijesh');
+    expect(html).toContain('No floating point for money');
+    expect(html).not.toContain('decision.no_float_money');
+    expect(html).toContain('vouched by brijesh'); // the public word (24a)
   });
 
   it('links each pin to the module that owns the code (the engineer lens)', () => {
@@ -1168,16 +1230,18 @@ describe('ConceptPage', () => {
     expect(html).toContain('Invoices are immutable once issued'); // first delta line
     expect(html).toContain('Amounts are always in minor units (cents).'); // second delta line
     expect(html).toContain('recorded by your team'); // provenance attribution
-    expect(html).toContain('Edit the delta'); // additive editor (has content → "Edit")
+    expect(html).toContain('Edit the note'); // additive editor (has content → "Edit")
   });
 
-  it('marks per-field provenance in the states table (D6): human ink vs "not read from code"', () => {
+  it('marks per-field provenance in the states table: human ink vs "not recorded yet"', () => {
     const html = markup(<ConceptPage detail={detail} names={new Map()} curation={noopCuration} />);
     // a filled effect/invariant is the human's intent - human ink
     expect(html).toContain('class="human-ink">not yet sent');
     expect(html).toContain('class="human-ink">amount is positive');
-    // an empty cell is honest about it, never a bare dash (draft-inv, open-eff, paid-inv)
-    expect(count(html, /class="state-empty">not read from code/g)).toBe(3);
+    // an empty cell on this human-authored table says so honestly (24g) -
+    // never a bare dash, and never provenance-speak (draft-inv, open-eff, paid-inv)
+    expect(count(html, /class="state-empty">not recorded yet/g)).toBe(3);
+    expect(html).not.toContain('not read from code');
     expect(html).not.toContain('<td><span class="dim">-</span></td>');
   });
 });
@@ -1239,6 +1303,14 @@ describe('FlowPage', () => {
     ).toBe(2);
   });
 
+  it('leads with the steps; the linking workbench follows them (24g)', () => {
+    const html = markup(<FlowPage detail={detail} names={new Map()} curation={noopCuration} />);
+    // the reader's contract: describe the flow from this page alone - the
+    // meaning outranks the curation tooling
+    expect(html.indexOf('Steps')).toBeGreaterThan(-1);
+    expect(html.indexOf('Steps')).toBeLessThan(html.indexOf('Entry points'));
+  });
+
   it('shows the delta band as an invitation when no human ink is recorded (D6)', () => {
     // this flow's notes are null
     const html = markup(<FlowPage detail={detail} names={new Map()} curation={noopCuration} />);
@@ -1246,7 +1318,7 @@ describe('FlowPage', () => {
     expect(html).toContain('class="cap-section delta-band"'); // the dashed invite, not filled
     expect(html).not.toContain('delta-band filled');
     expect(html).toContain('The steps above are read from code'); // the flow-specific invitation
-    expect(html).toContain('Add the delta'); // the additive editor affordance (no content yet)
+    expect(html).toContain('Add a note'); // the additive editor affordance (no content yet)
   });
 });
 
@@ -1267,12 +1339,12 @@ describe('curation affordances (T17)', () => {
     notes: null,
   });
 
-  it('a proposed capability offers certify, link, and edit', () => {
+  it('a proposed capability offers vouch, link, and edit', () => {
     const html = markup(
       <ConceptPage detail={concept('proposed')} names={new Map()} curation={noopCuration} />,
     );
     expect(count(html, /btn-certify/g)).toBeGreaterThanOrEqual(1);
-    expect(html).toContain('Certify');
+    expect(html).toContain('Vouch'); // the public word (24a); `certified` is storage-only
     expect(html).toContain('Link code'); // the drag-to-pin affordance
     expect(html).toContain('Edit');
   });
@@ -1306,7 +1378,7 @@ describe('curation affordances (T17)', () => {
     const html = markup(<FlowPage detail={emptyFlow} names={new Map()} curation={noopCuration} />);
     expect(html).toContain('Entry points');
     expect(html).toContain('Link code');
-    expect(html).toContain('Certify');
+    expect(html).toContain('Vouch');
   });
 
   it('the module lens certifies exactly the not-yet-certified rules/decisions', () => {
@@ -1568,9 +1640,11 @@ describe('inferred layer (21a) - moonlight', () => {
       />,
     );
     // the tile carries the moonlight class and reads "described", not "unexplained"
+    // (the word itself appears in the always-present Legend ramp, so assert the
+    // tile-level class - dark-word - rather than the page text)
     expect(html).toContain('moonlit');
     expect(html).toContain('moon-word');
-    expect(html).not.toContain('unexplained');
+    expect(html).not.toContain('dark-word');
   });
 
   it('the legend explains the two lights (described vs vouched)', () => {
@@ -1626,7 +1700,7 @@ describe('inferred layer (21a) - moonlight', () => {
     const html = markup(<InferredPage detail={inferredConcept} />);
     // the pin now offers to show its backing source, one interaction away
     expect(html).toContain('evidence-toggle');
-    expect(html).toContain('Read from code');
+    expect(html).toContain('Show the code'); // 24a: never the confidence tier's words
     expect(html).toContain('aria-expanded="false"'); // collapsed until asked
     // and the code panel is lazy - nothing is fetched/shown in the collapsed state
     expect(html).not.toContain('evidence-panel');
@@ -1636,7 +1710,7 @@ describe('inferred layer (21a) - moonlight', () => {
     const html = markup(<InferredPage detail={inferredConcept} curation={noopCuration} />);
     expect(html).toContain('Reading is reviewing'); // the vouch bar head
     expect(html).toContain('btn-certify'); // the one-keystroke vouch
-    expect(html).toContain('Certify');
+    expect(html).toContain('Vouch');
     expect(html).toContain('Edit'); // correct-in-place is the deeper fix
   });
 
@@ -1660,7 +1734,7 @@ describe('inferred layer (21a) - moonlight', () => {
     };
     const html = markup(<InferredPage detail={card} curation={noopCuration} />);
     expect(html).toContain('vouch-note');
-    expect(html).toContain('not a claim to certify'); // honest reason, not a dead button
+    expect(html).toContain('not a claim to vouch'); // honest reason, not a dead button
     expect(html).not.toContain('btn-certify');
   });
 
@@ -1884,7 +1958,7 @@ describe('evidence, revealed (D5)', () => {
       </EvidenceReveal>,
     );
     expect(html).toContain('src/billing/refund.ts#issueRefund'); // the chip face
-    expect(html).toContain('Read from code'); // the reveal action
+    expect(html).toContain('Show the code'); // the reveal action (24a wording)
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('evidence-panel'); // the panel is not rendered until open
   });
@@ -1911,20 +1985,46 @@ describe('observatory', () => {
     expect(billing?.vouched).toBeCloseTo(5 / 6, 5);
   });
 
-  it('areaShares splits each area into three shares that sum to ~1', () => {
+  it('areaShares: three-light churn masses that sum to ~1, real areas only (24b)', () => {
     const shares = areaShares(feed);
-    // busiest area first (Billing & Money = 50 churn, legacy = 20)
-    expect(shares[0].area).toBe('Billing & Money');
+    // a solo module named after itself is not a product area - excluded
+    expect(shares.find((s) => s.area === 'src/legacy')).toBeUndefined();
+    expect(shares).toHaveLength(1);
+    // both billing modules hold fresh vouched facts: the phosphor segment IS
+    // the area's vouched share, the same number the top bar reports
+    expect(shares[0]).toMatchObject({ area: 'Billing & Money', vouched: 1 });
     for (const s of shares) {
       expect(s.vouched + s.described + s.unexplained).toBeCloseTo(1, 5);
     }
-    // the un-vouched mass of un-described modules is dark, not described
-    const billingArea = shares.find((s) => s.area === 'Billing & Money');
-    expect(billingArea?.described).toBe(0);
-    expect(billingArea?.unexplained).toBeGreaterThan(0);
-    // a purely machine-described area is all moonlight, no phosphor
-    const legacyArea = shares.find((s) => s.area === 'src/legacy');
-    expect(legacyArea).toMatchObject({ vouched: 0, described: 1, unexplained: 0 });
+    // mixed standings split the churn mass whole-module by standing
+    const mixed = areaShares({
+      areas: [
+        {
+          area: 'Shop',
+          modules: ['src/a', 'src/b', 'src/c'],
+          concepts: [],
+          flows: [],
+          dark: false,
+        },
+      ],
+      modules: [
+        { module: 'src/a', dark: false, churn: 10, certifiedFacts: 2, staleFacts: 0, score: 1 },
+        {
+          module: 'src/b',
+          dark: true,
+          churn: 20,
+          certifiedFacts: 0,
+          staleFacts: 0,
+          score: 0,
+          described: true,
+        },
+        { module: 'src/c', dark: true, churn: 10, certifiedFacts: 0, staleFacts: 0, score: 0 },
+      ],
+      cold: false,
+    } as MapFeed);
+    expect(mixed[0].vouched).toBeCloseTo(0.25, 5);
+    expect(mixed[0].described).toBeCloseTo(0.5, 5);
+    expect(mixed[0].unexplained).toBeCloseTo(0.25, 5);
   });
 
   it('vouchedBurnup accumulates certifications by date, monotonically', () => {
@@ -1942,8 +2042,10 @@ describe('observatory', () => {
     expect(html).toContain('obs-legend');
     expect(html).toContain('standing-vouched');
     expect(html).toContain('standing-described');
-    // one bar row per product area, with a vouched % readout
-    expect(count(html, /obs-row-label/g)).toBe(feed.areas.length);
+    // one bar row per *real* product area (solo pseudo-areas excluded, 24b),
+    // each with a self-labelling vouched readout
+    expect(count(html, /obs-row-label/g)).toBe(1);
+    expect(html).toContain('% vouched');
     expect(html).toContain('obs-seg');
   });
 
@@ -1957,7 +2059,7 @@ describe('observatory', () => {
 
   it('shows an honest empty state when there is no certification history', () => {
     const html = markup(<Observatory feed={feed} history={[]} />);
-    expect(html).toContain('Not enough certification history');
+    expect(html).toContain('No vouching history');
     expect(html).not.toContain('obs-line');
     // the other two charts still draw
     expect(count(html, /obs-dot/g)).toBe(feed.modules.length);
@@ -2154,7 +2256,7 @@ describe('review walk (D9, 23d-3)', () => {
     expect(html).toContain('src/billing'); // the subject
     expect(html).toContain(`1 / ${claims.length}`); // progress
     expect(html).toContain('Refund draft'); // the first claim (proposed) leads
-    expect(html).toContain('Read from code'); // the evidence panel head (D5)
+    expect(html).toContain('The code behind this claim'); // the evidence panel head (D5)
     expect(html).toContain('Vouch'); // the one-keystroke decision
     expect(html).toContain('esc'); // the key legend
     expect(html).toContain('flag (soon)'); // x-flag is honestly deferred, not a dead button

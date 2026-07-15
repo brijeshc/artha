@@ -884,6 +884,47 @@ a.crumb:hover {
   color: var(--ink-3);
   pointer-events: none;
 }
+/* The board's top-right instrument row (24c): legend · zoom · fit · tidy. */
+.board-controls {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 6;
+}
+.board-ctl {
+  padding: 4px 10px;
+  background: var(--night-1);
+  border: 1px solid var(--line-2);
+  border-radius: 2px;
+  color: var(--ink-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+.board-ctl:hover {
+  color: var(--ink);
+  border-color: var(--phosphor-2);
+}
+.board-zoom {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  min-width: 34px;
+  text-align: center;
+}
+/* The legend chip rides in the controls row; its body drops below it. */
+.legend.legend-top {
+  position: relative;
+  right: auto;
+  bottom: auto;
+}
+.legend.legend-top .legend-body {
+  right: 0;
+  top: 30px;
+  bottom: auto;
+}
+
 .board-tidy {
   position: absolute;
   top: 8px;
@@ -1656,14 +1697,21 @@ a.fact-line:hover {
   text-transform: uppercase;
   white-space: nowrap;
 }
-.standing-dark {
+/* The three-light ladder (24a): the only visible standings. The old bucket
+   classes (dark/thin/partial/understood) stay as aliases while tests migrate. */
+.standing-dark,
+.standing-unexplained {
   color: var(--ink-3);
 }
 .standing-thin,
 .standing-partial {
   color: var(--amber);
 }
-.standing-understood {
+.standing-described {
+  color: var(--moon);
+}
+.standing-understood,
+.standing-vouched {
   color: var(--phosphor);
 }
 .standing-stale {
@@ -1784,6 +1832,15 @@ a.fact-line:hover {
 
 .card-foot {
   font-size: 10.5px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* One card per capability (24e): the quiet "also in …" line on shared cards. */
+.card-also {
+  font-size: 10px;
+  font-style: italic;
   color: var(--ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2336,9 +2393,15 @@ a.fact-line:hover {
   color: var(--ink);
 }
 .cmdk-hit:hover,
-.cmdk-hit:focus-visible {
+.cmdk-hit:focus-visible,
+.cmdk-hit.active {
   background: var(--phosphor-dim);
   outline: none;
+}
+.cmdk-keys {
+  margin: 8px 10px 4px;
+  font-size: 10px;
+  color: var(--ink-3);
 }
 .cmdk-hit.inert {
   cursor: default;
@@ -2555,6 +2618,11 @@ a.fact-line:hover {
 .claim-outcome.vouched {
   color: var(--phosphor);
   background: var(--phosphor-dim);
+}
+/* Take a vouch back (24f) - quiet, right beside the outcome pill. */
+.review-undo {
+  padding: 1px 8px;
+  font-size: 10.5px;
 }
 .claim-outcome.corrected {
   color: var(--amber);

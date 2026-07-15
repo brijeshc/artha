@@ -10,7 +10,7 @@ import { confidenceLabel, moduleOfPath, shortName } from '../derive';
 import { routeHref } from '../router';
 import { CertifyButton, type Curation, EditFields } from './Curate';
 import { EvidenceReveal } from './Evidence';
-import { SectionHead } from './Status';
+import { CodeProse, SectionHead } from './Status';
 
 /**
  * The moonlight layer (21a): machine-described meaning, rendered so a reader can
@@ -108,7 +108,11 @@ export function InferredPage({
         <p className="page-kind">{INFERRED.page}</p>
         <h2 className="page-title">{detail.name}</h2>
         <p className="page-sub mono">{detail.id}</p>
-        {detail.summary && <p className="page-summary moon-prose">{detail.summary}</p>}
+        {detail.summary && (
+          <p className="page-summary moon-prose">
+            <CodeProse text={detail.summary} />
+          </p>
+        )}
         <p className="page-meta">
           <ConfidenceChip slug={detail.confidence} />
           <span className="meta-sep">·</span>

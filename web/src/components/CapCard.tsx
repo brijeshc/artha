@@ -7,8 +7,13 @@ import { StatusBadge } from './Status';
  * One capability as a glanceable card: kind rule, product name, standing, and
  * the preview that tells you what you'll find inside - a concept shows its
  * state chain, a flow its step coverage. Used by the catalog and module page.
+ * `also` (24e) quietly names the other areas a shared capability touches -
+ * the card itself renders exactly once.
  */
-export function CapCard({ entry }: { entry: CapabilityEntry }): JSX.Element {
+export function CapCard({
+  entry,
+  also = [],
+}: { entry: CapabilityEntry; also?: string[] }): JSX.Element {
   const { ref, name, status, modules, states, steps } = entry;
   return (
     <a className={`cap-card kind-${ref.kind}`} href={routeHref({ view: ref.kind, id: ref.id })}>
@@ -52,6 +57,7 @@ export function CapCard({ entry }: { entry: CapabilityEntry }): JSX.Element {
       <span className="card-foot mono">
         {modules.length > 0 ? modules.map(shortName).join(' · ') : 'not linked to code'}
       </span>
+      {also.length > 0 && <span className="card-also">also in {also.join(' · ')}</span>}
     </a>
   );
 }

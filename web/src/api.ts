@@ -40,6 +40,12 @@ export interface PinView {
   stale: boolean;
 }
 
+/** A related entry with its display name resolved server-side (24g). */
+export interface RelatedRef {
+  id: string;
+  name: string | null;
+}
+
 export interface ConceptDetail {
   id: string;
   kind: 'concept';
@@ -51,7 +57,7 @@ export interface ConceptDetail {
   states: Array<{ name: string; effect: string | null; invariant: string | null }>;
   transitions: Array<{ from: string; to: string; trigger: string }>;
   pins: PinView[];
-  related: string[];
+  related: RelatedRef[];
   modules: string[];
   /** The human delta band (D6): what the code can't say; null until written. */
   notes: string | null;
@@ -73,7 +79,7 @@ export interface FlowDetail {
   certifiedAt: string | null;
   entry: PinView[];
   steps: FlowStepView[];
-  related: string[];
+  related: RelatedRef[];
   modules: string[];
   /** The human delta band (D6): what the code can't say; null until written. */
   notes: string | null;
@@ -85,6 +91,8 @@ export interface SearchHit {
   heading: string | null;
   status: string;
   score: number;
+  /** The module a rule/decision hit opens (24d); null when it touches none. */
+  module?: string | null;
 }
 
 export interface CatalogConcept {

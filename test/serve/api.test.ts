@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FileGraph } from '../../src/analytics/references';
 import { defaultConfig } from '../../src/config/config';
+import { openArthaIndex } from '../../src/mcp/query';
 import {
   areasOf,
   catalog,
@@ -17,6 +18,7 @@ import {
   vouchedHistory,
 } from '../../src/serve/api';
 import { fact, fakeIndex, pin } from '../helpers/fakeIndex';
+import { writeFixtureIndex } from '../mcp/fixture';
 
 // A non-git temp repo with two source modules on disk. No git → churn is an
 // empty map (graceful), so the map feed exercises the fs-universe + coverage.
@@ -173,7 +175,9 @@ describe('conceptDetail', () => {
       trigger: 'payment failed',
     });
     expect(detail?.pins[0]?.symbol).toBe('src/billing/Sub.ts#Sub');
-    expect(detail?.related).toEqual(['concept.invoice']);
+    // related carries its resolved name (24g); this index has no such fact, so
+    // the name is honestly null and the client falls back to the id
+    expect(detail?.related).toEqual([{ id: 'concept.invoice', name: null }]);
     expect(detail?.modules).toEqual(['src/billing']);
   });
 
@@ -489,5 +493,24 @@ describe('search', () => {
 
   it('returns nothing for a blank query', () => {
     expect(search(index, '   ')).toEqual([]);
+  });
+
+  it('prefix-matches the token being typed and lands rules on their module (24d)', () => {
+    // the fake fts stub above can't exercise prefixing - use the real index
+    const dir = mkdtempSync(join(tmpdir(), 'artha-search-'));
+    const dbPath = join(dir, 'index.db');
+    try {
+      writeFixtureIndex(dbPath);
+      const real = openArthaIndex(dbPath);
+      // mid-word: "mon" must already surface the money facts
+      const hits = search(real, 'mon', undefined, 20, ['src']);
+      expect(hits.map((h) => h.id)).toContain('decision.money');
+      // a rule/decision hit carries the module it governs, so the command bar
+      // can open it somewhere real instead of rendering an inert row
+      expect(hits.find((h) => h.id === 'decision.money')?.module).toBe('src');
+      real.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

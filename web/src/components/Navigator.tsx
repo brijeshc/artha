@@ -1,15 +1,21 @@
 import { useState } from 'react';
 import type { Catalog, MapFeed } from '../api';
 import { NAV } from '../copy';
-import { type AreaStat, type CapabilityEntry, capabilitiesByArea, shortName } from '../derive';
+import {
+  type AreaStat,
+  type PlacedCapability,
+  capabilitiesByPrimaryArea,
+  shortName,
+} from '../derive';
 import { type Route, routeHref } from '../router';
 
 /**
  * The gazetteer: the knowledge base as a navigable tree. Views first, then one
  * section per product area - each expandable into the capabilities it offers
- * (product language) and the modules that implement it (code language). This
- * is the "different section for different business logic" spine; everything
- * in it is a plain link, so the whole tree deep-links.
+ * (product language) and the modules that implement it (code language). Each
+ * capability appears **once**, under its primary area (24e) - a flow touching
+ * three areas is one row, not three. Everything in it is a plain link, so the
+ * whole tree deep-links.
  */
 
 export interface NavigatorProps {
@@ -17,11 +23,18 @@ export interface NavigatorProps {
   feed: MapFeed;
   catalog: Catalog;
   stats: AreaStat[];
-  zoneCount: number;
+  /** Rows in the Explain-next queue - the badge always matches the page (24b). */
+  queueCount: number;
 }
 
-export function Navigator({ route, feed, catalog, stats, zoneCount }: NavigatorProps): JSX.Element {
-  const grouped = capabilitiesByArea(catalog, feed.areas);
+export function Navigator({
+  route,
+  feed,
+  catalog,
+  stats,
+  queueCount,
+}: NavigatorProps): JSX.Element {
+  const grouped = capabilitiesByPrimaryArea(catalog, feed.areas);
   const capsByArea = new Map(
     grouped
       .filter((g) => g.area !== null)
@@ -84,7 +97,7 @@ export function Navigator({ route, feed, catalog, stats, zoneCount }: NavigatorP
           label={NAV.queue}
           active={route.view === 'queue'}
           glyph="◌"
-          badge={zoneCount > 0 ? String(zoneCount) : undefined}
+          badge={queueCount > 0 ? String(queueCount) : undefined}
         />
       </div>
 
@@ -164,7 +177,7 @@ function AreaNode({
   selectedModule,
 }: {
   stat: AreaStat;
-  caps: CapabilityEntry[];
+  caps: PlacedCapability[];
   open: boolean;
   onToggle: () => void;
   selectedArea: string | null;
@@ -205,11 +218,12 @@ function AreaNode({
 
       {open && (
         <ul className="nav-list nav-area-children">
-          {caps.map((c) => (
+          {caps.map(({ entry: c, also }) => (
             <li key={c.ref.id}>
               <a
                 className={`nav-cap kind-${c.ref.kind}`}
                 href={routeHref({ view: c.ref.kind, id: c.ref.id })}
+                title={also.length > 0 ? `${c.name} - also in ${also.join(', ')}` : undefined}
               >
                 <span className={`cap-glyph kind-${c.ref.kind}`} aria-hidden="true">
                   {c.ref.kind === 'concept' ? '●' : '→'}

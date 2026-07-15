@@ -80,9 +80,18 @@ export interface Kpi {
   tone: Tone;
 }
 
-/** Coverage of a module as a 0..1 fraction: certified/(certified+1), saturating. */
+/** Coverage of a module as a 0..1 fraction: certified/(certified+1), saturating.
+ * Internal ranking signal only (queue uncertainty, the flying-blind y axis) -
+ * the headline vouched % is the reachable share (24b), never this curve. */
 export function coverageOf(m: MapModule): number {
   return m.certifiedFacts <= 0 ? 0 : m.certifiedFacts / (m.certifiedFacts + 1);
+}
+
+/** Does at least one fresh (non-stale) vouched fact hold here? `certifiedFacts`
+ * counts only currently-certified facts (stale is a disjoint status), so this
+ * is exactly "standing vouched meaning exists". */
+function hasVouch(m: MapModule): boolean {
+  return m.certifiedFacts > 0;
 }
 
 /** How brightly a tile reads - the visual coverage ramp. */
@@ -131,15 +140,17 @@ export function kpis(feed: MapFeed): Kpi[] {
   const dark = mods.filter((m) => m.dark);
 
   const totalChurn = sum(mods.map((m) => m.churn));
-  // Vouched: churn-weighted *depth* of certified coverage. Depth (coverageOf,
-  // saturating) rather than a has-any-fact bit, so one lucky fact cannot claim
-  // a whole module. Churn-weighted so the number reflects *active* code; falls
-  // back to a plain module average when there is no churn signal at all.
+  // Vouched (24b): the *reachable* share - how much of the recent change sits
+  // in modules where at least one fresh (non-stale) vouched fact holds.
+  // Reaches 100% when every busy module carries standing vouched meaning; the
+  // saturating depth curve (coverageOf) stays internal as a ranking signal.
+  // Churn-weighted so the number reflects *active* code; falls back to a plain
+  // module share when there is no churn signal at all.
   const vouchedPct =
     totalChurn > 0
-      ? sum(mods.map((m) => m.churn * coverageOf(m))) / totalChurn
+      ? sum(mods.filter(hasVouch).map((m) => m.churn)) / totalChurn
       : total > 0
-        ? sum(mods.map(coverageOf)) / total
+        ? mods.filter(hasVouch).length / total
         : 0;
 
   // Described: the machine layer's reach - the moonlight number, worded and
@@ -335,8 +346,8 @@ export interface AreaStat {
   certified: number;
   stale: number;
   darkModules: number;
-  /** Churn-weighted vouched depth within the area, 0..1 (same honesty rule as
-   * the top bar: certified coverage, never the machine layer). */
+  /** The area's vouched share, 0..1 - the same reachable, churn-weighted
+   * formula as the top bar (24b), so "vouched" is one number system. */
   vouched: number;
 }
 
@@ -353,9 +364,9 @@ export function areaStats(feed: MapFeed): AreaStat[] {
       darkModules: mods.filter((m) => m.dark).length,
       vouched:
         churn > 0
-          ? sum(mods.map((m) => m.churn * coverageOf(m))) / churn
+          ? sum(mods.filter(hasVouch).map((m) => m.churn)) / churn
           : mods.length > 0
-            ? sum(mods.map(coverageOf)) / mods.length
+            ? mods.filter(hasVouch).length / mods.length
             : 0,
     };
   });
@@ -429,6 +440,58 @@ export function capabilitiesByArea(
   }
 
   const out: Array<{ area: MapArea | null; entries: CapabilityEntry[] }> = [];
+  for (const a of areas) {
+    const list = grouped.get(a.area);
+    if (list && list.length > 0) out.push({ area: a, entries: list });
+  }
+  if (unplaced.length > 0) out.push({ area: null, entries: unplaced });
+  return out;
+}
+
+/** A capability placed once (24e): under its primary area, naming the rest. */
+export interface PlacedCapability {
+  entry: CapabilityEntry;
+  /** The other areas this capability also touches, in area order. */
+  also: string[];
+}
+
+/**
+ * One card per capability (24e): each capability lands under the *first* area
+ * (in area order) whose modules it touches, and carries the remaining areas as
+ * quiet "also" chips - never the same card repeated per area. The catalog and
+ * the navigator read this; the area *inspector* keeps {@link capabilitiesByArea},
+ * because inspecting one area should list everything it touches.
+ */
+export function capabilitiesByPrimaryArea(
+  catalog: Catalog,
+  areas: MapArea[],
+): Array<{ area: MapArea | null; entries: PlacedCapability[] }> {
+  const areaOfModule = new Map<string, MapArea[]>();
+  for (const a of areas)
+    for (const m of a.modules) {
+      const list = areaOfModule.get(m) ?? [];
+      list.push(a);
+      areaOfModule.set(m, list);
+    }
+
+  const grouped = new Map<string, PlacedCapability[]>();
+  const unplaced: PlacedCapability[] = [];
+  for (const entry of capabilityEntries(catalog)) {
+    const touched: MapArea[] = [];
+    for (const a of areas) {
+      if (entry.modules.some((m) => areaOfModule.get(m)?.includes(a))) touched.push(a);
+    }
+    if (touched.length === 0) {
+      unplaced.push({ entry, also: [] });
+      continue;
+    }
+    const [primary, ...rest] = touched;
+    const list = grouped.get(primary.area) ?? [];
+    list.push({ entry, also: rest.map((a) => a.area) });
+    grouped.set(primary.area, list);
+  }
+
+  const out: Array<{ area: MapArea | null; entries: PlacedCapability[] }> = [];
   for (const a of areas) {
     const list = grouped.get(a.area);
     if (list && list.length > 0) out.push({ area: a, entries: list });
@@ -636,29 +699,31 @@ export function flyingBlind(feed: MapFeed): BlindDot[] {
     .sort((a, b) => b.churn - a.churn || a.module.localeCompare(b.module));
 }
 
-/** One product area's two-light split (23c) - the three shares sum to ~1. */
+/** One product area's three-light split (23c) - the three shares sum to ~1. */
 export interface AreaShare {
   area: string;
-  /** Churn-weighted vouched depth (phosphor). */
+  /** The recent-change mass carrying standing vouched meaning (phosphor). */
   vouched: number;
-  /** The remaining, machine-described mass (moonlight). */
+  /** The machine-described remainder (moonlight). */
   described: number;
-  /** The remaining, un-described mass (dark). */
+  /** The un-described remainder (dark). */
   unexplained: number;
   churn: number;
 }
 
 /**
- * Per-area vouched / described / unexplained shares (23c), churn-weighted so the
- * bar reflects *active* code (falling back to a plain module average when an
- * area has no churn signal). A module's vouched mass is its coverage depth; the
- * rest is described if the machine has read it, else dark. The three shares of a
- * bar sum to 1, so one row is the two-light grammar drawn as a stacked bar.
- * Busiest area first.
+ * Per-area vouched / described / unexplained shares (23c, reframed by 24b):
+ * each module's churn mass lands wholly on its standing - vouched when a fresh
+ * vouched fact holds, else described when the machine has read it, else dark -
+ * so the phosphor segment is exactly the area's vouched share, the same number
+ * the top bar and the area meters report. Falls back to a plain module count
+ * when an area has no churn signal. Only real (grouped) product areas chart -
+ * a solo module named after itself is not an area (24b). Busiest area first.
  */
 export function areaShares(feed: MapFeed): AreaShare[] {
   const byName = new Map(feed.modules.map((m) => [m.module, m]));
   return feed.areas
+    .filter((a) => a.modules.length > 1 || a.modules[0] !== a.area)
     .map((area): AreaShare => {
       const mods = area.modules.flatMap((m) => byName.get(m) ?? []);
       const churn = sum(mods.map((m) => m.churn));
@@ -668,11 +733,9 @@ export function areaShares(feed: MapFeed): AreaShare[] {
       let described = 0;
       let unexplained = 0;
       for (const m of mods) {
-        const cov = coverageOf(m);
-        vouched += weight(m) * cov;
-        const rest = weight(m) * (1 - cov);
-        if (m.described ?? false) described += rest;
-        else unexplained += rest;
+        if (hasVouch(m)) vouched += weight(m);
+        else if (m.described ?? false) described += weight(m);
+        else unexplained += weight(m);
       }
       return {
         area: area.area,

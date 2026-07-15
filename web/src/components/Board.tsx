@@ -1,9 +1,11 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Catalog, MapFeed, RefEdge } from '../api';
 import { type BoardNode, boardLayout, borderPoint } from '../board';
-import { BOARD, ROUTE } from '../copy';
+import { BOARD, BOARD_LEGEND, ROUTE } from '../copy';
 import { type FlowTrace, capabilitiesByModule, isMoonlit, shortName } from '../derive';
 import { roughArrowhead, roughCircle, roughLine, roughRect, seedFrom } from '../rough';
 import { routeHref } from '../router';
+import { statusWord } from './Status';
 import { type BoardOverrides, useBoardDrag } from './useBoardDrag';
 
 /**
@@ -29,30 +31,44 @@ export interface BoardProps {
   trace?: FlowTrace | null;
   /** Hand-dragged seats, module → position; wins over the auto layout. */
   overrides?: BoardOverrides;
+  /** Rendered size = board units × scale (24c fit/zoom); positions stay in
+   * board units, so drags and hrefs are scale-free. */
+  scale?: number;
   /** Present only in the interactive viewport - absent in SSR renders. */
   onNodePointerDown?: (e: React.PointerEvent, node: BoardNode) => void;
   /** True while (or just after) a drag, so the click doesn't navigate. */
   suppressNav?: () => boolean;
 }
 
-export function Board(props: BoardProps): JSX.Element {
-  const { feed, refs, catalog, selectedArea, selectedModule, overrides = {} } = props;
-  const trace = props.trace ?? null;
-
+/** The auto layout with hand overrides applied, plus the paper extent - shared
+ * by the Board itself and the viewport's fit/scroll math (24c). */
+export function placedLayout(
+  feed: MapFeed,
+  refs: RefEdge[],
+  overrides: BoardOverrides,
+): { nodes: BoardNode[]; width: number; height: number } {
   const areaOf = new Map<string, string>();
   for (const a of feed.areas) for (const m of a.modules) areaOf.set(m, a.area);
-  const capsOf = capabilitiesByModule(catalog);
   const base = boardLayout(feed.modules, refs, areaOf);
   const nodes = base.nodes.map((n) => {
     const o = overrides[n.module];
     return o ? { ...n, x: o.x, y: o.y } : n;
   });
-  const byName = new Map(nodes.map((n) => [n.module, n]));
-  const moduleOf = new Map(feed.modules.map((m) => [m.module, m]));
-
   // Extent grows with dragged nodes so nothing ever leaves the paper.
   const width = Math.max(base.width, ...nodes.map((n) => n.x + n.w + 40));
   const height = Math.max(base.height, ...nodes.map((n) => n.y + n.h + 40));
+  return { nodes, width, height };
+}
+
+export function Board(props: BoardProps): JSX.Element {
+  const { feed, refs, catalog, selectedArea, selectedModule, overrides = {} } = props;
+  const trace = props.trace ?? null;
+  const scale = props.scale ?? 1;
+
+  const capsOf = capabilitiesByModule(catalog);
+  const { nodes, width, height } = placedLayout(feed, refs, overrides);
+  const byName = new Map(nodes.map((n) => [n.module, n]));
+  const moduleOf = new Map(feed.modules.map((m) => [m.module, m]));
 
   const lit = new Set<string>();
   if (selectedModule) lit.add(selectedModule);
@@ -78,8 +94,8 @@ export function Board(props: BoardProps): JSX.Element {
   return (
     <svg
       className={traceStatus ? `board route-${traceStatus}` : 'board'}
-      width={width}
-      height={height}
+      width={width * scale}
+      height={height * scale}
       viewBox={`0 0 ${width} ${height}`}
       aria-label="The board - modules and their imports as a flowchart"
     >
@@ -126,7 +142,8 @@ export function Board(props: BoardProps): JSX.Element {
         const dimmed = hasFocus && !lit.has(n.module) && !selected;
         const seed = seedFrom(n.module);
         const steps = stationsOf.get(n.module);
-        const word = standing === 'vouched' ? `${m.certifiedFacts} certified` : standing;
+        // One footer grammar for every standing (24a): the word, then counts.
+        const word = standing === 'vouched' ? `vouched ×${m.certifiedFacts}` : standing;
         // The chalk annotations: the machine's one-liner (the 21b slot) and the
         // capabilities this code carries, in product language (D4).
         const desc = m.describedAs ? clamp(m.describedAs, 36) : null;
@@ -256,11 +273,16 @@ function BoardRoute({
 
 // ── the interactive viewport ──────────────────────────────────────────────────
 
+/** Zoom bounds (24c): far enough out to fit a big repo, in enough to read. */
+const ZOOM_MIN = 0.3;
+const ZOOM_MAX = 2;
+
 /**
  * Owns what SSR cannot: dragging boxes (positions persist per browser via the
- * shared {@link useBoardDrag} hook), the scroll-panned paper, the tidy control,
- * and the route card. Click grammar matches the terrain's tiles: click selects
- * (inspector), click again opens the module page; a drag never navigates.
+ * shared {@link useBoardDrag} hook), the scroll-panned paper, fit-to-view and
+ * zoom (24c), the tidy control, the legend, and the route card. Click grammar
+ * matches the terrain's tiles: click selects (inspector), click again opens
+ * the module page; a drag never navigates.
  */
 export function BoardViewport(props: {
   feed: MapFeed;
@@ -270,16 +292,75 @@ export function BoardViewport(props: {
   selectedModule: string | null;
   trace?: FlowTrace | null;
 }): JSX.Element {
-  const { overrides, hasHandLayout, onPointerDown, suppressNav, tidy } =
-    useBoardDrag('artha.board.layout.v1');
   const trace = props.trace ?? null;
+  const viewportRef = useRef<HTMLDivElement>(null);
+
+  // Fit-to-view (24c): the whole graph is visible on first paint - never a
+  // half-cut box with no cue that more exists. `zoom` is the hand override;
+  // null means "keep fitting", also what the Fit button restores.
+  const [fitScale, setFitScale] = useState(1);
+  const [zoom, setZoom] = useState<number | null>(null);
+  const scale = zoom ?? fitScale;
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
+  const getScale = useCallback(() => scaleRef.current, []);
+
+  const { overrides, hasHandLayout, onPointerDown, suppressNav, tidy } = useBoardDrag(
+    'artha.board.layout.v1',
+    getScale,
+  );
+  const { nodes, width, height } = placedLayout(props.feed, props.refs, overrides);
+
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const measure = () => {
+      const fit = Math.min(1, (vp.clientWidth - 16) / width, (vp.clientHeight - 16) / height);
+      setFitScale(Math.max(ZOOM_MIN, Number.isFinite(fit) && fit > 0 ? fit : 1));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(vp);
+    return () => ro.disconnect();
+  }, [width, height]);
+
+  // Ctrl+scroll zooms (plain scroll still pans) - non-passive so it can take
+  // the gesture from the browser's page zoom.
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setZoom((z) => clampZoom((z ?? scaleRef.current) * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    };
+    vp.addEventListener('wheel', onWheel, { passive: false });
+    return () => vp.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // A traced route (or an off-screen selection) scrolls into view - station 3
+  // must never sit beyond the fold while the card talks about it.
+  const focusModule = trace?.stations[0]?.module ?? props.selectedModule ?? null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: nodes is fresh each render; the focus target + scale name the moment to re-scroll
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp || !focusModule) return;
+    const n = nodes.find((x) => x.module === focusModule);
+    if (!n) return;
+    vp.scrollTo({
+      left: Math.max(0, (n.x + n.w / 2) * scale - vp.clientWidth / 2),
+      top: Math.max(0, (n.y + n.h / 2) * scale - vp.clientHeight / 2),
+      behavior: 'smooth',
+    });
+  }, [focusModule, scale]);
 
   return (
     <div className="board-wrap">
-      <div className="board-viewport">
+      <div className="board-viewport" ref={viewportRef}>
         <Board
           {...props}
           overrides={overrides}
+          scale={scale}
           onNodePointerDown={(e, node) =>
             onPointerDown(e, { id: node.module, x: node.x, y: node.y })
           }
@@ -287,13 +368,68 @@ export function BoardViewport(props: {
         />
       </div>
       <p className="board-hint">{BOARD.hint}</p>
-      {hasHandLayout && (
-        <button type="button" className="board-tidy" onClick={tidy} title={BOARD.tidyHint}>
-          {BOARD.tidy}
+      <div className="board-controls">
+        <BoardLegend />
+        <button
+          type="button"
+          className="board-ctl"
+          onClick={() => setZoom((z) => clampZoom((z ?? scaleRef.current) / 1.2))}
+          title={BOARD.zoomOut}
+          aria-label={BOARD.zoomOut}
+        >
+          −
         </button>
-      )}
+        <span className="board-zoom mono" aria-live="polite">
+          {Math.round(scale * 100)}%
+        </span>
+        <button
+          type="button"
+          className="board-ctl"
+          onClick={() => setZoom((z) => clampZoom((z ?? scaleRef.current) * 1.2))}
+          title={BOARD.zoomIn}
+          aria-label={BOARD.zoomIn}
+        >
+          +
+        </button>
+        {zoom !== null && (
+          <button
+            type="button"
+            className="board-ctl board-fit"
+            onClick={() => setZoom(null)}
+            title={BOARD.fitHint}
+          >
+            {BOARD.fit}
+          </button>
+        )}
+        {hasHandLayout && (
+          <button type="button" className="board-ctl" onClick={tidy} title={BOARD.tidyHint}>
+            {BOARD.tidy}
+          </button>
+        )}
+      </div>
       {trace && <RouteCard trace={trace} clearHref="#/" />}
     </div>
+  );
+}
+
+function clampZoom(z: number): number {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+}
+
+/** The board's own legend (24c): the default view defines every word and glyph
+ * it uses, on-screen - the terrain's popover never covered the board. */
+function BoardLegend(): JSX.Element {
+  return (
+    <details className="legend legend-top">
+      <summary>{BOARD_LEGEND.title}</summary>
+      <div className="legend-body">
+        <p>{BOARD_LEGEND.box}</p>
+        <p>{BOARD_LEGEND.lights}</p>
+        <p>{BOARD_LEGEND.counts}</p>
+        <p>{BOARD_LEGEND.stale}</p>
+        <p>{BOARD_LEGEND.select}</p>
+      </div>
+    </details>
   );
 }
 
@@ -317,7 +453,7 @@ export function RouteCard({
         </a>
         <span className={`status status-${known ? trace.status : 'unknown'}`}>
           <span className="status-dot" aria-hidden="true" />
-          {trace.status}
+          {statusWord(trace.status)}
         </span>
       </p>
       <p className="route-coverage mono">

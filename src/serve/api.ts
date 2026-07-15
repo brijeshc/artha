@@ -162,6 +162,12 @@ export interface PinView {
   stale: boolean;
 }
 
+/** A related entry with its display name resolved server-side (24g). */
+export interface RelatedRef {
+  id: string;
+  name: string | null;
+}
+
 export interface ConceptDetail {
   id: string;
   kind: 'concept';
@@ -173,7 +179,7 @@ export interface ConceptDetail {
   states: Array<{ name: string; effect: string | null; invariant: string | null }>;
   transitions: Array<{ from: string; to: string; trigger: string }>;
   pins: PinView[];
-  related: string[];
+  related: RelatedRef[];
   modules: string[];
   /** The human delta band (D6): what the code can't say; null until a human writes it. */
   notes: string | null;
@@ -195,7 +201,7 @@ export interface FlowDetail {
   certifiedAt: string | null;
   entry: PinView[];
   steps: FlowStepView[];
-  related: string[];
+  related: RelatedRef[];
   modules: string[];
   /** The human delta band (D6): what the code can't say; null until a human writes it. */
   notes: string | null;
@@ -768,6 +774,10 @@ export interface SearchHit {
   heading: string | null;
   status: string;
   score: number;
+  /** Where a rule/decision hit lands when opened (its first pinned or scoped
+   * module) - concepts and flows open their own pages instead. Null when the
+   * fact touches no known module (24d: every hit should go somewhere). */
+  module: string | null;
 }
 
 /**
@@ -782,8 +792,22 @@ export function search(
   query: string,
   queryEmbedding?: ArrayLike<number>,
   limit = 20,
+  sourceRoots: string[] = [],
 ): SearchHit[] {
   if (query.trim() === '') return [];
+  const landing = (factId: string): string | null => {
+    for (const pin of index.pins) {
+      if (pin.fact_id !== factId) continue;
+      const mod = moduleOf(pin.symbol_ref.split('#')[0] ?? '', sourceRoots);
+      if (mod) return mod;
+    }
+    for (const scope of index.scopeFiles) {
+      if (scope.fact_id !== factId) continue;
+      const mod = moduleOf(scope.file_path, sourceRoots);
+      if (mod) return mod;
+    }
+    return null;
+  };
   return rankFacts(index, { task: query, includeProposed: true, queryEmbedding })
     .slice(0, limit)
     .map((item) => ({
@@ -792,6 +816,7 @@ export function search(
       heading: item.fact.heading,
       status: item.fact.status,
       score: item.score,
+      module: landing(item.fact.id),
     }));
 }
 
@@ -826,8 +851,13 @@ function pinViews(index: ArthaIndex, factId: string): PinView[] {
     }));
 }
 
-function relatedOf(index: ArthaIndex, factId: string): string[] {
-  return index.related.filter((r) => r.fact_id === factId).map((r) => r.related_id);
+/** Related entries with their display names resolved (24g) - the reader gets
+ * "Money is integer minor units", never a raw `invariant.money`. */
+function relatedOf(index: ArthaIndex, factId: string): RelatedRef[] {
+  const heading = new Map(index.facts.map((f) => [f.id, f.heading]));
+  return index.related
+    .filter((r) => r.fact_id === factId)
+    .map((r) => ({ id: r.related_id, name: heading.get(r.related_id) ?? null }));
 }
 
 /** The modules a fact's pins resolve into. */

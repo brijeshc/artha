@@ -35,8 +35,14 @@ export function QueuePage({ queue, cold }: { queue: ValueRanked[]; cold: boolean
                     </span>
                   ))}
                 </span>
+                {/* The bar visualizes movement; the why-chip already words the
+                    exact count ("6 recent changes") - no second number (24b). */}
                 <span className="queue-churn">
-                  <span className="queue-churn-bar" aria-hidden="true">
+                  <span
+                    className="queue-churn-bar"
+                    role="img"
+                    aria-label={`${z.churn} recent changes`}
+                  >
                     <span
                       className="queue-churn-fill"
                       style={{
@@ -47,7 +53,6 @@ export function QueuePage({ queue, cold }: { queue: ValueRanked[]; cold: boolean
                       }}
                     />
                   </span>
-                  <span className="queue-churn-n mono">{z.churn}Δ</span>
                 </span>
               </a>
             </li>

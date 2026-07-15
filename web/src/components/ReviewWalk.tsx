@@ -4,7 +4,7 @@ import { CURATE, EVIDENCE, REVIEW } from '../copy';
 import type { ReviewClaim } from '../derive';
 import { EvidenceCode } from './Evidence';
 import { ConfidenceChip } from './Inferred';
-import { KindTag, StatusBadge } from './Status';
+import { CodeProse, KindTag, StatusBadge } from './Status';
 
 /**
  * The review walk (D9, 23d-3): reading a page *is* reviewing it. Press R on any
@@ -43,6 +43,9 @@ export function ReviewWalk({
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvState[]>([]);
+  // What each vouch actually wrote (an inferred claim materializes into a new
+  // id) - the undo path (24f) must un-certify the written entry, not the source.
+  const writtenIds = useRef(new Map<number, string>());
   const busy = useRef(false);
 
   const current = items[index];
@@ -89,10 +92,30 @@ export function ReviewWalk({
       // certify() routes an `inferred:` id through materialize server-side, so
       // one call vouches both tiers; the walk stays put and advances (unlike the
       // page's certify, which navigates to the freshly-materialized entry).
-      await certify(current.id);
+      const res = await certify(current.id);
+      writtenIds.current.set(index, res.id);
       setOutcomes((o) => replaceAt(o, index, 'vouched'));
       onChanged();
       goNext();
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      busy.current = false;
+    }
+  };
+
+  // Take a vouch back (24f): re-saving the written entry returns it to
+  // proposed (the edit path un-certifies) - a wrong keystroke is never final.
+  const undo = async (i: number): Promise<void> => {
+    const claim = items[i];
+    if (!claim || busy.current) return;
+    busy.current = true;
+    setError(null);
+    try {
+      const id = writtenIds.current.get(i) ?? claim.id;
+      await saveEntry({ id, name: claim.name, summary: claim.prose ?? '' });
+      setOutcomes((o) => replaceAt(o, i, 'pending'));
+      onChanged();
     } catch (e) {
       setError(errText(e));
     } finally {
@@ -144,8 +167,13 @@ export function ReviewWalk({
         e.preventDefault();
         goPrev();
         break;
-      case 'v':
       case 'Enter':
+        // Enter reads as "next" in a j/k walk (24f) - it must never write.
+        // Vouching stays on its own explicit key.
+        e.preventDefault();
+        goNext();
+        break;
+      case 'v':
         e.preventDefault();
         void vouch();
         break;
@@ -213,7 +241,17 @@ export function ReviewWalk({
                   <StatusBadge status={current.status ?? 'proposed'} />
                 )}
                 {outcomes[index] === 'vouched' && (
-                  <span className="claim-outcome vouched">{REVIEW.vouched}</span>
+                  <>
+                    <span className="claim-outcome vouched">{REVIEW.vouched}</span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost review-undo"
+                      onClick={() => void undo(index)}
+                      title={REVIEW.undoHint}
+                    >
+                      {REVIEW.undo}
+                    </button>
+                  </>
                 )}
                 {outcomes[index] === 'corrected' && (
                   <span className="claim-outcome corrected">{REVIEW.corrected}</span>
@@ -222,7 +260,11 @@ export function ReviewWalk({
               <h3 className={current.origin === 'inferred' ? 'claim-name moon' : 'claim-name'}>
                 {current.name}
               </h3>
-              {current.prose && <p className="claim-prose">{current.prose}</p>}
+              {current.prose && (
+                <p className="claim-prose">
+                  <CodeProse text={current.prose} />
+                </p>
+              )}
               {current.states.length > 0 && <Chain items={current.states} sep=" · " />}
               {current.steps.length > 0 && <Chain items={current.steps} sep=" → " />}
 

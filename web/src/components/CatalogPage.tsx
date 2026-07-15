@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import type { Catalog, MapFeed } from '../api';
 import { CATALOG, INFERRED } from '../copy';
-import { capabilitiesByArea } from '../derive';
+import { capabilitiesByPrimaryArea } from '../derive';
 import { CapCard } from './CapCard';
 import { InferredCard } from './Inferred';
-import { SectionHead } from './Status';
+import { SectionHead, statusWord } from './Status';
 
 /**
- * The product lens: every capability, one section per product area - the
- * "what does this product do" reading a PM opens with. Filters cut by
- * standing and kind; each card opens the full capability page.
+ * The product lens: every capability **once** (24e), under its primary area
+ * with quiet "also in" chips for the rest - the "what does this product do"
+ * reading a PM opens with, never the same card repeated per area. Filters cut
+ * by standing and kind; each card opens the full capability page.
  */
 
 type StatusFilter = 'all' | 'certified' | 'proposed' | 'stale';
@@ -19,11 +20,13 @@ export function CatalogPage({ catalog, feed }: { catalog: Catalog; feed: MapFeed
   const [status, setStatus] = useState<StatusFilter>('all');
   const [kind, setKind] = useState<KindFilter>('all');
 
-  const groups = capabilitiesByArea(catalog, feed.areas)
+  const groups = capabilitiesByPrimaryArea(catalog, feed.areas)
     .map((g) => ({
       ...g,
       entries: g.entries.filter(
-        (e) => (status === 'all' || e.status === status) && (kind === 'all' || e.ref.kind === kind),
+        (p) =>
+          (status === 'all' || p.entry.status === status) &&
+          (kind === 'all' || p.entry.ref.kind === kind),
       ),
     }))
     .filter((g) => g.entries.length > 0);
@@ -76,8 +79,8 @@ export function CatalogPage({ catalog, feed }: { catalog: Catalog; feed: MapFeed
                 <span className="catalog-area-count">{g.entries.length}</span>
               </h3>
               <div className="catalog-grid">
-                {g.entries.map((e) => (
-                  <CapCard key={e.ref.id} entry={e} />
+                {g.entries.map((p) => (
+                  <CapCard key={p.entry.ref.id} entry={p.entry} also={p.also} />
                 ))}
               </div>
             </section>
@@ -122,7 +125,7 @@ function FilterChips({
           aria-pressed={value === o}
           onClick={() => onChange(o)}
         >
-          {o}
+          {statusWord(o)}
         </button>
       ))}
     </div>

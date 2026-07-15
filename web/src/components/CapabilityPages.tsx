@@ -1,4 +1,4 @@
-import type { ConceptDetail, FlowDetail, PinView, Suggestion } from '../api';
+import type { ConceptDetail, FlowDetail, PinView, RelatedRef, Suggestion } from '../api';
 import { CURATE, DELTA, DETAIL, ROUTE } from '../copy';
 import { moduleOfPath, shortName } from '../derive';
 import { routeHref } from '../router';
@@ -84,13 +84,13 @@ export function ConceptPage({
 }
 
 /** A state's effect/invariant cell: human intent read as *human ink* when filled,
- * or an honest "not read from code" when the human hasn't recorded it yet - never
- * a bare dash, so the per-field provenance (D6) is always legible. */
+ * or an honest "not recorded yet" when the human hasn't written it - never a
+ * bare dash (D6), and never provenance-speak on a human-authored table (24g). */
 function StateCell({ value }: { value: string | null }): JSX.Element {
   return value ? (
     <td className="human-ink">{value}</td>
   ) : (
-    <td className="state-empty">{DELTA.notFromCode}</td>
+    <td className="state-empty">{DELTA.notRecorded}</td>
   );
 }
 
@@ -112,18 +112,11 @@ export function FlowPage({
     <div className="page capability-page">
       <CapabilityHead kind="flow" detail={detail} curation={curation} />
 
-      {/* Always shown: a flow's entry pins are where you link its first symbol. */}
-      <PinsSection
-        n="01"
-        title={DETAIL.entryHead}
-        pins={detail.entry}
-        modules={detail.modules}
-        linkTo={{ id: detail.id, curation, suggestions }}
-      />
-
+      {/* The reader's contract: describe the flow from this page alone - so the
+          steps lead (24g), and the linking workbench follows them. */}
       <section className="cap-section">
         <SectionHead
-          n="02"
+          n="01"
           title={DETAIL.stepsHead}
           gloss={total > 0 ? DETAIL.flowLede : undefined}
           aside={
@@ -159,6 +152,16 @@ export function FlowPage({
         )}
       </section>
 
+      {/* The linking workbench: entry pins + machine suggestions, below the
+          meaning they serve (24g). */}
+      <PinsSection
+        n="02"
+        title={DETAIL.entryHead}
+        pins={detail.entry}
+        modules={detail.modules}
+        linkTo={{ id: detail.id, curation, suggestions }}
+      />
+
       <DeltaBand n="03" surface="flow" notes={detail.notes} id={detail.id} curation={curation} />
 
       <RelatedSection n="04" related={detail.related} names={names} />
@@ -188,11 +191,11 @@ function CapabilityHead({
         <span className="meta-sep">·</span>
         {detail.certifiedBy ? (
           <span>
-            certified by {detail.certifiedBy}
+            vouched by {detail.certifiedBy}
             {detail.certifiedAt ? ` on ${detail.certifiedAt}` : ''}
           </span>
         ) : (
-          <span>not yet certified by a human</span>
+          <span>not yet vouched by a human</span>
         )}
         {detail.modules.length > 0 && (
           <>
@@ -303,7 +306,7 @@ function RelatedSection({
   names,
 }: {
   n: string;
-  related: string[];
+  related: RelatedRef[];
   names: Map<string, string>;
 }): JSX.Element | null {
   if (related.length === 0) return null;
@@ -311,14 +314,17 @@ function RelatedSection({
     <section className="cap-section">
       <SectionHead n={n} title={DETAIL.relatedHead} gloss={DETAIL.relatedGloss} />
       <ul className="related-list">
-        {related.map((id) => {
+        {related.map(({ id, name }) => {
           const kind = id.split('.')[0] ?? 'fact';
           const openable = kind === 'concept' || kind === 'flow';
+          // Product language first (24g): the server resolves every related
+          // entry's heading, so a raw id is the last resort, never the norm.
+          const label = name ?? names.get(id) ?? id;
           if (!openable) {
             return (
               <li key={id} className="related-item">
                 <KindTag kind={kind} />
-                <span className="mono dim">{id}</span>
+                <span className="related-name">{label}</span>
               </li>
             );
           }
@@ -329,7 +335,7 @@ function RelatedSection({
                 className="related-link"
                 href={routeHref({ view: kind as 'concept' | 'flow', id })}
               >
-                {names.get(id) ?? id}
+                {label}
               </a>
             </li>
           );

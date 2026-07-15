@@ -104,10 +104,10 @@ Shipped in impact-ordered sub-slices:
 
 ## 23e - craft debt (small, visible)
 
-- Catalog dedup: one card per capability with area chips, instead of the same card repeated under every area it touches.
+- ~~Catalog dedup~~ **moved to [24e](24-usability.md)** (2026-07-15): one card per capability with area chips, instead of the same card repeated under every area it touches.
 - State-machine layout: redraw concept lifecycles in the **chalk register** (the board's rough strokes), layered left-to-right with orthogonal return edges.
-- State table honesty: empty effect/invariant cells say "not read from code" instead of a bare dash.
-- Board refinements: crossing-minimizing order within layers (barycenter pass), chalk area boundaries (dashed provinces around same-area boxes when adjacent), a shareable committed layout (`.artha/board.yaml`) so a team sees one hand-arranged board, zoom.
+- State table honesty: empty effect/invariant cells say "not read from code" instead of a bare dash. *(Shipped with 23d-4; 24g refines the human-authored case to "not recorded yet".)*
+- Board refinements: crossing-minimizing order within layers (barycenter pass), chalk area boundaries (dashed provinces around same-area boxes when adjacent), a shareable committed layout (`.artha/board.yaml`) so a team sees one hand-arranged board. ~~zoom~~ **zoom moved to [24c](24-usability.md)** (2026-07-15).
 - More trace entry points: navigator flow rows and catalog flow cards offer the trace, not only the flow page; inferred flow skeletons trace in moonlight.
 
 ## Out of scope

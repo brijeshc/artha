@@ -139,8 +139,9 @@ function ModuleTile(props: {
     .join(' ');
 
   // Standing word: vouched (phosphor) > described (moonlight) > unexplained (dark).
+  // One grammar across board + terrain (24a): the word, then ×count when known.
   const standing =
-    bucket !== 'dark' ? `${certified} certified` : moonlit ? 'described' : 'unexplained';
+    bucket !== 'dark' ? `vouched ×${certified}` : moonlit ? 'described' : 'unexplained';
   const wired = neighbor ? ' · wired to selection' : '';
   return (
     <a
@@ -158,10 +159,10 @@ function ModuleTile(props: {
       {showMeta && (
         <span className="tile-meta">
           {bucket !== 'dark' ? (
-            <span className="tile-standing">{certified} certified</span>
+            <span className="tile-standing">vouched ×{certified}</span>
           ) : moonlit ? (
             <span className="tile-standing moon-word">
-              described{inferredConcepts > 0 ? ` · ${inferredConcepts}` : ''}
+              described{inferredConcepts > 0 ? ` ×${inferredConcepts}` : ''}
             </span>
           ) : (
             <span className="tile-standing dark-word">unexplained</span>
@@ -195,6 +196,7 @@ function Legend(): JSX.Element {
         </p>
         <p>{LEGEND.dark}</p>
         <p>{LEGEND.stale}</p>
+        <p>{LEGEND.churn}</p>
         <p>{LEGEND.select}</p>
       </div>
     </details>

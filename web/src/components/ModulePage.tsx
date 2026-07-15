@@ -7,7 +7,7 @@ import { CertifyButton, type Curation } from './Curate';
 import { ModuleDelta } from './Delta';
 import { InferredCard } from './Inferred';
 import { ModuleBoardViewport } from './ModuleBoard';
-import { KindTag, SectionHead, StatusBadge } from './Status';
+import { CodeProse, KindTag, SectionHead, StatusBadge } from './Status';
 import { WiredTo } from './Wired';
 
 /**
@@ -38,17 +38,13 @@ export function ModulePage({
   // Concepts + flows are both moonlight *capabilities*; conventions are rules.
   const inferredCaps = [...(detail.inferredConcepts ?? []), ...(detail.inferredFlows ?? [])];
   const inferredConventions = detail.inferredConventions ?? [];
-  const bucketWord =
-    detail.certifiedFacts === 0
-      ? 'dark zone'
-      : detail.certifiedFacts === 1
-        ? 'thin'
-        : detail.certifiedFacts <= 3
-          ? 'partial'
-          : 'understood';
   const hasCertified = caps.length > 0 || detail.rules.length > 0 || detail.decisions.length > 0;
   const hasInferred = card !== null || inferredCaps.length > 0 || inferredConventions.length > 0;
   const hasWired = detail.dependsOn.length > 0 || detail.usedBy.length > 0;
+  // The three-light ladder is the only visible standing (24a); depth reads as a
+  // plain number in the stats row, and stale rides as a modifier chip.
+  const standing =
+    detail.certifiedFacts > 0 ? 'vouched' : hasInferred ? 'described' : 'unexplained';
 
   // Section numbers run in render order across both certified and machine-
   // described sections, so the reading index stays continuous whatever exists.
@@ -62,11 +58,8 @@ export function ModulePage({
         <h2 className="page-title mono">{shortName(detail.module)}</h2>
         <p className="page-sub mono">{detail.module}</p>
         <p className="page-meta">
-          <span
-            className={`standing standing-${detail.certifiedFacts === 0 ? 'dark' : bucketWord}`}
-          >
-            {bucketWord}
-          </span>
+          <span className={`standing standing-${standing}`}>{standing}</span>
+          {detail.staleFacts > 0 && <span className="standing standing-stale">stale</span>}
           {detail.areas
             .filter((a) => a !== detail.module)
             .map((a) => (
@@ -77,7 +70,7 @@ export function ModulePage({
         </p>
         <dl className="page-stats">
           <PageStat label="churn / 90d" value={String(detail.churn)} />
-          <PageStat label="certified" value={String(detail.certifiedFacts)} />
+          <PageStat label="facts vouched" value={String(detail.certifiedFacts)} />
           <PageStat label="stale" value={String(detail.staleFacts)} />
           {detail.queueRank !== null && detail.dark && (
             <PageStat label="queue position" value={`#${detail.queueRank}`} />
@@ -89,7 +82,7 @@ export function ModulePage({
           even before a single fact is vouched (21a). */}
       {card?.summary && (
         <p className="module-lead moon-prose" aria-label={INFERRED.moduleCardHead}>
-          {card.summary}
+          <CodeProse text={card.summary} />
         </p>
       )}
 
@@ -215,7 +208,14 @@ function RuleItem({ fact, curation }: { fact: ModuleFact; curation: Curation }):
             {s}
           </code>
         ))}
-        {fact.viaScope && <span className="via-scope">in scope</span>}
+        {fact.viaScope && (
+          <span
+            className="via-scope"
+            title="This rule’s scope covers the whole module - it applies here without a direct pin."
+          >
+            applies module-wide
+          </span>
+        )}
         {fact.stalePins > 0 && (
           <span className="standing standing-stale">
             {fact.stalePins} stale pin{fact.stalePins > 1 ? 's' : ''}
