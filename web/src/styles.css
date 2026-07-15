@@ -711,6 +711,37 @@ a.crumb:hover {
   user-select: none;
 }
 
+/* provinces: a dashed chalk boundary round a product area, drawn only where the
+   area's boxes truly sit together. Recessive - it is the ground the flowchart
+   stands on, never a mark competing with it. */
+.bprovince {
+  opacity: 0.5;
+  transition: opacity var(--fast);
+  pointer-events: none;
+}
+.bprovince path {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1.1;
+  stroke-dasharray: 7 6;
+  stroke-linecap: round;
+}
+.bprovince text {
+  font-family: var(--chalk);
+  font-size: 11px;
+  fill: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+.bprovince.hot {
+  opacity: 0.95;
+}
+.bprovince.hot path {
+  stroke: var(--ink-2);
+}
+.bprovince.faded {
+  opacity: 0.18;
+}
+
 /* import edges: chalk arrows reading "depends on" - structure, never phosphor */
 .bedge {
   opacity: 0.5;

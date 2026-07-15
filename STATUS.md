@@ -2,7 +2,7 @@
 
 A living, two-page summary.
 For the full detail, see [PROGRESS.md](PROGRESS.md) (the running log) and [tasks-v0.3/README.md](tasks-v0.3/README.md) (the current task index).
-Last updated: 2026-07-16 (23e-1).
+Last updated: 2026-07-16 (23e-2).
 
 ## What we are building
 
@@ -44,7 +44,7 @@ Two rules hold everywhere:
 
 **v0.1 and v0.2 are done. v0.3 is roughly two-thirds done.**
 The whole loop works end to end today: index a repo, read the map, vouch the machine's read, add what it missed, serve it to an agent.
-423 tests pass across 33 files, typecheck and lint clean.
+430 tests pass across 33 files, typecheck and lint clean.
 
 You can see it right now: `npm run demo` builds, seeds a fake shop repo, and serves the dashboard at http://127.0.0.1:4173.
 
@@ -82,7 +82,7 @@ The import graph and pin suggestions are fully automatic.
 - **21c** - fully delivered except what 21b enriches.
 - **22** - the contradiction view: where the machine's read disagrees with what a human vouched.
 - **23e** - craft debt (trimmed; catalog dedup and zoom moved into 24).
-  **23e-1 is done (2026-07-16)**: concept lifecycles are redrawn in the board's chalk, left-to-right, with returns routed orthogonally through a lane below the boxes - so the atlas is one continuous hand at every altitude. Board refinements and more trace entry points remain.
+  **23e-1 and 23e-2 are done (2026-07-16)**: concept lifecycles are redrawn in the board's chalk, left-to-right, with returns routed orthogonally through a lane below the boxes - so the atlas is one continuous hand at every altitude. The board also straightens its rows now (a barycentre pass that keeps each product area whole) and outlines an area as a dashed chalk province wherever its modules genuinely sit together. A shareable committed board layout and more trace entry points remain.
 - **T18** - the ask-the-human interview.
 - **T19 / T20** - contradiction preview and the v0.2 success test.
 
@@ -91,8 +91,8 @@ The import graph and pin suggestions are fully automatic.
 In order:
 
 1. **23e - craft debt (trimmed).**
-   State machines are now drawn in chalk (23e-1, done).
-   The leftovers: board refinements (crossing-minimizing layout, a shareable committed board layout) and more trace entry points.
+   State machines are now drawn in chalk (23e-1, done), and the board straightens its rows and outlines its provinces (23e-2, done).
+   The leftovers: a shareable committed board layout (`.artha/board.yaml`) so a team sees one hand-arranged board, and more trace entry points.
 
 2. **21b - AI synthesis and verification.**
    The machine layer currently describes code deterministically, which is honest but thin.

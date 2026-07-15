@@ -16,7 +16,13 @@ import type {
   ValueRanked,
   VouchedPoint,
 } from '../../web/src/api';
-import { GAP_Y, boardLayout, fileBoardLayout, stateLayout } from '../../web/src/board';
+import {
+  GAP_Y,
+  areaProvinces,
+  boardLayout,
+  fileBoardLayout,
+  stateLayout,
+} from '../../web/src/board';
 import { Atlas } from '../../web/src/components/Atlas';
 import { Board, BoardViewport, RouteCard } from '../../web/src/components/Board';
 import { CapCard } from '../../web/src/components/CapCard';
@@ -555,6 +561,118 @@ describe('boardLayout', () => {
         const apart = a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
         expect(apart).toBe(true);
       }
+  });
+
+  it('straightens the arrows: a row reorders to cut a crossing (23e-2)', () => {
+    // name order alone seats x left of y, so both arrows cross on the way down
+    const layout = boardLayout(
+      [mod('src/a'), mod('src/b'), mod('src/x'), mod('src/y')],
+      [
+        { from_module: 'src/a', to_module: 'src/y', count: 1 },
+        { from_module: 'src/b', to_module: 'src/x', count: 1 },
+      ],
+    );
+    const by = new Map(layout.nodes.map((n) => [n.module, n]));
+    const y = by.get('src/y');
+    const x = by.get('src/x');
+    if (!x || !y) throw new Error('missing nodes');
+    expect(y.layer).toBe(1);
+    expect(y.x).toBeLessThan(x.x); // the pass swapped them, so nothing crosses
+  });
+
+  it('keeps every product area contiguous in its row - a province is one block', () => {
+    const areaOf = new Map<string, string>();
+    for (const a of feed.areas) for (const m of a.modules) areaOf.set(m, a.area);
+    const layout = boardLayout(feed.modules, refEdges, areaOf);
+    const rows = new Map<number, string[]>();
+    for (const n of [...layout.nodes].sort((p, q) => p.x - q.x))
+      rows.set(n.layer, [...(rows.get(n.layer) ?? []), n.module]);
+    for (const row of rows.values()) {
+      const closed = new Set<string>();
+      let running: string | null = null;
+      for (const m of row) {
+        const area = areaOf.get(m) ?? '~';
+        if (area === running) continue;
+        // an area may never resume once another has interrupted it
+        expect(closed.has(area)).toBe(false);
+        if (running !== null) closed.add(running);
+        running = area;
+      }
+    }
+  });
+});
+
+describe('the board draws its provinces (23e-2)', () => {
+  /** Two modules of one area, nothing between them - the shape a province is
+   * actually for. (The demo repo never draws one: each of its areas owns a
+   * single module, or sits layers apart.) */
+  const together: MapFeed = {
+    cold: false,
+    areas: [
+      { area: 'Platform', modules: ['src/auth', 'src/mail'], concepts: [], flows: [], dark: false },
+    ],
+    modules: [
+      { module: 'src/auth', dark: false, churn: 3, certifiedFacts: 0, staleFacts: 0, score: 0 },
+      { module: 'src/mail', dark: false, churn: 2, certifiedFacts: 0, staleFacts: 0, score: 0 },
+    ],
+  };
+
+  it('outlines an area whose modules sit together, and names it', () => {
+    const html = markup(
+      <Board
+        feed={together}
+        refs={[]}
+        catalog={catalog}
+        selectedArea={null}
+        selectedModule={null}
+      />,
+    );
+    expect(html).toContain('bprovince');
+    expect(html).toContain('>Platform<');
+  });
+
+  it('lights the province of the selected area and fades the rest', () => {
+    const html = markup(
+      <Board
+        feed={together}
+        refs={[]}
+        catalog={catalog}
+        selectedArea="Platform"
+        selectedModule={null}
+      />,
+    );
+    expect(html).toContain('bprovince hot');
+  });
+});
+
+describe('areaProvinces (chalk boundaries, 23e-2)', () => {
+  const box = (module: string, x: number) => ({ module, x, y: 0, w: 100, h: 50 });
+  const billing = new Map([
+    ['src/a', 'Billing'],
+    ['src/b', 'Billing'],
+  ]);
+
+  it('draws a boundary round an area whose boxes sit together', () => {
+    const p = areaProvinces([box('src/a', 0), box('src/b', 140)], billing, 10);
+    expect(p).toHaveLength(1);
+    expect(p[0].area).toBe('Billing');
+    expect(p[0].x).toBe(-10);
+    expect(p[0].w).toBe(260); // the span 0..240, with the padding either side
+  });
+
+  it('leaves a lone box alone - its own frame already says everything', () => {
+    expect(areaProvinces([box('src/a', 0)], new Map([['src/a', 'Billing']]))).toEqual([]);
+  });
+
+  it('draws nothing rather than a border that lies', () => {
+    // a Platform module sits between the two Billing ones, so a Billing
+    // boundary would enclose it and claim a province that isn't there
+    const p = areaProvinces(
+      [box('src/a', 0), box('src/mid', 140), box('src/b', 280)],
+      new Map([...billing, ['src/mid', 'Platform']]),
+      10,
+    );
+    expect(p).toEqual([]);
   });
 });
 

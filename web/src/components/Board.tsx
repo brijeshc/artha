@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Catalog, MapFeed, RefEdge } from '../api';
-import { type BoardNode, boardLayout, borderPoint } from '../board';
+import { type BoardNode, areaProvinces, boardLayout, borderPoint } from '../board';
 import { BOARD, BOARD_LEGEND, ROUTE } from '../copy';
 import { type FlowTrace, capabilitiesByModule, isMoonlit, shortName } from '../derive';
 import { roughArrowhead, roughCircle, roughLine, roughRect, seedFrom } from '../rough';
@@ -69,6 +69,9 @@ export function Board(props: BoardProps): JSX.Element {
   const { nodes, width, height } = placedLayout(feed, refs, overrides);
   const byName = new Map(nodes.map((n) => [n.module, n]));
   const moduleOf = new Map(feed.modules.map((m) => [m.module, m]));
+  const areaOf = new Map<string, string>();
+  for (const a of feed.areas) for (const m of a.modules) areaOf.set(m, a.area);
+  const provinces = areaProvinces(nodes, areaOf);
 
   const lit = new Set<string>();
   if (selectedModule) lit.add(selectedModule);
@@ -100,6 +103,24 @@ export function Board(props: BoardProps): JSX.Element {
       aria-label="The board - modules and their imports as a flowchart"
     >
       <title>The board - modules and their imports as a flowchart</title>
+
+      {/* the provinces first: a chalk boundary is drawn around, never over */}
+      {provinces.map((p) => {
+        const seed = seedFrom(`province:${p.area}`);
+        return (
+          <g
+            key={p.area}
+            className={`bprovince${selectedArea === p.area ? ' hot' : ''}${
+              hasFocus && selectedArea !== p.area ? ' faded' : ''
+            }`}
+          >
+            <path d={roughRect(p.x, p.y, p.w, p.h, seed)} />
+            <text x={p.x + 10} y={p.y + 16}>
+              {p.area}
+            </text>
+          </g>
+        );
+      })}
 
       {edges.map((e) => {
         const a = byName.get(e.from_module);

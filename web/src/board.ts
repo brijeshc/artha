@@ -68,22 +68,34 @@ export interface LayeredLayout {
   height: number;
 }
 
+/** How the caller wants a row ordered. */
+export interface LayoutOrder {
+  /** The seed order and the tie-break - the last word, so a row is never
+   * arbitrary. */
+  sortKey?: (id: string) => string;
+  /** Keeps a group's members contiguous in a row: a product area is a
+   * province, and it reads as one block or not at all. Omit for one group. */
+  groupOf?: (id: string) => string;
+}
+
 /**
  * The blackboard's layout engine, generic over node ids: layer by dependency
  * depth (an edge from→to pushes `to` below `from`, longest path via Kahn),
- * centre each layer's row, and give every row generous air. Cycles cannot
- * happen cleanly in import graphs but do happen - members that never top-sort
- * keep a deterministic name-ordered fallback seat and their back-edges simply
- * don't constrain the layering. Shared by the module board and the inner file
- * board so both hands draw the same flowchart. Pure and deterministic:
- * reordering the inputs never changes the output.
+ * order each row to cut edge crossings, centre it, and give every row generous
+ * air. Cycles cannot happen cleanly in import graphs but do happen - members
+ * that never top-sort keep a deterministic name-ordered fallback seat and their
+ * back-edges simply don't constrain the layering. Shared by the module board
+ * and the inner file board so both hands draw the same flowchart. Pure and
+ * deterministic: reordering the inputs never changes the output.
  */
 export function layeredLayout(
   ids: string[],
   links: Link[],
   metrics: LayoutMetrics,
-  sortKey: (id: string) => string = (id) => id,
+  order: LayoutOrder = {},
 ): LayeredLayout {
+  const sortKey = order.sortKey ?? ((id: string) => id);
+  const groupOf = order.groupOf ?? (() => '');
   const { nodeW, nodeH, gapX, gapY, margin } = metrics;
   const names = [...ids].sort();
   const known = new Set(names);
@@ -122,8 +134,6 @@ export function layeredLayout(
     layer.set(n, importers.length > 0 ? Math.max(...importers) : 0);
   }
 
-  // Rows: caller's sort key inside a layer (area-then-name keeps provinces
-  // adjacent on the module board; plain name on the file board).
   const rows = new Map<number, string[]>();
   for (const n of names) {
     const l = layer.get(n) ?? 0;
@@ -131,9 +141,11 @@ export function layeredLayout(
     row.push(n);
     rows.set(l, row);
   }
+  // Seed with the caller's order, then straighten the arrows.
   for (const row of rows.values()) row.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
 
   const layers = [...rows.keys()].sort((a, b) => a - b);
+  straightenRows(rows, layers, edges, groupOf, sortKey);
   const widest = Math.max(...layers.map((l) => (rows.get(l) ?? []).length), 1);
   const width = margin * 2 + widest * nodeW + (widest - 1) * gapX;
   const height = margin * 2 + layers.length * nodeH + (layers.length - 1) * gapY;
@@ -157,10 +169,79 @@ export function layeredLayout(
   return { nodes, width, height };
 }
 
+/** Sweeps of the barycentre pass. Four settles every board this size draws;
+ * a fixed count keeps the result deterministic, which matters more here than
+ * the last crossing. */
+const SWEEPS = 4;
+
 /**
- * The module board's layout: modules layered by their import graph, rows kept
- * in area-then-name order so provinces stay adjacent. A thin adapter over
- * {@link layeredLayout}.
+ * Cut the crossings: order each row by where its edges actually land (the
+ * barycentre of a node's neighbours in the next row over), sweeping up and
+ * down a few times. A node with nothing in the adjacent row keeps its seat
+ * rather than drifting to the edge.
+ *
+ * Groups stay contiguous throughout: the pass orders the *groups* by their own
+ * barycentre and the members inside each one, so a product area still reads as
+ * one province - the arrows straighten around the areas, never through them.
+ * Deterministic: a seeded order, a fixed sweep count, and the sort key
+ * breaking every tie.
+ */
+function straightenRows(
+  rows: Map<number, string[]>,
+  layers: number[],
+  edges: Link[],
+  groupOf: (id: string) => string,
+  sortKey: (id: string) => string,
+): void {
+  for (let pass = 0; pass < SWEEPS; pass++) {
+    // alternate: settle against the row above, then against the row below
+    const up = pass % 2 === 0;
+    const walk = up ? layers.slice(1) : layers.slice(0, -1).reverse();
+    for (const l of walk) {
+      const row = rows.get(l) ?? [];
+      if (row.length < 2) continue;
+      const other = rows.get(up ? l - 1 : l + 1) ?? [];
+      const seat = new Map(other.map((n, i) => [n, i]));
+
+      const pull = new Map<string, number>();
+      row.forEach((n, i) => {
+        const hits: number[] = [];
+        for (const e of edges) {
+          const mine = up ? e.to : e.from;
+          const theirs = up ? e.from : e.to;
+          if (mine !== n) continue;
+          const s = seat.get(theirs);
+          if (s !== undefined) hits.push(s);
+        }
+        // nothing to be pulled by: keep the seat you have
+        pull.set(n, hits.length > 0 ? hits.reduce((a, b) => a + b, 0) / hits.length : i);
+      });
+
+      const groups = new Map<string, string[]>();
+      for (const n of row) groups.set(groupOf(n), [...(groups.get(groupOf(n)) ?? []), n]);
+      const groupPull = new Map<string, number>();
+      for (const [g, members] of groups)
+        groupPull.set(g, members.reduce((s, n) => s + (pull.get(n) ?? 0), 0) / members.length);
+
+      const next: string[] = [];
+      for (const g of [...groups.keys()].sort(
+        (a, b) => (groupPull.get(a) ?? 0) - (groupPull.get(b) ?? 0) || a.localeCompare(b),
+      ))
+        next.push(
+          ...[...(groups.get(g) ?? [])].sort(
+            (a, b) =>
+              (pull.get(a) ?? 0) - (pull.get(b) ?? 0) || sortKey(a).localeCompare(sortKey(b)),
+          ),
+        );
+      rows.set(l, next);
+    }
+  }
+}
+
+/**
+ * The module board's layout: modules layered by their import graph, rows
+ * straightened to cut crossings while each product area stays one province.
+ * A thin adapter over {@link layeredLayout}.
  */
 export function boardLayout(
   modules: MapModule[],
@@ -173,7 +254,10 @@ export function boardLayout(
     modules.map((m) => m.module),
     links,
     metrics,
-    (n) => `${areaOf?.get(n) ?? '~'} ${n}`,
+    {
+      groupOf: (n) => areaOf?.get(n) ?? '~',
+      sortKey: (n) => `${areaOf?.get(n) ?? '~'} ${n}`,
+    },
   );
   return {
     nodes: nodes.map((n) => ({ module: n.id, x: n.x, y: n.y, w: n.w, h: n.h, layer: n.layer })),
@@ -210,12 +294,63 @@ export function fileBoardLayout(files: string[], edges: Link[]): FileBoardLayout
     gapY: FILE_GAP_Y,
     margin: FILE_MARGIN,
   };
+  // One module's files are one group, so the pass straightens them freely.
   const { nodes, width, height } = layeredLayout(files, edges, metrics);
   return {
     nodes: nodes.map((n) => ({ file: n.id, x: n.x, y: n.y, w: n.w, h: n.h, layer: n.layer })),
     width,
     height,
   };
+}
+
+/** A product area drawn as a province: the dashed chalk boundary around it. */
+export interface Province {
+  area: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** How much air a province's boundary leaves around its boxes. */
+export const PROVINCE_PAD = 22;
+
+/**
+ * The chalk boundaries around each product area - drawn only where an area's
+ * boxes actually sit together. An outline that swallowed a module from another
+ * area would claim a province that isn't there, so that one is left undrawn:
+ * the board would rather say nothing than draw a border that lies. A lone box
+ * is not a province either - its own frame already says everything an outline
+ * would.
+ *
+ * Pure over the *placed* nodes, so a hand-dragged board re-answers the question
+ * honestly: drag a foreign module into the middle of an area and that area's
+ * boundary simply stops being drawn.
+ */
+export function areaProvinces(
+  nodes: Array<{ module: string; x: number; y: number; w: number; h: number }>,
+  areaOf: Map<string, string>,
+  pad: number = PROVINCE_PAD,
+): Province[] {
+  const byArea = new Map<string, typeof nodes>();
+  for (const n of nodes) {
+    const area = areaOf.get(n.module);
+    if (area) byArea.set(area, [...(byArea.get(area) ?? []), n]);
+  }
+  const out: Province[] = [];
+  for (const [area, members] of [...byArea].sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (members.length < 2) continue;
+    const x = Math.min(...members.map((m) => m.x)) - pad;
+    const y = Math.min(...members.map((m) => m.y)) - pad;
+    const w = Math.max(...members.map((m) => m.x + m.w)) + pad - x;
+    const h = Math.max(...members.map((m) => m.y + m.h)) + pad - y;
+    const mine = new Set(members.map((m) => m.module));
+    const swallowsAForeigner = nodes.some(
+      (n) => !mine.has(n.module) && n.x < x + w && n.x + n.w > x && n.y < y + h && n.y + n.h > y,
+    );
+    if (!swallowsAForeigner) out.push({ area, x, y, w, h });
+  }
+  return out;
 }
 
 // ── the concept lifecycle (23e) ───────────────────────────────────────────────
