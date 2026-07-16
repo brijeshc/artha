@@ -2,7 +2,7 @@
 
 A living, two-page summary.
 For the full detail, see [PROGRESS.md](PROGRESS.md) (the running log) and [tasks-v0.3/README.md](tasks-v0.3/README.md) (the current task index).
-Last updated: 2026-07-16 (23e-3).
+Last updated: 2026-07-16 (task 23 complete).
 
 ## What we are building
 
@@ -44,7 +44,7 @@ Two rules hold everywhere:
 
 **v0.1 and v0.2 are done. v0.3 is roughly two-thirds done.**
 The whole loop works end to end today: index a repo, read the map, vouch the machine's read, add what it missed, serve it to an agent.
-440 tests pass across 34 files, typecheck and lint clean.
+446 tests pass across 34 files, typecheck and lint clean.
 
 You can see it right now: `npm run demo` builds, seeds a fake shop repo, and serves the dashboard at http://127.0.0.1:4173.
 
@@ -73,6 +73,11 @@ The import graph and pin suggestions are fully automatic.
   Press `R` on any page to sweep its unvouched claims one at a time (23d-3).
   Every page carries a "What the code can't say" slot for human ink, added without un-certifying anything (23d-4).
   The ask queue now ranks by **where explaining pays off next** - how many modules depend on it, how much it changes, how uncertain it is - and each row says why in plain words (23d-5).
+- **23e (done, 2026-07-16, four slices)** - the craft debt, which completes **task 23**.
+  Concept lifecycles are redrawn in the board's chalk, left-to-right, with a return (a cancel, a retry) routed through a lane below the boxes and provably clear of every box it isn't about - so the atlas is one continuous hand at every altitude.
+  The board straightens its rows and outlines a product area as a dashed chalk province wherever its modules genuinely sit together.
+  A hand-arranged board can be **committed** to `.artha/board.yaml`, so it stops dying in the one browser that made it.
+  And the trace is offered wherever a flow is named - where a *machine-read* flow traces as what it **reaches**, never as a route, because the code says what a flow touches and never the order.
 - **24 (done, 2026-07-16)** - usability hardening, from a full UX audit.
   One public vocabulary (vouch everywhere, the vouched/described/unexplained ladder), honest numbers (the queue is "Explain next" with a matching badge, dark = unvouched, a vouched % that can reach 100), a default Board that fits the window with its own legend and zoom, prefix search with clickable rule hits and arrow keys, one card per capability, a review walk where Enter never writes and a vouch can be undone, and capability pages that lead with meaning.
 
@@ -81,8 +86,6 @@ The import graph and pin suggestions are fully automatic.
 - **21b** - AI synthesis. Turning the deterministic candidates into richer prose, opt-in and spend-capped, with a verifier gate.
 - **21c** - fully delivered except what 21b enriches.
 - **22** - the contradiction view: where the machine's read disagrees with what a human vouched.
-- **23e** - craft debt (trimmed; catalog dedup and zoom moved into 24).
-  **23e-1 to 23e-3 are done (2026-07-16)**: concept lifecycles are redrawn in the board's chalk, left-to-right, with returns routed orthogonally through a lane below the boxes - so the atlas is one continuous hand at every altitude. The board straightens its rows (a barycentre pass that keeps each product area whole) and outlines an area as a dashed chalk province wherever its modules genuinely sit together. And a hand-arranged board can now be **committed** to `.artha/board.yaml`, so it stops dying in one browser and the whole team opens the same blackboard. Only "more trace entry points" remains.
 - **T18** - the ask-the-human interview.
 - **T19 / T20** - contradiction preview and the v0.2 success test.
 
@@ -90,24 +93,20 @@ The import graph and pin suggestions are fully automatic.
 
 In order:
 
-1. **23e - craft debt (trimmed).**
-   State machines are drawn in chalk (23e-1), the board straightens its rows and outlines its provinces (23e-2), and a board can be committed for the whole team (23e-3).
-   The one leftover: more trace entry points - navigator flow rows and catalog flow cards offering the trace, and inferred flow skeletons tracing in moonlight.
-
-2. **21b - AI synthesis and verification.**
+1. **21b - AI synthesis and verification.**
    The machine layer currently describes code deterministically, which is honest but thin.
    21b makes it *readable*, with every claim citing its pins and a verifier gating confidence.
    The dashboard already reserves the exact slot this writes into (`describedAs`), so it enriches with no client rework.
 
-3. **22 - the contradiction view.**
+2. **22 - the contradiction view.**
    Nearly a byproduct: once inferred meaning exists, "the machine disagrees with a vouched fact" *is* the view.
    The review walk already has a deferred `x` key waiting on it.
 
-4. **T18 - the ask-the-human loop.**
+3. **T18 - the ask-the-human loop.**
    Deliberately held until after 21a, so the interview opens with "here is my read, what did I get wrong?" instead of a blank page.
    The write and certify plumbing it needs is already shipped.
 
-5. **T20 - the success test.**
+4. **T20 - the success test.**
    A non-author reads the map and answers questions about the codebase.
    Now with a second arm: it must pass on **machine-inferred content alone**, zero human input, on a stranger's repo.
 

@@ -54,6 +54,7 @@ import {
   capabilityNames,
   capabilityReviewClaims,
   flowTrace,
+  inferredFlowTrace,
   kpis,
   moduleReviewClaims,
   neighborsOf,
@@ -97,6 +98,8 @@ export function App(): JSX.Element {
   // The flow being traced as a route on the atlas (`#/?f=…`) - cached apart
   // from the flow *page* detail so the two never contend.
   const [traceDetail, setTraceDetail] = useState<FlowDetail | null>(null);
+  /** The machine-read flow being traced as what it reaches (23e-4). */
+  const [traceInferred, setTraceInferred] = useState<InferredFactView | null>(null);
   const [inferredDetail, setInferredDetail] = useState<InferredFactView | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -265,14 +268,25 @@ export function App(): JSX.Element {
       .catch(() => setSuggestions([]));
   }, [capabilityKey]);
 
-  // The flow behind an atlas route trace (`#/?f=…`).
+  // The flow behind an atlas route trace (`#/?f=…`). A machine-read flow traces
+  // too (23e-4) - as what it *reaches*, so it is loaded from the moonlight layer
+  // and kept apart from the human flow it is not.
   const tracedFlowId = route.view === 'atlas' ? (route.flow ?? null) : null;
+  const tracedInferred = tracedFlowId?.startsWith('inferred:') ?? false;
   useEffect(() => {
     if (!tracedFlowId) return;
+    if (tracedInferred) {
+      setTraceDetail(null);
+      getInferred(tracedFlowId)
+        .then(setTraceInferred)
+        .catch(() => setTraceInferred(null));
+      return;
+    }
+    setTraceInferred(null);
     getFlow(tracedFlowId)
       .then(setTraceDetail)
       .catch(() => setTraceDetail(null));
-  }, [tracedFlowId]);
+  }, [tracedFlowId, tracedInferred]);
 
   // The machine-described (moonlight) detail - a module card or state-machine
   // candidate. Loaded on its own so it never contends with the concept/flow cache.
@@ -404,13 +418,17 @@ export function App(): JSX.Element {
   const selectedModule = route.view === 'atlas' ? (route.module ?? null) : null;
   const atlasLens = route.view === 'atlas' ? route.lens : undefined;
   // Only trace once the loaded flow matches the URL - never draw a stale route.
-  const trace =
-    route.view === 'atlas' && route.flow && traceDetail && traceDetail.id === route.flow
-      ? flowTrace(
-          traceDetail,
-          map.modules.map((m) => m.module),
-        )
-      : null;
+  const trace = (() => {
+    if (route.view !== 'atlas' || !route.flow) return null;
+    if (traceInferred && traceInferred.id === route.flow)
+      return inferredFlowTrace(traceInferred, traceInferred.module);
+    if (traceDetail && traceDetail.id === route.flow)
+      return flowTrace(
+        traceDetail,
+        map.modules.map((m) => m.module),
+      );
+    return null;
+  })();
 
   const inspector = (() => {
     if (route.view !== 'atlas') return null;

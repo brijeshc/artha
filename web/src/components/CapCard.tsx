@@ -1,3 +1,4 @@
+import { ROUTE } from '../copy';
 import type { CapabilityEntry } from '../derive';
 import { shortName } from '../derive';
 import { routeHref } from '../router';
@@ -14,6 +15,27 @@ export function CapCard({
   entry,
   also = [],
 }: { entry: CapabilityEntry; also?: string[] }): JSX.Element {
+  const { ref, name, status, modules, states, steps } = entry;
+  return (
+    // The card is one big link, so the trace can't live inside it (an anchor in
+    // an anchor is not a thing) - it rides the slot alongside, top-right.
+    <span className="cap-card-slot">
+      <CardBody entry={entry} also={also} />
+      {ref.kind === 'flow' && (
+        <a
+          className="card-trace"
+          href={routeHref({ view: 'atlas', flow: ref.id })}
+          title={ROUTE.traceHint}
+          aria-label={`${ROUTE.trace}: ${name}`}
+        >
+          ⤳
+        </a>
+      )}
+    </span>
+  );
+}
+
+function CardBody({ entry, also }: { entry: CapabilityEntry; also: string[] }): JSX.Element {
   const { ref, name, status, modules, states, steps } = entry;
   return (
     <a className={`cap-card kind-${ref.kind}`} href={routeHref({ view: ref.kind, id: ref.id })}>

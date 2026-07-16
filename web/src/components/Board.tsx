@@ -83,13 +83,18 @@ export function Board(props: BoardProps): JSX.Element {
   if (trace) for (const s of trace.stations) stationsOf.set(s.module, s.steps);
   if (trace) for (const m of stationsOf.keys()) lit.add(m);
   const hasFocus = lit.size > 0;
+  // The entry is the only station a machine-read flow can name (23e-4).
+  const entryModule = trace?.kind === 'reaches' ? (trace.stations[0]?.module ?? null) : null;
 
   const edges = refs.filter(
     (r) => r.from_module !== r.to_module && byName.has(r.from_module) && byName.has(r.to_module),
   );
 
   const traceStatus = trace
-    ? trace.status === 'certified' || trace.status === 'proposed' || trace.status === 'stale'
+    ? trace.status === 'certified' ||
+      trace.status === 'proposed' ||
+      trace.status === 'stale' ||
+      trace.status === 'described'
       ? trace.status
       : 'unknown'
     : null;
@@ -244,10 +249,13 @@ export function Board(props: BoardProps): JSX.Element {
               </text>
             )}
             {steps && (
-              <g className="bstation">
+              // A machine-read flow's stations carry no number (23e-4): the
+              // code says this module is touched, never that it is touched
+              // third. The badge marks the entry - the one thing it does say.
+              <g className={trace?.kind === 'reaches' ? 'bstation bstation-reaches' : 'bstation'}>
                 <path d={roughCircle(n.x + 4, n.y + 4, 13, seed + 11)} />
                 <text x={n.x + 4} y={n.y + 5}>
-                  {steps.join('·')}
+                  {steps.length > 0 ? steps.join('·') : n.module === entryModule ? '⌂' : '·'}
                 </text>
               </g>
             )}
@@ -265,7 +273,11 @@ function clamp(s: string, max: number): string {
 
 /** The traced flow as a chalk route: station to station in the flow's own
  * status colour, each leg stopping at the boxes' borders (like the edges do)
- * so the chalk never runs under a module's name. */
+ * so the chalk never runs under a module's name.
+ *
+ * A machine-read flow draws differently (23e-4): its legs all fan out *from
+ * the entry*, dashed, because the code states what the flow touches but not
+ * the order it touches them in. A chain here would invent that order. */
 function BoardRoute({
   trace,
   byName,
@@ -276,17 +288,20 @@ function BoardRoute({
   const stations = trace.stations.flatMap((s) => byName.get(s.module) ?? []);
   if (stations.length < 2) return null;
   const seed = seedFrom(trace.id);
+  const leg = (from: BoardNode, to: BoardNode, i: number) => {
+    const p1 = borderPoint(from, to.x + to.w / 2, to.y + to.h / 2);
+    const p2 = borderPoint(to, from.x + from.w / 2, from.y + from.h / 2);
+    return roughLine(p1.x, p1.y, p2.x, p2.y, seed + i, { bow: 14, jitter: 1.2 });
+  };
+  const reaches = trace.kind === 'reaches';
+  const entry = stations[0];
   const d = stations
     .slice(1)
-    .map((to, i) => {
-      const from = stations[i];
-      const p1 = borderPoint(from, to.x + to.w / 2, to.y + to.h / 2);
-      const p2 = borderPoint(to, from.x + from.w / 2, from.y + from.h / 2);
-      return roughLine(p1.x, p1.y, p2.x, p2.y, seed + i, { bow: 14, jitter: 1.2 });
-    })
+    // reaches: every leg leaves the entry. route: each leg leaves the one before.
+    .map((to, i) => leg(reaches ? entry : stations[i], to, i))
     .join(' ');
   return (
-    <g className="broute">
+    <g className={reaches ? 'broute broute-reaches' : 'broute'}>
       <path d={d} />
     </g>
   );
@@ -518,12 +533,20 @@ export function RouteCard({
   clearHref: string;
 }): JSX.Element {
   const known =
-    trace.status === 'certified' || trace.status === 'proposed' || trace.status === 'stale';
+    trace.status === 'certified' ||
+    trace.status === 'proposed' ||
+    trace.status === 'stale' ||
+    trace.status === 'described';
+  const reaches = trace.kind === 'reaches';
+  // A machine-read flow opens on its moonlight page, not a capability page.
+  const href = reaches
+    ? routeHref({ view: 'inferred', id: trace.id })
+    : routeHref({ view: 'flow', id: trace.id });
   return (
     <aside className="route-card" aria-label={`Flow route: ${trace.name}`}>
-      <p className="route-kind">{ROUTE.kind}</p>
+      <p className="route-kind">{reaches ? ROUTE.reachKind : ROUTE.kind}</p>
       <p className="route-name">
-        <a href={routeHref({ view: 'flow', id: trace.id })} title={ROUTE.open}>
+        <a href={href} title={ROUTE.open}>
           {trace.name}
         </a>
         <span className={`status status-${known ? trace.status : 'unknown'}`}>
@@ -532,10 +555,28 @@ export function RouteCard({
         </span>
       </p>
       <p className="route-coverage mono">
-        {trace.linked}/{trace.total} steps linked
+        {reaches
+          ? `${trace.stations.length} modules reached`
+          : `${trace.linked}/${trace.total} steps linked`}
       </p>
       {trace.stations.length === 0 ? (
-        <p className="route-empty">{ROUTE.noStations}</p>
+        <p className="route-empty">{reaches ? ROUTE.noReach : ROUTE.noStations}</p>
+      ) : reaches ? (
+        // Unordered on purpose (23e-4): a numbered list would claim the very
+        // sequence the code never states.
+        <>
+          <p className="route-unordered">{ROUTE.unordered}</p>
+          <ul className="route-reach">
+            {trace.steps.map((s) => (
+              <li key={s.text} className={s.module ? 'route-step' : 'route-step unlinked'}>
+                <span className="route-step-text">{s.text}</span>
+                <span className="route-step-module mono">
+                  {s.module ? shortName(s.module) : ROUTE.notLinked}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
       ) : (
         <ol className="route-steps">
           {trace.steps.map((s) => (
@@ -550,7 +591,7 @@ export function RouteCard({
         </ol>
       )}
       <p className="route-actions">
-        <a className="route-open" href={routeHref({ view: 'flow', id: trace.id })}>
+        <a className="route-open" href={href}>
           {ROUTE.open} →
         </a>
         <a className="route-clear" href={clearHref}>

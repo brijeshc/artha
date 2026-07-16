@@ -51,6 +51,7 @@ import {
   coverageBucket,
   flowTrace,
   flyingBlind,
+  inferredFlowTrace,
   kpis,
   moduleOfPath,
   moduleReviewClaims,
@@ -1039,6 +1040,59 @@ describe('flow routes on the board', () => {
     expect(html).toContain(`href="${routeHref({ view: 'flow', id: 'flow.refund' })}"`);
   });
 
+  // ── a machine-read flow traces as what it *reaches* (23e-4) ────────────────
+
+  const skeletonId = 'inferred:flow:src/billing:placeOrder';
+  const skeleton: InferredFactView = {
+    id: skeletonId,
+    kind: 'flow',
+    name: 'Place Order',
+    summary: 'An operation read from code.',
+    confidence: 'read-from-code',
+    module: 'src/billing', // the entry point's module - the one thing code states
+    states: [],
+    steps: [
+      { label: 'Payments', module: 'src/payments' },
+      { label: 'Legacy', module: 'src/legacy' },
+      { label: 'Payments', module: 'src/payments' }, // the fan-out repeats a module
+    ],
+    pins: [],
+  };
+
+  it('traces a machine-read flow as reaches - the entry, then what it touches', () => {
+    const t = inferredFlowTrace(skeleton, 'src/billing');
+    expect(t.kind).toBe('reaches');
+    expect(t.status).toBe('described'); // moonlight, never the phosphor of a vouched path
+    // the entry leads, each reached module appears once, and nothing is numbered
+    expect(t.stations).toEqual([
+      { module: 'src/billing', steps: [] },
+      { module: 'src/payments', steps: [] },
+      { module: 'src/legacy', steps: [] },
+    ]);
+    expect(t.steps.every((s) => s.n === 0)).toBe(true);
+  });
+
+  it('draws reaches as dashed moonlight legs from the entry, with no step numbers', () => {
+    const t = inferredFlowTrace(skeleton, 'src/billing');
+    const html = markup(<Board {...base} trace={t} />);
+    expect(html).toContain('route-described'); // moonlight, not a status it hasn't earned
+    expect(html).toContain('broute-reaches');
+    expect(html).toContain('bstation-reaches');
+    expect(html).toContain('⌂'); // the entry - the one station the code really names
+    expect(html).not.toContain('1·2'); // nothing here is step one
+  });
+
+  it('the reach card refuses to imply an order, and opens the moonlight page', () => {
+    const t = inferredFlowTrace(skeleton, 'src/billing');
+    const html = markup(<RouteCard trace={t} clearHref="#/" />);
+    expect(html).toContain('what this reaches');
+    expect(html).toContain('not the order it runs in');
+    expect(html).toContain('3 modules reached');
+    // an inferred flow has no capability page to open
+    expect(html).toContain(`href="${routeHref({ view: 'inferred', id: skeletonId })}"`);
+    expect(html).not.toContain('steps linked');
+  });
+
   it('a route with no linked steps says so instead of drawing a guess', () => {
     const bare: FlowDetail = {
       ...routeDetail,
@@ -1218,6 +1272,22 @@ describe('Navigator', () => {
     expect(html).toContain('Invoice'); // capability by product name
     expect(html).toContain('legacy'); // solo module under "Other modules"
     expect(html).toContain(routeHref({ view: 'concept', id: 'concept.invoice' }));
+  });
+
+  it('offers the trace beside a flow row, not only on the flow’s page (23e-4)', () => {
+    const html = markup(
+      <Navigator
+        route={{ view: 'atlas' }}
+        feed={feed}
+        catalog={catalog}
+        stats={areaStats(feed)}
+        queueCount={1}
+      />,
+    );
+    expect(html).toContain(`href="${routeHref({ view: 'atlas', flow: 'flow.refund' })}"`);
+    // exactly one row can be traced: the catalog's one flow. A concept is not a
+    // path across the board, so it offers nothing.
+    expect(count(html, /class="nav-trace"/g)).toBe(1);
   });
 });
 
@@ -1891,6 +1961,23 @@ describe('CapCard', () => {
     const html = markup(<CapCard entry={entry} />);
     expect(count(html, /step-dot linked/g)).toBe(2);
     expect(count(html, /step-dot\b/g)).toBe(4);
+  });
+
+  it('offers the trace on a flow card, without nesting it inside the card link (23e-4)', () => {
+    const entry = capabilityEntries(catalog).find((e) => e.ref.kind === 'flow');
+    if (!entry) throw new Error('missing flow entry');
+    const html = markup(<CapCard entry={entry} />);
+    expect(html).toContain('card-trace');
+    expect(html).toContain(`href="${routeHref({ view: 'atlas', flow: entry.ref.id })}"`);
+    // the trace is the slot's sibling, not the card's child - an <a> in an <a>
+    // is not markup any browser agrees on
+    expect(html.indexOf('card-trace')).toBeGreaterThan(html.indexOf('</a>'));
+  });
+
+  it('a concept has nowhere to trace, so it offers nothing', () => {
+    const entry = capabilityEntries(catalog).find((e) => e.ref.kind === 'concept');
+    if (!entry) throw new Error('missing concept entry');
+    expect(markup(<CapCard entry={entry} />)).not.toContain('card-trace');
   });
 });
 

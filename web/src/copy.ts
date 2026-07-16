@@ -31,6 +31,15 @@ export const ROUTE = {
   notLinked: 'not linked',
   noStations:
     'None of this flow’s steps are linked to code yet, so there is no route to draw. Link a step and the line appears.',
+  // A machine-read flow (23e-4): the code says what it touches, never in what
+  // order - so this is never called a route, and nothing here is numbered.
+  reachKind: 'what this reaches',
+  reachTrace: 'Show what it reaches',
+  reachTraceHint:
+    'Light the modules this flow touches on the board. Read from code, so it shows what it reaches - not the order, which only you can say.',
+  unordered: 'Read from code, so this is what it touches - not the order it runs in.',
+  noReach:
+    'This flow reaches no other module - everything it touches lives where it starts. Nothing to draw on the board.',
 } as const;
 
 /** Navigator sections and view names. */

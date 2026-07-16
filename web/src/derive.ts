@@ -306,6 +306,14 @@ export interface FlowTrace {
   /** Ordered stations the route line runs through - linked steps only. */
   stations: FlowStation[];
   steps: FlowTraceStep[];
+  /**
+   * `route` = a vouched flow, whose steps run in a known order (numbered
+   * stations, a line from one to the next). `reaches` = a machine-read flow
+   * (23e-4): the entry point is known, but the *order* its fan-out runs in is
+   * exactly the delta 21a refuses to invent - so it draws what the flow
+   * touches, and numbers nothing.
+   */
+  kind: 'route' | 'reaches';
 }
 
 /**
@@ -335,6 +343,43 @@ export function flowTrace(detail: FlowDetail, moduleNames: string[]): FlowTrace 
     total: steps.length,
     stations,
     steps,
+    kind: 'route',
+  };
+}
+
+/**
+ * A machine-read flow drawn as what it **reaches** (23e-4) - never as a route.
+ *
+ * 21a reads a flow's entry point off the code and rolls its import fan-out up
+ * to module altitude, but deliberately stops there: the order those steps run
+ * in, and what each one means, is the human's delta. Numbering this fan-out
+ * would dress a source-order artifact up as a runtime sequence, so the trace
+ * marks the **entry** (which the code really does state - it is the flow's one
+ * evidence pin) and lights the rest as touched, unordered.
+ *
+ * `entryModule` is the module the entry pin lives in; the fan-out modules
+ * follow it, each its own station so the board can light them all without
+ * implying one leads to the next.
+ */
+export function inferredFlowTrace(detail: InferredFactView, entryModule: string | null): FlowTrace {
+  const reached: string[] = [];
+  const steps: FlowTraceStep[] = [];
+  for (const s of detail.steps ?? []) {
+    steps.push({ n: 0, text: s.label, module: s.module }); // n = 0: nothing is step one here
+    if (s.module && s.module !== entryModule && !reached.includes(s.module)) reached.push(s.module);
+  }
+  const stations: FlowStation[] = [];
+  if (entryModule) stations.push({ module: entryModule, steps: [] });
+  for (const m of reached) stations.push({ module: m, steps: [] });
+  return {
+    id: detail.id,
+    name: detail.name,
+    status: 'described',
+    linked: steps.filter((s) => s.module !== null).length,
+    total: steps.length,
+    stations,
+    steps,
+    kind: 'reaches',
   };
 }
 

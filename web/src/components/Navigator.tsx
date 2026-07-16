@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Catalog, MapFeed } from '../api';
-import { NAV } from '../copy';
+import { NAV, ROUTE } from '../copy';
 import {
   type AreaStat,
   type PlacedCapability,
@@ -219,7 +219,7 @@ function AreaNode({
       {open && (
         <ul className="nav-list nav-area-children">
           {caps.map(({ entry: c, also }) => (
-            <li key={c.ref.id}>
+            <li key={c.ref.id} className="nav-cap-row">
               <a
                 className={`nav-cap kind-${c.ref.kind}`}
                 href={routeHref({ view: c.ref.kind, id: c.ref.id })}
@@ -230,6 +230,18 @@ function AreaNode({
                 </span>
                 {c.name}
               </a>
+              {/* A flow is a path across the board, so offer the trace where the
+                  flow is named - not only once you have opened its page (23e-4). */}
+              {c.ref.kind === 'flow' && (
+                <a
+                  className="nav-trace"
+                  href={routeHref({ view: 'atlas', flow: c.ref.id })}
+                  title={ROUTE.traceHint}
+                  aria-label={`${ROUTE.trace}: ${c.name}`}
+                >
+                  ⤳
+                </a>
+              )}
             </li>
           ))}
           {a.modules.map((m) => (
