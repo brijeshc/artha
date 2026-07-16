@@ -56,6 +56,7 @@ Run inside a git repository you want to capture meaning for:
 artha init                      # scaffold .artha/
 artha mine                      # draft decisions from git history (needs an LLM — see below)
 artha review                    # certify / edit / reject the drafts in a TUI
+artha infer                     # synthesize readable descriptions over the inferred layer (opt-in, needs an LLM)
 artha build                     # compile certified YAML → .artha/index.db
 artha export --agents-md        # write a compact AGENTS.md of certified entries
 ```
@@ -104,6 +105,7 @@ Curation writes from the dashboard (link / certify / edit) land in `.demo/.artha
 | `artha init` | Scaffold `.artha/{decisions,invariants,conventions}/` and a `config.yaml`. | ✅ |
 | `artha mine` | Draft `proposed` decisions from git history (heuristic pre-filter + LLM). | needs an LLM |
 | `artha review` | Certify / edit / reject drafts in an interactive TUI. | ✅ |
+| `artha infer` | Synthesize product-language names + summaries over the machine-inferred layer; every claim verified against its pinned code, spend-capped, incremental. | needs an LLM |
 | `artha build` | Validate + resolve pins + compile certified YAML to a SQLite/FTS5 index. | ✅ |
 | `artha export --agents-md` | Emit a compact, deterministic `AGENTS.md` of certified entries. | ✅ |
 | `artha mcp` | Start the stdio MCP server (`context_for_task`, `why`). | ✅ |
