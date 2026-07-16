@@ -1,6 +1,6 @@
 # Artha v0.3 - task index (2026-07-05)
 
-**Status: re-centering locked; 21a shipped (the deterministic offline layer is complete).**
+**Status: re-centering locked; 21a + task 23 + task 24 shipped; 21b underway (21b-1 - the synthesis pipeline - done).**
 Product.md §12 headlined v0.3 as "contradiction detection + trust".
 This re-centers v0.3 around **the inferred layer**: a machine-extracted, full-coverage description of code meaning that does the heavy lifting *before* any human is asked for anything.
 Rationale and evidence are in [21-inferred-layer.md](21-inferred-layer.md) §Why; the OQ locks are recorded there and in [../PROGRESS.md](../PROGRESS.md).
@@ -24,12 +24,14 @@ A box also wears the concept's own standing now, instead of drawing every lifecy
 **23e-2 is done (2026-07-16)** - the board straightens its rows (a barycentre pass that keeps each product area whole) and outlines an area as a dashed chalk province wherever its modules genuinely sit together.
 **23e-3 is done (2026-07-16)** - the team's board: a hand-arranged blackboard can be committed to `.artha/board.yaml` as an ordinary git diff, so it stops dying in the one browser that made it.
 Seats answer in order - your hand, then the team's, then the automatic layout - and the file is arrangement only, never meaning: it never reaches the index, an agent, or the numbers.
-**The gate before 21b/22/T18 is open**; the last 23e item (more trace entry points) is next, then 21b (LLM synthesis + verification).
+**23e-4 is done (2026-07-16)** - more trace entry points: a flow's trace is offered wherever a flow is named (navigator rows, catalog cards), and a machine-read flow traces as what it **reaches**, never as a route. **Task 23 is complete.**
+**21b-1 is done (2026-07-16)** - the LLM synthesis pipeline: `artha infer` enriches the 21a candidates into product-language names + readable summaries via a pluggable engine (`api` / `claude-cli`, reusing the T06 pattern), opt-in and spend-capped, incremental by a content-hash cache (`.artha/.inferred.json`), with a deterministic **verifier gate** that downgrades any ungrounded claim to `uncertain`; `artha build` overlays the cache and silently reverts on drift.
+**The next work is the rest of 21b** (transitions + flow-step text, MCP serving the layer labeled, the `uncertain` render), then 22 (contradiction view), then T18.
 
 | #   | Task | Depends on | One-line summary |
 |-----|------|------------|------------------|
 | 21a | [Inferred layer - deterministic candidates](21-inferred-layer.md) | v0.2 T12, T13, T17b | offline, LLM-free extraction: module cards, state-machine/flow/convention candidates, all evidence-pinned; the map is never black |
-| 21b | [Inferred layer - LLM synthesis + verification](21-inferred-layer.md) | 21a, v0.1 T06 engine | opt-in, spend-capped, incremental synthesis into readable meaning; every claim cites pins; verifier gates confidence |
+| 21b | [Inferred layer - LLM synthesis + verification](21-inferred-layer.md) | 21a, v0.1 T06 engine | opt-in, spend-capped, incremental synthesis into readable meaning; every claim cites pins; verifier gates confidence. **21b-1 done (2026-07-16): the pipeline - `artha infer`, names+summaries, verifier → inferred/uncertain, build overlay** |
 | 21c | [Inferred layer - dashboard reframe](21-inferred-layer.md) | 21a (21b enriches), v0.2 T16d/T17 | two-light map (moonlight/phosphor), vouch-by-reading, the delta band, inverted interview entry |
 | 22  | Contradiction view (inferred vs certified) | 21b | the v0.3 loophole view, seeded by disagreement between the machine layer and vouched facts |
 | 23  | [Atlas elevation](23-atlas-elevation.md) | T16d, T17b, 21a | drawn linkage (wiring lens + flow routes, **23a shipped**), terrain texture, observatory charts, review mode (delivers 21c's D5/D6/D9/D10), craft debt (**23e-1 chalk lifecycles, 23e-2 straightened rows + provinces, 23e-3 the team's board - all shipped**) |

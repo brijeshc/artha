@@ -14,7 +14,9 @@ export type CliRunner = (args: string[], stdin: string) => Promise<string>;
 
 const BINARY = 'claude';
 
-function realRunner(args: string[], stdin: string): Promise<string> {
+/** The real `claude` CLI runner, shared by the miner and the 21b synthesizer so
+ * both shell out identically (Windows `.cmd` handling, stdin payload, buffer). */
+export function realCliRunner(args: string[], stdin: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const done = (error: Error | null, stdout: string | Buffer): void => {
       if (error) reject(error);
@@ -33,7 +35,7 @@ function realRunner(args: string[], stdin: string): Promise<string> {
 }
 
 /** Verify the Claude Code CLI is installed; throw an actionable error if not. */
-export async function assertClaudeCli(runner: CliRunner = realRunner): Promise<void> {
+export async function assertClaudeCli(runner: CliRunner = realCliRunner): Promise<void> {
   try {
     await runner(['--version'], '');
   } catch (cause) {
@@ -53,7 +55,7 @@ export async function assertClaudeCli(runner: CliRunner = realRunner): Promise<v
  */
 export async function createClaudeCliMiner(
   model: string,
-  runner: CliRunner = realRunner,
+  runner: CliRunner = realCliRunner,
 ): Promise<Miner> {
   await assertClaudeCli(runner);
 

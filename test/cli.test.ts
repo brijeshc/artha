@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildProgram } from '../src/cli';
 
-const SUBCOMMANDS = ['init', 'mine', 'review', 'build', 'export', 'mcp', 'serve'];
+const SUBCOMMANDS = ['init', 'mine', 'infer', 'review', 'build', 'export', 'mcp', 'serve'];
 
 describe('artha cli', () => {
   it('registers every subcommand', () => {

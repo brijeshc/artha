@@ -23,6 +23,20 @@ export interface MinerConfig {
   model: string;
 }
 
+/**
+ * The synthesis engine for `artha infer` (21b): the opt-in, spend-capped pass
+ * that enriches the deterministic 21a inferred layer into readable meaning.
+ * Shares the miner's engine backends (`api` / `claude-cli`). One strong model,
+ * not a tier split (OQ-C, locked 2026-07-16): simplest to build and verify; a
+ * cheap card tier can be added later if steady-state cost proves it worthwhile.
+ */
+export interface InferConfig {
+  /** Backend used to synthesize descriptions. Default `api`. */
+  engine: MinerEngine;
+  /** Model the synthesizer runs with. Default `claude-opus-4-8` (no silent downgrade). */
+  model: string;
+}
+
 export interface ArthaConfig {
   /** Roots used to expand invariant/convention scope globs. */
   sourceRoots: string[];
@@ -31,6 +45,8 @@ export interface ArthaConfig {
   /** Stored for forward-compat; v0.1 uses the built-in resolver and ignores it. */
   codegraphDb?: string;
   miner: MinerConfig;
+  /** Synthesis engine for `artha infer` (21b). */
+  infer: InferConfig;
   /**
    * OQ5 seam (v0.2): named product **areas** → the code modules they cover, for
    * the dashboard map's product column. Optional — when absent, `artha serve`
@@ -54,6 +70,8 @@ const DEFAULTS = {
   defaultSeverity: 'medium',
   minerEngine: 'api',
   minerModel: 'claude-opus-4-8',
+  inferEngine: 'api',
+  inferModel: 'claude-opus-4-8',
   embeddingsEnabled: true,
   embeddingsModel: 'Xenova/all-MiniLM-L6-v2',
 } as const;
@@ -109,6 +127,16 @@ export function loadConfig(repoRoot: string): ArthaConfig {
     }
   }
 
+  if (typeof obj.infer === 'object' && obj.infer !== null) {
+    const infer = obj.infer as Record<string, unknown>;
+    if (typeof infer.model === 'string' && infer.model.length > 0) {
+      config.infer.model = infer.model;
+    }
+    if (typeof infer.engine === 'string' && MINER_ENGINES.has(infer.engine as MinerEngine)) {
+      config.infer.engine = infer.engine as MinerEngine;
+    }
+  }
+
   const areas = parseAreas(obj.areas);
   if (areas) config.areas = areas;
 
@@ -138,6 +166,7 @@ export function defaultConfig(): ArthaConfig {
     sourceRoots: [...DEFAULTS.sourceRoots],
     defaultSeverity: DEFAULTS.defaultSeverity,
     miner: { engine: DEFAULTS.minerEngine, model: DEFAULTS.minerModel },
+    infer: { engine: DEFAULTS.inferEngine, model: DEFAULTS.inferModel },
     embeddings: { enabled: DEFAULTS.embeddingsEnabled, model: DEFAULTS.embeddingsModel },
   };
 }

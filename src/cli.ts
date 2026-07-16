@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { Command } from 'commander';
 import { buildCommand } from './commands/build';
 import { exportCommand } from './commands/export';
+import { inferCommand } from './commands/infer';
 import { initCommand } from './commands/init';
 import { mcpCommand } from './commands/mcp';
 import { mineCommand } from './commands/mine';
@@ -33,6 +34,13 @@ export function buildProgram(): Command {
     .option('--limit <n>', 'how many commits of history to scan (default: all)')
     .option('--max <n>', 'max commits to send to the miner this run (default: 20; 0 = unlimited)')
     .action(mineCommand);
+
+  program
+    .command('infer')
+    .description('synthesize readable descriptions over the inferred layer (opt-in, spend-capped)')
+    .option('--dry-run', 'preview what would be synthesized without any engine call or credentials')
+    .option('--max <n>', 'max candidates to synthesize this run (default: 50; 0 = unlimited)')
+    .action(inferCommand);
 
   program
     .command('review')

@@ -2,7 +2,7 @@
 
 A living, two-page summary.
 For the full detail, see [PROGRESS.md](PROGRESS.md) (the running log) and [tasks-v0.3/README.md](tasks-v0.3/README.md) (the current task index).
-Last updated: 2026-07-16 (task 23 complete).
+Last updated: 2026-07-16 (task 23 complete; 21b-1 - the synthesis pipeline - done).
 
 ## What we are building
 
@@ -44,7 +44,7 @@ Two rules hold everywhere:
 
 **v0.1 and v0.2 are done. v0.3 is roughly two-thirds done.**
 The whole loop works end to end today: index a repo, read the map, vouch the machine's read, add what it missed, serve it to an agent.
-446 tests pass across 34 files, typecheck and lint clean.
+479 tests pass across 38 files, typecheck and lint clean.
 
 You can see it right now: `npm run demo` builds, seeds a fake shop repo, and serves the dashboard at http://127.0.0.1:4173.
 
@@ -84,6 +84,7 @@ The import graph and pin suggestions are fully automatic.
 ### Not done
 
 - **21b** - AI synthesis. Turning the deterministic candidates into richer prose, opt-in and spend-capped, with a verifier gate.
+  **21b-1 is done (2026-07-16)**: `artha infer` is the pipeline - a pluggable engine (reusing the mining backends), product-language names + readable summaries over the 21a candidates, incremental by a content-hash cache, and a verifier that grounds every claim in the pinned code and marks the ungrounded `uncertain`. `artha build` overlays it and reverts silently on drift. Left: transitions + flow-step text (21b-2), MCP serving the layer labeled below vouched (21b-3), and the `uncertain` render (21b-4).
 - **21c** - fully delivered except what 21b enriches.
 - **22** - the contradiction view: where the machine's read disagrees with what a human vouched.
 - **T18** - the ask-the-human interview.
@@ -93,9 +94,11 @@ The import graph and pin suggestions are fully automatic.
 
 In order:
 
-1. **21b - AI synthesis and verification.**
+1. **21b - AI synthesis and verification (underway; 21b-1 done).**
    The machine layer currently describes code deterministically, which is honest but thin.
    21b makes it *readable*, with every claim citing its pins and a verifier gating confidence.
+   The pipeline (`artha infer`) ships: names + summaries, verified and cached, overlaid at build time and reverting on drift.
+   Next slices enrich state-machine transitions + flow steps, serve the layer over MCP, and render the `uncertain` tier.
    The dashboard already reserves the exact slot this writes into (`describedAs`), so it enriches with no client rework.
 
 2. **22 - the contradiction view.**

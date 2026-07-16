@@ -54,8 +54,17 @@ describe('loadConfig', () => {
       defaultSeverity: 'low',
       codegraphDb: '.codegraph/graph.db',
       miner: { engine: 'api', model: 'claude-haiku-4-5' },
+      infer: { engine: 'api', model: 'claude-opus-4-8' },
       embeddings: { enabled: true, model: 'Xenova/all-MiniLM-L6-v2' },
     });
+  });
+
+  it('reads the infer engine + model (21b), ignoring an unknown engine', () => {
+    writeConfig('infer:\n  engine: claude-cli\n  model: claude-opus-4-8\n');
+    expect(loadConfig(tmp).infer).toEqual({ engine: 'claude-cli', model: 'claude-opus-4-8' });
+
+    writeConfig('infer:\n  engine: bogus\n');
+    expect(loadConfig(tmp).infer.engine).toBe('api'); // default retained
   });
 
   it('reads embeddings settings (enabled + model)', () => {

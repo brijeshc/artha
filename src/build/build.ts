@@ -4,6 +4,7 @@ import { inferLayer } from '../analytics/inferred';
 import { listSourceFiles, referenceGraph } from '../analytics/references';
 import type { ArthaConfig } from '../config/config';
 import type { Embedder } from '../embed/embedder';
+import { evidenceHash, readSynthCache } from '../infer/cache';
 import type { ResolvedSymbol, SymbolResolver } from '../resolver/SymbolResolver';
 import { createTreeSitterResolver } from '../resolver/treeSitterResolver';
 import { loadEntries, writeEntry } from '../schema/load';
@@ -13,6 +14,8 @@ import {
   type FactRow,
   type FlowStepRow,
   type IndexData,
+  type InferredPinRow,
+  type InferredRow,
   type PinRow,
   type ProvenanceRow,
   type RelatedRow,
@@ -37,6 +40,8 @@ export interface BuildReport {
   refs: number;
   /** Number of inferred facts (module cards + state-machine candidates) emitted (21a). */
   inferred: number;
+  /** Number of inferred facts overlaid with synthesized enrichment (21b). */
+  enriched: number;
   dbPath: string;
 }
 
@@ -71,6 +76,7 @@ export async function buildIndex(
     embedded: 0,
     refs: 0,
     inferred: 0,
+    enriched: 0,
     dbPath,
   };
 
@@ -165,6 +171,12 @@ export async function buildIndex(
     data.inferredStates = layer.states;
     data.inferredSteps = layer.steps;
     report.inferred = layer.facts.length;
+
+    // 21b — overlay any synthesized enrichment (`artha infer`) onto the
+    // deterministic candidates, but only where the pinned code is unchanged: a
+    // content-hash match keeps the description honest; drift silently falls back
+    // to the 21a text (D12 — moonlight regenerates quietly, nothing to maintain).
+    report.enriched = overlaySynthesis(arthaDir, data.inferred, data.inferredPins);
   }
 
   // T14 — build-time embeddings (best-effort, offline-by-default). Read the
@@ -324,7 +336,40 @@ function toIndexData(
  * points and each (non-null) `steps[].pin`. These are the actual Pin objects, so
  * resolution writes `content_hash` straight back onto them (and thus to disk).
  */
-function collectPins(entry: ArthaEntry): Pin[] {
+/**
+ * Overlay `artha infer` output (21b) onto the deterministic 21a facts. An entry
+ * applies only when its `evidenceHash` still matches the fact's current pins -
+ * so a description read from code that has since changed is dropped, not shown
+ * (D12). Overwrites the name (`heading`), prose (`body`), and `confidence`
+ * (`inferred`/`uncertain`) in place; returns how many facts were enriched.
+ */
+function overlaySynthesis(arthaDir: string, facts: InferredRow[], pins: InferredPinRow[]): number {
+  const cache = readSynthCache(arthaDir);
+  if (cache.size === 0) return 0;
+
+  const pinsByFact = new Map<string, InferredPinRow[]>();
+  for (const pin of pins) {
+    const bucket = pinsByFact.get(pin.inferred_id);
+    if (bucket) bucket.push(pin);
+    else pinsByFact.set(pin.inferred_id, [pin]);
+  }
+
+  let enriched = 0;
+  for (const fact of facts) {
+    const entry = cache.get(fact.id);
+    if (!entry) continue;
+    if (entry.evidenceHash !== evidenceHash(pinsByFact.get(fact.id) ?? [])) continue;
+    fact.heading = entry.name;
+    fact.body = entry.summary;
+    fact.confidence = entry.confidence;
+    enriched++;
+  }
+  return enriched;
+}
+
+/** Every pin an entry carries: its base pins plus, for a flow, its entry pins
+ * and each step's pin. Shared with `infer` so both suppress the same candidates. */
+export function collectPins(entry: ArthaEntry): Pin[] {
   const pins: Pin[] = [...(entry.pins ?? [])];
   if (entry.kind === 'flow') {
     pins.push(...(entry.entry ?? []));
