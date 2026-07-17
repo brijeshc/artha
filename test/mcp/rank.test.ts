@@ -3,8 +3,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type ArthaIndex, openArthaIndex } from '../../src/mcp/query';
-import { estimateTokens, formatItem, rankFacts, selectWithinBudget } from '../../src/mcp/rank';
-import { fact, fakeIndex } from '../helpers/fakeIndex';
+import {
+  estimateTokens,
+  formatInferredItem,
+  formatItem,
+  rankFacts,
+  rankInferred,
+  selectWithinBudget,
+} from '../../src/mcp/rank';
+import { fact, fakeIndex, inferredFact, inferredPin } from '../helpers/fakeIndex';
 import { writeFixtureIndex } from './fixture';
 
 let dir: string;
@@ -101,6 +108,93 @@ describe('formatItem / estimateTokens', () => {
 
   it('estimates ~4 chars per token', () => {
     expect(estimateTokens('12345678')).toBe(2);
+  });
+});
+
+describe('rankInferred — the machine layer (21b-3)', () => {
+  // Two inferred facts sharing the "billing" keyword (equal lexical bm25) so the
+  // confidence weight, not lexical score, decides their relative order.
+  const inferredIndex = () =>
+    fakeIndex({
+      inferred: [
+        inferredFact('inferred:module:src/billing', 'read-from-code', {
+          heading: 'Billing',
+          body: 'Handles charges.',
+        }),
+        inferredFact('inferred:concept:src/billing.ts#S', 'uncertain', {
+          heading: 'Billing state',
+          body: 'A state.',
+        }),
+      ],
+      inferredPins: [inferredPin('inferred:module:src/billing', 'src/billing.ts#charge')],
+      inferredFts: (q) =>
+        q.includes('billing')
+          ? new Map([
+              ['inferred:module:src/billing', -1],
+              ['inferred:concept:src/billing.ts#S', -1],
+            ])
+          : new Map(),
+    });
+
+  const inferredIds = (items: ReturnType<typeof rankInferred>) => items.map((i) => i.fact.id);
+
+  it('ranks inferred facts on their own FTS corpus', () => {
+    expect(inferredIds(rankInferred(inferredIndex(), { task: 'billing' }))).toContain(
+      'inferred:module:src/billing',
+    );
+  });
+
+  it('at equal relevance, an uncertain fact ranks below a grounded one', () => {
+    const items = rankInferred(inferredIndex(), { task: 'billing' });
+    const grounded = items.findIndex((i) => i.fact.confidence !== 'uncertain');
+    const uncertain = items.findIndex((i) => i.fact.confidence === 'uncertain');
+    expect(grounded).toBeGreaterThanOrEqual(0);
+    expect(grounded).toBeLessThan(uncertain);
+  });
+
+  it('ranks on pin overlap when the task text matches nothing lexically', () => {
+    const got = rankInferred(inferredIndex(), {
+      task: 'zzznomatch',
+      symbols: ['src/billing.ts#charge'],
+    });
+    expect(inferredIds(got)).toEqual(['inferred:module:src/billing']); // only the pinned card
+  });
+
+  it('drops facts with zero relevance, and is empty when the layer is empty', () => {
+    expect(rankInferred(inferredIndex(), { task: 'zzznomatch' })).toEqual([]);
+    expect(rankInferred(fakeIndex({}), { task: 'billing' })).toEqual([]);
+  });
+});
+
+describe('formatInferredItem (21b-3)', () => {
+  it('labels machine-described, never certified, and lists pins', () => {
+    const [top] = rankInferred(
+      fakeIndex({
+        inferred: [
+          inferredFact('inferred:module:src/billing', 'read-from-code', {
+            heading: 'Billing',
+            body: 'Handles charges.',
+          }),
+        ],
+        inferredPins: [inferredPin('inferred:module:src/billing', 'src/billing.ts#charge')],
+        inferredFts: () => new Map([['inferred:module:src/billing', -1]]),
+      }),
+      { task: 'billing' },
+    );
+    if (top === undefined) throw new Error('expected a ranked inferred item');
+    const text = formatInferredItem(top);
+    expect(text.startsWith('[machine-described, unverified by team]')).toBe(true);
+    expect(text).not.toContain('[certified]');
+    expect(text).toContain('pins: src/billing.ts#charge');
+  });
+
+  it('marks a downgraded fact as uncertain', () => {
+    const text = formatInferredItem({
+      fact: inferredFact('inferred:concept:x', 'uncertain', { heading: 'X', body: 'Y' }),
+      pins: [],
+      score: 1,
+    });
+    expect(text).toContain('[machine-described, uncertain]');
   });
 });
 

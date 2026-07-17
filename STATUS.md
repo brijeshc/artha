@@ -86,7 +86,8 @@ The import graph and pin suggestions are fully automatic.
 - **21b** - AI synthesis. Turning the deterministic candidates into richer prose, opt-in and spend-capped, with a verifier gate.
   **21b-1 is done (2026-07-16)**: `artha infer` is the pipeline - a pluggable engine (reusing the mining backends), product-language names + readable summaries over the 21a candidates, incremental by a content-hash cache, and a verifier that grounds every claim in the pinned code and marks the ungrounded `uncertain`. `artha build` overlays it and reverts silently on drift.
   **21b-2's flow-step text is done (2026-07-17)**: each module a flow reaches now carries one grounded, verifier-gated line saying what the flow does there - never the order, which stays the human's - overlaid into a new `note` column and reverting on drift like the rest.
-  Left: 21b-2's other half (state-machine transitions), MCP serving the layer labeled below vouched (21b-3), and the `uncertain` render (21b-4).
+  **21b-3 - MCP serving - is done (2026-07-17)**: `context_for_task` now hands the machine layer to an agent, labeled `[machine-described, unverified by team]` and ranked strictly below the team's vouched facts (in its own FTS corpus, so human ranking is untouched); on by default, never as certified. This is the piece that extends the agent's -56%-discovery value to a repo nobody has curated yet.
+  Left: 21b-2's other half (state-machine transitions) and the `uncertain` render (21b-4).
 - **21c** - fully delivered except what 21b enriches.
 - **22** - the contradiction view: where the machine's read disagrees with what a human vouched.
 - **T18** - the ask-the-human interview.

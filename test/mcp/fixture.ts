@@ -120,6 +120,62 @@ export const FIXTURE: IndexData = {
   inferredSteps: [],
 };
 
+/**
+ * The machine-described inferred layer (21b-3) over the same money/cents code:
+ * one grounded module card and one downgraded (`uncertain`) concept, both
+ * lexically matching "money" and pinned into src/money.ts.
+ */
+export const INFERRED_FIXTURE: Pick<IndexData, 'inferred' | 'inferredPins'> = {
+  inferred: [
+    {
+      id: 'inferred:module:src/money',
+      kind: 'module',
+      module: 'src/money',
+      heading: 'Money',
+      body: 'Shared foundation for money and cents handling across the app.',
+      confidence: 'read-from-code',
+      origin: 'inferred',
+    },
+    {
+      id: 'inferred:concept:src/money.ts#Rounding',
+      kind: 'concept',
+      module: 'src/money',
+      heading: 'Rounding mode',
+      body: 'A rounding mode read from the money module.',
+      confidence: 'uncertain',
+      origin: 'inferred',
+    },
+  ],
+  inferredPins: [
+    {
+      inferred_id: 'inferred:module:src/money',
+      symbol_ref: 'src/money.ts#toCents',
+      symbol_id: 'src/money.ts#toCents',
+      content_hash: 'h',
+      role: 'export',
+      ord: 0,
+    },
+    {
+      inferred_id: 'inferred:concept:src/money.ts#Rounding',
+      symbol_ref: 'src/money.ts#Rounding',
+      symbol_id: null,
+      content_hash: 'h',
+      role: 'evidence',
+      ord: 0,
+    },
+  ],
+};
+
 export function writeFixtureIndex(dbPath: string): void {
   writeIndex(dbPath, FIXTURE);
+}
+
+/** The full fixture plus the inferred layer (21b-3). */
+export function writeFixtureIndexWithInferred(dbPath: string): void {
+  writeIndex(dbPath, { ...FIXTURE, ...INFERRED_FIXTURE });
+}
+
+/** Inferred layer only, no vouched facts — a repo the team has not touched (D1). */
+export function writeInferredOnlyIndex(dbPath: string): void {
+  writeIndex(dbPath, { ...FIXTURE, facts: [], pins: [], scopeFiles: [], ...INFERRED_FIXTURE });
 }

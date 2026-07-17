@@ -118,6 +118,11 @@ CREATE TABLE artha_inferred_steps (
   ord          INTEGER NOT NULL
 );
 CREATE VIRTUAL TABLE artha_fts USING fts5(id UNINDEXED, heading, body);
+-- A parallel FTS over the inferred layer (21b-3). Kept separate from artha_fts so
+-- the machine layer's documents never enter the human corpus - adding them there
+-- would shift bm25's IDF and silently perturb human-fact ranking. MCP ranks the
+-- two corpora independently and serves inferred strictly below vouched.
+CREATE VIRTUAL TABLE artha_inferred_fts USING fts5(id UNINDEXED, heading, body);
 `;
 
 export interface FactRow {
@@ -378,8 +383,14 @@ export function writeIndex(dbPath: string, data: IndexData): void {
       `INSERT INTO artha_inferred (id, kind, module, heading, body, confidence, origin)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
+    const inferredFts = db.prepare(
+      'INSERT INTO artha_inferred_fts (id, heading, body) VALUES (?, ?, ?)',
+    );
     for (const r of data.inferred) {
       inferred.run(r.id, r.kind, r.module, r.heading, r.body, r.confidence, r.origin);
+      // Index the (possibly 21b-enriched) name + prose so MCP can rank the machine
+      // layer lexically, in its own corpus (21b-3).
+      inferredFts.run(r.id, r.heading, r.body ?? '');
     }
 
     const inferredPin = db.prepare(
