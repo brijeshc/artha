@@ -118,6 +118,7 @@ export const FIXTURE: IndexData = {
   inferredPins: [],
   inferredStates: [],
   inferredSteps: [],
+  inferredTransitions: [],
 };
 
 /**

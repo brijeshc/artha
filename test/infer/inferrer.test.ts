@@ -17,6 +17,7 @@ describe('parseSynthResponse', () => {
       name: 'Refund a purchase',
       summary: 'Reverses a charge.',
       steps: [],
+      transitions: [],
     });
   });
 
@@ -27,6 +28,15 @@ describe('parseSynthResponse', () => {
     );
     if (!('steps' in r)) throw new Error('expected enriched');
     expect(r.steps).toEqual([{ module: 'src/billing', text: 'charges the card' }]);
+  });
+
+  it('reads a concept’s transitions, dropping entries missing a field (21b-2)', () => {
+    const r = parseSynthResponse(
+      '{"enriched": true, "name": "Order lifecycle", "summary": "S", "steps": [], "transitions": [' +
+        '{"from": "cart", "to": "paid", "trigger": "payment succeeds"}, {"from": "paid", "to": "shipped"}]}',
+    );
+    if (!('transitions' in r)) throw new Error('expected enriched');
+    expect(r.transitions).toEqual([{ from: 'cart', to: 'paid', trigger: 'payment succeeds' }]);
   });
 
   it('reads enriched=false as an honest refusal', () => {
@@ -49,6 +59,7 @@ describe('parseSynthResponse', () => {
       name: 'Order lifecycle',
       summary: 'States.',
       steps: [],
+      transitions: [],
     });
   });
 
@@ -90,6 +101,16 @@ describe('renderSynthPrompt', () => {
     });
     expect(prompt).toContain('Reaches');
     expect(prompt).toContain('src/billing (Billing)');
+  });
+
+  it('lists the states when a concept has members, to bound its transitions (21b-2)', () => {
+    const prompt = renderSynthPrompt({
+      ...base,
+      kind: 'concept',
+      members: ['cart', 'paid', 'shipped'],
+    });
+    expect(prompt).toContain('States');
+    expect(prompt).toContain('cart, paid, shipped');
   });
 
   it('truncates oversized evidence with a marker', () => {

@@ -8,6 +8,7 @@ import type {
   InferredRow,
   InferredStateRow,
   InferredStepRow,
+  InferredTransitionRow,
 } from '../../src/build/db';
 import { materializeInferred } from '../../src/serve/materialize';
 import { fakeIndex } from '../helpers/fakeIndex';
@@ -34,7 +35,7 @@ const FLOW_ID = 'inferred:flow:src/checkout/place.ts#placeOrder';
 const FLOW_REF = 'src/checkout/place.ts#placeOrder';
 
 /** An index carrying one inferred concept (a state machine) + one inferred flow. */
-function seededIndex() {
+function seededIndex(inferredTransitions: InferredTransitionRow[] = []) {
   const inferred: InferredRow[] = [
     {
       id: CONCEPT_ID,
@@ -97,7 +98,7 @@ function seededIndex() {
       ord: 0,
     },
   ];
-  return fakeIndex({ inferred, inferredStates, inferredSteps, inferredPins });
+  return fakeIndex({ inferred, inferredStates, inferredSteps, inferredPins, inferredTransitions });
 }
 
 function readEntry(path: string): Record<string, unknown> {
@@ -124,13 +125,33 @@ describe('materializeInferred', () => {
       summary: '3 states read from the `OrderState` type (cart, paid, fulfilled).',
       derived_from: 'inferred@abc123',
     });
-    // states read verbatim; their meaning + transitions stay the human delta
+    // states read verbatim; with none grounded, transitions stay the human delta
     expect(entry.states).toEqual([{ name: 'cart' }, { name: 'paid' }, { name: 'fulfilled' }]);
     expect(entry.pins).toEqual([{ symbol: CONCEPT_REF }]);
     expect(typeof entry.certified_by).toBe('string');
     expect(entry.certified_at).toBe('2026-07-09');
-    // no transitions are ever fabricated
+    // nothing grounded → no transitions block is invented
     expect(entry.transitions).toBeUndefined();
+  });
+
+  it('seeds grounded transitions into the materialized draft (21b-2)', () => {
+    const transitions: InferredTransitionRow[] = [
+      {
+        inferred_id: CONCEPT_ID,
+        from_state: 'cart',
+        to_state: 'paid',
+        trigger: 'payment succeeds',
+        ord: 0,
+      },
+    ];
+    const out = materializeInferred(repo, seededIndex(transitions), CONCEPT_ID, {});
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+
+    const entry = readEntry(join(arthaDir, 'concepts', 'concept.order_state.yaml'));
+    // the machine-grounded transitions become the human's starting draft to correct
+    expect(entry.transitions).toEqual([{ from: 'cart', to: 'paid', trigger: 'payment succeeds' }]);
+    expect(entry.status).toBe('proposed');
   });
 
   it('vouching without certify leaves a proposed draft (edit-then-certify path)', () => {

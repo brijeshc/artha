@@ -59,7 +59,13 @@ const SRC = {
     "  state: OrderState = 'cart';\n" +
     '  private gateway = new StripeGateway();\n' +
     '  private sub?: Subscription;\n' +
-    '  pay(): void {\n    this.gateway.charge(0);\n    sendEmail();\n  }\n' +
+    // The methods that move the OrderState field - cross-file uses of the union
+    // declared in orderState.ts, so the 21b-2 usage index grounds its transitions.
+    "  place(): void {\n    if (this.state === 'cart') this.state = 'placed';\n  }\n" +
+    '  pay(): void {\n' +
+    "    if (this.state === 'placed') {\n      this.gateway.charge(0);\n      sendEmail();\n      this.state = 'paid';\n    }\n  }\n" +
+    "  fulfill(): void {\n    if (this.state === 'paid') this.state = 'fulfilled';\n  }\n" +
+    "  cancel(): void {\n    this.state = 'cancelled';\n  }\n" +
     '}\n',
   // An exported orchestration function - the inferred layer reads it as a "Place
   // Order" flow skeleton (21a), its steps the areas it imports (Billing then

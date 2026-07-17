@@ -7,7 +7,13 @@ import { openIndex } from '../../src/build/db';
 import { defaultConfig } from '../../src/config/config';
 import { readSynthCache } from '../../src/infer/cache';
 import { infer } from '../../src/infer/infer';
-import type { Inferrer, SynthInput, SynthResult, SynthStepText } from '../../src/infer/inferrer';
+import type {
+  Inferrer,
+  SynthInput,
+  SynthResult,
+  SynthStepText,
+  SynthTransition,
+} from '../../src/infer/inferrer';
 
 /**
  * Stub synthesizer: enriches every candidate with a plain, grounded summary by
@@ -30,7 +36,17 @@ class StubInferrer implements Inferrer {
       ...(input.steps ?? []).map((s) => ({ module: s.module, text: `does work in ${s.label}` })),
       { module: 'src/nowhere', text: 'a step for a module never reached' },
     ];
-    return { enriched: true, name: `${input.heading} (clarified)`, summary, steps };
+    // Propose one transition between real states, plus one to a fabricated state,
+    // to prove the caller drops the fabricated edge before storage (21b-2).
+    const members = input.members ?? [];
+    const transitions: SynthTransition[] =
+      members.length >= 2
+        ? [
+            { from: members[0] as string, to: members[1] as string, trigger: 'the state advances' },
+            { from: members[0] as string, to: 'ghost_state', trigger: 'a fabricated edge' },
+          ]
+        : [];
+    return { enriched: true, name: `${input.heading} (clarified)`, summary, steps, transitions };
   }
 }
 
@@ -89,6 +105,22 @@ const stepNote = (flowId: string, module: string): unknown => {
       .prepare('SELECT note FROM artha_inferred_steps WHERE inferred_id = ? AND to_module = ?')
       .get(flowId, module) as { note: unknown } | undefined;
     return row?.note ?? null;
+  } finally {
+    db.close();
+  }
+};
+
+/** The transitions stored for a concept (21b-2), read straight from the index. */
+const transitionRows = (
+  conceptId: string,
+): Array<{ from_state: string; to_state: string; trigger: string }> => {
+  const db = openIndex(join(repo, '.artha', 'index.db'));
+  try {
+    return db
+      .prepare(
+        'SELECT from_state, to_state, trigger FROM artha_inferred_transitions WHERE inferred_id = ? ORDER BY ord',
+      )
+      .all(conceptId) as Array<{ from_state: string; to_state: string; trigger: string }>;
   } finally {
     db.close();
   }
@@ -172,6 +204,15 @@ describe('infer (21b synthesis pipeline)', () => {
       { module: 'src/billing', text: 'does work in Billing' },
     ]);
   });
+
+  it('synthesizes a concept’s transitions, dropping edges to fabricated states (21b-2)', async () => {
+    await infer(repo, config(), { inferrer: new StubInferrer() });
+    // the stub proposes cart→paid (real states) and cart→ghost_state (fabricated);
+    // only the edge between two real states survives alignment
+    expect(readSynthCache(join(repo, '.artha')).get(ORDER_CONCEPT)?.transitions).toEqual([
+      { from: 'cart', to: 'paid', trigger: 'the state advances' },
+    ]);
+  });
 });
 
 describe('build overlays synthesis (21b) and reverts on drift (D12)', () => {
@@ -225,5 +266,21 @@ describe('build overlays synthesis (21b) and reverts on drift (D12)', () => {
     writeCheckout('  charge();\n  return true;\n');
     await buildIndex(repo, config());
     expect(stepNote(PLACE_FLOW, 'src/billing')).toBeNull();
+  });
+
+  it('overlays concept transitions into the index and reverts them on drift (21b-2)', async () => {
+    await infer(repo, config(), { inferrer: new StubInferrer() });
+    await buildIndex(repo, config());
+    expect(transitionRows(ORDER_CONCEPT)).toEqual([
+      { from_state: 'cart', to_state: 'paid', trigger: 'the state advances' },
+    ]);
+
+    // the concept's declaration changes → its transitions revert (D12), 21a emits none
+    writeFileSync(
+      join(repo, 'src', 'billing', 'order.ts'),
+      "export type OrderState = 'cart' | 'paid' | 'shipped' | 'refunded';\n",
+    );
+    await buildIndex(repo, config());
+    expect(transitionRows(ORDER_CONCEPT)).toEqual([]);
   });
 });

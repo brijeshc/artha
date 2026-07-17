@@ -180,6 +180,9 @@ export const INFERRED = {
   conventionsHead: 'Machine-noticed conventions',
   conventionsGloss: 'Naming patterns the code repeats. What each one requires is yours to define.',
   statesHead: 'States read from code',
+  transitionsHead: 'Transitions read from code',
+  transitionsGloss:
+    'Where the code moves between states, read from how the states are used and verified against it - not yet vouched. What each trigger means beyond the code is yours to add.',
   stepsHead: 'Reaches',
   stepsGloss:
     'The areas this operation touches, read from its imports - not the order it runs them.',

@@ -117,6 +117,13 @@ CREATE TABLE artha_inferred_steps (
   note         TEXT,
   ord          INTEGER NOT NULL
 );
+CREATE TABLE artha_inferred_transitions (
+  inferred_id  TEXT NOT NULL,
+  from_state   TEXT NOT NULL,
+  to_state     TEXT NOT NULL,
+  trigger      TEXT NOT NULL,
+  ord          INTEGER NOT NULL
+);
 CREATE VIRTUAL TABLE artha_fts USING fts5(id UNINDEXED, heading, body);
 -- A parallel FTS over the inferred layer (21b-3). Kept separate from artha_fts so
 -- the machine layer's documents never enter the human corpus - adding them there
@@ -272,6 +279,19 @@ export interface InferredStepRow {
   ord: number;
 }
 
+/** One transition of an inferred state-machine candidate (21b-2): a directed edge
+ * the synthesizer proposed and the verifier grounded - `from_state`/`to_state`
+ * are always real members, `trigger` is grounded in the pinned usage code. Never
+ * emitted by 21a (which leaves transitions blank); filled only where `artha infer`
+ * grounded one, and reverts on drift. */
+export interface InferredTransitionRow {
+  inferred_id: string;
+  from_state: string;
+  to_state: string;
+  trigger: string;
+  ord: number;
+}
+
 export interface IndexData {
   facts: FactRow[];
   pins: PinRow[];
@@ -288,6 +308,7 @@ export interface IndexData {
   inferredPins: InferredPinRow[];
   inferredStates: InferredStateRow[];
   inferredSteps: InferredStepRow[];
+  inferredTransitions: InferredTransitionRow[];
 }
 
 /** Emit a fresh `.artha/index.db` from scratch (idempotent: same input → same rows). */
@@ -411,6 +432,14 @@ export function writeIndex(dbPath: string, data: IndexData): void {
     );
     for (const r of data.inferredSteps) {
       inferredStep.run(r.inferred_id, r.label, r.to_module, r.note ?? null, r.ord);
+    }
+
+    const inferredTransition = db.prepare(
+      `INSERT INTO artha_inferred_transitions (inferred_id, from_state, to_state, trigger, ord)
+       VALUES (?, ?, ?, ?, ?)`,
+    );
+    for (const r of data.inferredTransitions) {
+      inferredTransition.run(r.inferred_id, r.from_state, r.to_state, r.trigger, r.ord);
     }
 
     db.exec('COMMIT');

@@ -2078,6 +2078,24 @@ describe('inferred layer (21a) - moonlight', () => {
     expect(html).toContain('What the code can’t say'); // the delta band (D6)
   });
 
+  it('lists grounded transitions in moonlight once inferred (21b-2)', () => {
+    const enriched = {
+      ...inferredConcept,
+      confidence: 'inferred',
+      transitions: [
+        { from: 'pending', to: 'shipped', trigger: 'the order ships' },
+        { from: 'shipped', to: 'delivered', trigger: 'it arrives' },
+      ],
+    };
+    const html = markup(<InferredPage detail={enriched} />);
+    expect(html).toContain('moon-transitions'); // a moonlight list, not the chalk diagram
+    expect(html).toContain('Transitions read from code'); // its own section
+    expect(html).toContain('the order ships'); // a grounded trigger
+    expect(html).toContain('it arrives');
+    // the states chain still renders above it
+    expect(html).toContain('pending');
+  });
+
   it('every evidence pin carries a reveal-the-code toggle (D5)', () => {
     const html = markup(<InferredPage detail={inferredConcept} />);
     // the pin now offers to show its backing source, one interaction away

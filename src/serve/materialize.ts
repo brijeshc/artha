@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { ArthaIndex } from '../mcp/query';
 import { resolveIdentity } from '../review/actions';
 import { loadEntries, writeEntry } from '../schema/load';
-import type { ArthaEntry, Pin, State } from '../schema/types';
+import type { ArthaEntry, Pin, State, Transition } from '../schema/types';
 import { validateEntry } from '../schema/validate';
 import { inferredDetail } from './api';
 import type { WriteOutcome } from './write';
@@ -76,8 +76,17 @@ export function materializeInferred(
           status: 'proposed',
           name,
           summary,
-          // States read verbatim; their meaning + transitions stay the human delta.
+          // States read verbatim; each state's meaning (effect/invariant) stays the
+          // human delta. Machine-grounded transitions (21b-2) seed the draft the
+          // human corrects - never a blank diagram - when `artha infer` found any.
           states: view.states.map((s): State => ({ name: s })),
+          ...(view.transitions.length > 0
+            ? {
+                transitions: view.transitions.map(
+                  (t): Transition => ({ from: t.from, to: t.to, trigger: t.trigger }),
+                ),
+              }
+            : {}),
           pins,
           derived_from,
         }

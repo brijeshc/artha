@@ -44,10 +44,18 @@ export function verifySynthesis(
   if (evidence.length === 0) return UNCERTAIN;
 
   const vocabulary = groundedVocabulary(evidence, deterministic);
-  // Every synthesized sentence is checked together: the name, the summary, and
-  // each flow step's description (21b-2) - one ungrounded code claim anywhere
-  // downgrades the whole fact, since they share one confidence tier.
-  const claimed = [result.name, result.summary, ...result.steps.map((s) => s.text)].join('\n');
+  // Every synthesized sentence is checked together: the name, the summary, each
+  // flow step's description (21b-2), and each transition trigger (21b-2) - one
+  // ungrounded code claim anywhere downgrades the whole fact, since they share one
+  // confidence tier. (A transition's from/to are already real states - the caller
+  // drops any that are not before this runs - and states come from pinned code, so
+  // only the trigger, the free-text claim, needs grounding here.)
+  const claimed = [
+    result.name,
+    result.summary,
+    ...result.steps.map((s) => s.text),
+    ...result.transitions.map((t) => t.trigger),
+  ].join('\n');
   for (const token of codeAssertions(claimed)) {
     if (!isGrounded(token, vocabulary)) return UNCERTAIN;
   }

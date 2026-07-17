@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { type InferredLayer, inferLayer } from '../analytics/inferred';
 import { listSourceFiles, referenceGraph } from '../analytics/references';
 import { collectPins } from '../build/build';
-import type { InferredPinRow, InferredRow, InferredStepRow } from '../build/db';
+import type { InferredPinRow, InferredRow, InferredStateRow, InferredStepRow } from '../build/db';
 import type { ArthaConfig } from '../config/config';
 import type { SymbolResolver } from '../resolver/SymbolResolver';
 import { createTreeSitterResolver } from '../resolver/treeSitterResolver';
@@ -11,7 +11,13 @@ import { evidenceFor } from '../serve/evidence';
 import { logger } from '../util/logger';
 import { type SynthCache, evidenceHash, readSynthCache, writeSynthCache } from './cache';
 import { createInferrer } from './engine';
-import type { EvidenceExcerpt, Inferrer, SynthStep, SynthStepText } from './inferrer';
+import type {
+  EvidenceExcerpt,
+  Inferrer,
+  SynthStep,
+  SynthStepText,
+  SynthTransition,
+} from './inferrer';
 import { UNCERTAIN, verifySynthesis } from './verify';
 
 export interface InferOptions {
@@ -71,6 +77,7 @@ export async function infer(
 
   const pinsByFact = groupBy(layer.pins, (p) => p.inferred_id);
   const stepsByFact = groupBy(layer.steps, (s) => s.inferred_id);
+  const statesByFact = groupBy(layer.states, (s) => s.inferred_id);
   const cache = readSynthCache(arthaDir);
 
   // First pass: keep every still-valid cached synthesis (its pinned code is
@@ -114,23 +121,27 @@ export async function infer(
 
       const evidence = gatherEvidence(pins, resolver);
       const factSteps = stepsByFact.get(fact.id) ?? [];
+      const factStates = statesByFact.get(fact.id) ?? [];
       const result = await inferrer.synthesize({
         kind: fact.kind,
         heading: fact.heading,
         body: fact.body ?? '',
         evidence,
         steps: stepInputs(factSteps),
+        members: factStates.map((s) => s.name),
       });
       if (!result.enriched) {
         report.declined++;
         continue;
       }
 
-      // Keep only step text for modules the flow really reaches, then verify
-      // what we'll actually store - a dropped stray step never taints the tier.
+      // Keep only step text for modules the flow really reaches and transitions
+      // between real states, then verify what we'll actually store - a dropped
+      // stray step or fabricated-state edge never taints the tier.
       const steps = alignSteps(result.steps, factSteps);
+      const transitions = alignTransitions(result.transitions, factStates);
       const tier = verifySynthesis(
-        { ...result, steps },
+        { ...result, steps, transitions },
         evidence,
         `${fact.heading} ${fact.body ?? ''}`,
       );
@@ -139,6 +150,7 @@ export async function infer(
         name: result.name,
         summary: result.summary,
         steps,
+        transitions,
         confidence: tier,
       });
       report.synthesized.push({ id: fact.id, confidence: tier });
@@ -198,6 +210,27 @@ function alignSteps(synthesized: SynthStepText[], steps: InferredStepRow[]): Syn
     if (!reached.has(s.module) || seen.has(s.module)) continue;
     seen.add(s.module);
     out.push(s);
+  }
+  return out;
+}
+
+/** Keep only transitions between real states (21b-2): both endpoints must be
+ * members of the concept's own state set, so a fabricated state - the machine
+ * "completing" the diagram - is dropped before it can be stored or taint the
+ * tier. Deduped by the (from → to) pair; the trigger's grounding is the verifier's. */
+function alignTransitions(
+  synthesized: SynthTransition[],
+  states: InferredStateRow[],
+): SynthTransition[] {
+  const real = new Set(states.map((s) => s.name));
+  const seen = new Set<string>();
+  const out: SynthTransition[] = [];
+  for (const t of synthesized) {
+    if (!real.has(t.from) || !real.has(t.to)) continue;
+    const key = `${t.from} ${t.to}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
   }
   return out;
 }

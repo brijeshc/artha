@@ -99,6 +99,7 @@ export function InferredPage({
 }): JSX.Element {
   const modules = detail.module ? [detail.module] : [];
   const steps = detail.steps ?? [];
+  const transitions = detail.transitions ?? [];
   const isConvention = detail.kind === 'convention';
   let n = 0;
   const next = (): string => String(++n).padStart(2, '0');
@@ -136,6 +137,34 @@ export function InferredPage({
         <section className="cap-section">
           <SectionHead n={next()} title={INFERRED.statesHead} />
           <Chain items={detail.states} sep=" · " />
+        </section>
+      )}
+
+      {/* Transitions the model read from the state's usage code and the verifier
+          grounded (21b-2). A moonlight list, not the chalk lifecycle: a machine
+          reads many verbose triggers where a human writes a few short ones, and a
+          list stays readable where the diagram would tangle. Machine ink. */}
+      {transitions.length > 0 && (
+        <section className="cap-section">
+          <SectionHead
+            n={next()}
+            title={INFERRED.transitionsHead}
+            gloss={INFERRED.transitionsGloss}
+          />
+          <ul className="moon-transitions">
+            {transitions.map((t) => (
+              <li key={`${t.from}-${t.to}-${t.trigger}`} className="moon-transition">
+                <span className="moon-transition-edge mono">
+                  {t.from}
+                  <span className="moon-transition-arrow"> → </span>
+                  {t.to}
+                </span>
+                <span className="moon-transition-trigger">
+                  <CodeProse text={t.trigger} />
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

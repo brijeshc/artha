@@ -169,6 +169,51 @@ describe('inferLayer — the deterministic inferred layer (21a)', () => {
   });
 });
 
+describe('inferLayer — state-usage pins (the transition-evidence index, 21b-2)', () => {
+  let tmp: string;
+  let layer: InferredLayer;
+
+  beforeAll(async () => {
+    tmp = mkdtempSync(join(tmpdir(), 'artha-usage-pins-'));
+    const files: Record<string, string> = {
+      'src/order/state.ts': "export type OrderState = 'cart' | 'paid';\n",
+      'src/order/checkout.ts': [
+        "import type { OrderState } from './state';",
+        'export class Checkout {',
+        "  state: OrderState = 'cart';", // Checkout.state
+        '  pay(): void {',
+        "    this.state = 'paid';", // Checkout.pay
+        '  }',
+        '}',
+      ].join('\n'),
+    };
+    for (const [rel, content] of Object.entries(files)) {
+      mkdirSync(join(tmp, rel, '..'), { recursive: true });
+      writeFileSync(join(tmp, rel), content);
+    }
+    const resolver = await createTreeSitterResolver(tmp);
+    const list = listSourceFiles(tmp, ROOTS);
+    const refs = referenceGraph(list, (rel) => resolver.imports(rel), ROOTS);
+    layer = inferLayer(list, resolver, refs, new Set(), ROOTS);
+  });
+
+  afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+
+  it('pins the cross-file declarations that move the state, as `usage` evidence', () => {
+    const id = 'inferred:concept:src/order/state.ts#OrderState';
+    const pins = layer.pins.filter((p) => p.inferred_id === id);
+    // the declaration (evidence) plus the sites that move it (usage), all resolved
+    expect(pins.find((p) => p.role === 'evidence')?.symbol_ref).toBe(
+      'src/order/state.ts#OrderState',
+    );
+    expect(pins.filter((p) => p.role === 'usage').map((p) => p.symbol_ref)).toEqual([
+      'src/order/checkout.ts#Checkout.state',
+      'src/order/checkout.ts#Checkout.pay',
+    ]);
+    expect(pins.every((p) => /^[0-9a-f]{6}$/.test(p.content_hash ?? ''))).toBe(true);
+  });
+});
+
 /**
  * A repo built to exercise the convention extractor: one module with a `*Repo`
  * suffix cluster (and a below-threshold `load*` prefix), one with a `use*` prefix

@@ -164,6 +164,9 @@ export interface InferredFactView {
   states: string[];
   /** Ordered fan-out steps (flow kind); empty otherwise. Optional for a pre-slice-2 index. */
   steps?: InferredStepView[];
+  /** Grounded transitions (concept kind, 21b-2), drawn in moonlight; empty until
+   * `artha infer` grounds them. Optional for a pre-21b-2 index. */
+  transitions?: Array<{ from: string; to: string; trigger: string }>;
   pins: PinView[];
 }
 

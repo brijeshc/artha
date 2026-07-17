@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { InferredPinRow } from '../build/db';
-import type { SynthStepText } from './inferrer';
+import type { SynthStepText, SynthTransition } from './inferrer';
 
 /**
  * The synthesis cache (`.artha/.inferred.json`): what `artha infer` produced,
@@ -32,6 +32,8 @@ export interface SynthCacheEntry {
   summary: string;
   /** Per-step descriptions for a flow (21b-2); empty for other kinds. */
   steps: SynthStepText[];
+  /** Grounded transitions for a concept (21b-2); empty for other kinds. */
+  transitions: SynthTransition[];
   /** Verified confidence tier: `inferred` or `uncertain` (verify.ts). */
   confidence: string;
 }
@@ -40,9 +42,10 @@ export interface SynthCacheEntry {
 export type SynthCache = Map<string, SynthCacheEntry>;
 
 const CACHE_FILE = '.inferred.json';
-// v2 (21b-2): entries gained per-step text. A schema change invalidates the
-// cache - old entries re-infer rather than serve a shape the reader expects more from.
-const CACHE_VERSION = 2;
+// v3 (21b-2): entries gained concept transitions (v2 added per-step text). A
+// schema change invalidates the cache - old entries re-infer rather than serve a
+// shape the reader expects more from.
+const CACHE_VERSION = 3;
 
 function cachePath(arthaDir: string): string {
   return join(arthaDir, CACHE_FILE);
@@ -85,6 +88,7 @@ function parseCache(raw: unknown): SynthCache {
         name: e.name,
         summary: e.summary,
         steps: parseSteps(e.steps),
+        transitions: parseTransitions(e.transitions),
         confidence: e.confidence,
       });
     }
@@ -104,6 +108,20 @@ function parseSteps(value: unknown): SynthStepText[] {
     }
   }
   return steps;
+}
+
+/** Read cached transitions defensively: keep only entries with all three strings. */
+function parseTransitions(value: unknown): SynthTransition[] {
+  if (!Array.isArray(value)) return [];
+  const transitions: SynthTransition[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue;
+    const t = item as Record<string, unknown>;
+    if (typeof t.from === 'string' && typeof t.to === 'string' && typeof t.trigger === 'string') {
+      transitions.push({ from: t.from, to: t.to, trigger: t.trigger });
+    }
+  }
+  return transitions;
 }
 
 /**
