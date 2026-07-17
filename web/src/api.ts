@@ -142,10 +142,13 @@ export interface Catalog {
   inferredFlows?: InferredCatalogFlow[];
 }
 
-/** One step of an inferred flow skeleton (21a): a downstream area, linking to its module. */
+/** One step of an inferred flow skeleton (21a): a downstream area, linking to its
+ * module. `note` is the synthesized one-line description of what the flow does
+ * there (21b-2), null until `artha infer` fills it. */
 export interface InferredStepView {
   label: string;
   module: string | null;
+  note?: string | null;
 }
 
 /** One inferred fact (21a) as the dashboard reads it: a module card, a
@@ -161,6 +164,9 @@ export interface InferredFactView {
   states: string[];
   /** Ordered fan-out steps (flow kind); empty otherwise. Optional for a pre-slice-2 index. */
   steps?: InferredStepView[];
+  /** Grounded transitions (concept kind, 21b-2), drawn in moonlight; empty until
+   * `artha infer` grounds them. Optional for a pre-21b-2 index. */
+  transitions?: Array<{ from: string; to: string; trigger: string }>;
   pins: PinView[];
 }
 

@@ -99,6 +99,7 @@ export function InferredPage({
 }): JSX.Element {
   const modules = detail.module ? [detail.module] : [];
   const steps = detail.steps ?? [];
+  const transitions = detail.transitions ?? [];
   const isConvention = detail.kind === 'convention';
   let n = 0;
   const next = (): string => String(++n).padStart(2, '0');
@@ -139,10 +140,38 @@ export function InferredPage({
         </section>
       )}
 
+      {/* Transitions the model read from the state's usage code and the verifier
+          grounded (21b-2). A moonlight list, not the chalk lifecycle: a machine
+          reads many verbose triggers where a human writes a few short ones, and a
+          list stays readable where the diagram would tangle. Machine ink. */}
+      {transitions.length > 0 && (
+        <section className="cap-section">
+          <SectionHead
+            n={next()}
+            title={INFERRED.transitionsHead}
+            gloss={INFERRED.transitionsGloss}
+          />
+          <ul className="moon-transitions">
+            {transitions.map((t) => (
+              <li key={`${t.from}-${t.to}-${t.trigger}`} className="moon-transition">
+                <span className="moon-transition-edge mono">
+                  {t.from}
+                  <span className="moon-transition-arrow"> → </span>
+                  {t.to}
+                </span>
+                <span className="moon-transition-trigger">
+                  <CodeProse text={t.trigger} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {steps.length > 0 && (
         <section className="cap-section">
           <SectionHead n={next()} title={INFERRED.stepsHead} gloss={INFERRED.stepsGloss} />
-          <ul className="moon-steps">
+          <ul className={`moon-steps${steps.some((s) => s.note) ? ' moon-steps-noted' : ''}`}>
             {steps.map((s) => (
               <li key={s.module ?? s.label} className="moon-step">
                 {s.module ? (
@@ -151,6 +180,13 @@ export function InferredPage({
                   </a>
                 ) : (
                   s.label
+                )}
+                {/* what the flow does at this module, synthesized + verified
+                    against the entry's code (21b-2). The order stays unstated. */}
+                {s.note && (
+                  <span className="moon-step-note">
+                    <CodeProse text={s.note} />
+                  </span>
                 )}
               </li>
             ))}

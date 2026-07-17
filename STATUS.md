@@ -2,7 +2,7 @@
 
 A living, two-page summary.
 For the full detail, see [PROGRESS.md](PROGRESS.md) (the running log) and [tasks-v0.3/README.md](tasks-v0.3/README.md) (the current task index).
-Last updated: 2026-07-16 (task 23 complete; 21b-1 - the synthesis pipeline - done).
+Last updated: 2026-07-17 (task 23 complete; 21b-1, 21b-2, and 21b-3 done - only the `uncertain` render 21b-4 remains before 22).
 
 ## What we are building
 
@@ -84,7 +84,10 @@ The import graph and pin suggestions are fully automatic.
 ### Not done
 
 - **21b** - AI synthesis. Turning the deterministic candidates into richer prose, opt-in and spend-capped, with a verifier gate.
-  **21b-1 is done (2026-07-16)**: `artha infer` is the pipeline - a pluggable engine (reusing the mining backends), product-language names + readable summaries over the 21a candidates, incremental by a content-hash cache, and a verifier that grounds every claim in the pinned code and marks the ungrounded `uncertain`. `artha build` overlays it and reverts silently on drift. Left: transitions + flow-step text (21b-2), MCP serving the layer labeled below vouched (21b-3), and the `uncertain` render (21b-4).
+  **21b-1 is done (2026-07-16)**: `artha infer` is the pipeline - a pluggable engine (reusing the mining backends), product-language names + readable summaries over the 21a candidates, incremental by a content-hash cache, and a verifier that grounds every claim in the pinned code and marks the ungrounded `uncertain`. `artha build` overlays it and reverts silently on drift.
+  **21b-2 is done (2026-07-17)**: both halves. Flow-step text - each module a flow reaches carries one grounded, verifier-gated line saying what it does there (never the order). And **state-machine transitions** - a machine concept can now show *how* it moves between states, not just which states exist: a cross-file state-usage index pins the code that moves each state (usually in another file), the model proposes the transitions, a gate drops any edge between fabricated states and grounds each trigger against the code, and the concept lists them in moonlight. Vouching a concept now hands over its transitions as a draft to correct.
+  **21b-3 - MCP serving - is done (2026-07-17)**: `context_for_task` now hands the machine layer to an agent, labeled `[machine-described, unverified by team]` and ranked strictly below the team's vouched facts (in its own FTS corpus, so human ranking is untouched); on by default, never as certified. This is the piece that extends the agent's -56%-discovery value to a repo nobody has curated yet.
+  Left: only the `uncertain` render (21b-4).
 - **21c** - fully delivered except what 21b enriches.
 - **22** - the contradiction view: where the machine's read disagrees with what a human vouched.
 - **T18** - the ask-the-human interview.

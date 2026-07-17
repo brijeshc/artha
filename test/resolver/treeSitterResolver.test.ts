@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { ResolvedSymbol, SymbolResolver } from '../../src/resolver/SymbolResolver';
+import type { EnumLike, ResolvedSymbol, SymbolResolver } from '../../src/resolver/SymbolResolver';
 import { createTreeSitterResolver } from '../../src/resolver/treeSitterResolver';
 
 const REPO = join(__dirname, '..', 'fixtures', 'repo');
@@ -204,6 +204,88 @@ describe('treeSitterResolver — enumLikes (for inferred state machines, 21a)', 
     expect(decls.find((d) => d.name === 'SubscriptionStatus')?.exported).toBe(true);
     expect(decls.find((d) => d.name === 'NAME')?.exported).toBe(true);
     expect(decls.find((d) => d.name === 'Single')?.exported).toBe(false);
+  });
+});
+
+describe('treeSitterResolver — memberUsages (state-usage index, 21b-2)', () => {
+  let tmp: string;
+  let resolver: SymbolResolver;
+  const ORDER: EnumLike = {
+    name: 'OrderState',
+    kind: 'union',
+    members: ['cart', 'paid', 'shipped'],
+  };
+  const CHANNEL: EnumLike = { name: 'Channel', kind: 'enum', members: ['Email', 'Sms'] };
+
+  beforeAll(async () => {
+    tmp = mkdtempSync(join(tmpdir(), 'artha-usages-'));
+    mkdirSync(join(tmp, 'src'), { recursive: true });
+    // The declaring file: its own union literals sit in the type, not a value
+    // context, so they must NOT count as usages.
+    writeFileSync(
+      join(tmp, 'src', 'order.ts'),
+      "export type OrderState = 'cart' | 'paid' | 'shipped';\n",
+    );
+    // Another file that actually moves the state - assignment, comparison, init.
+    writeFileSync(
+      join(tmp, 'src', 'checkout.ts'),
+      [
+        "import type { OrderState } from './order';",
+        'export class Checkout {',
+        "  state: OrderState = 'cart';", // field init → Checkout.state
+        '  pay(): void {',
+        "    if (this.state === 'cart') this.state = 'paid';", // compare + assign → Checkout.pay
+        '  }',
+        '  ship(): void {',
+        "    this.state = 'shipped';", // assign → Checkout.ship
+        '  }',
+        '}',
+        'export function classify(s: OrderState): string {',
+        "  return s === 'paid' ? 'done' : 'pending';", // compare → classify
+        '}',
+        'export function noise(): void {',
+        "  console.log('cart');", // a member word as a bare call arg → NOT a state move
+        '}',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(tmp, 'src', 'notify.ts'),
+      'export enum Channel { Email, Sms }\nexport function send(): Channel {\n  return Channel.Email;\n}\n',
+    );
+    resolver = await createTreeSitterResolver(tmp);
+  });
+
+  afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+
+  it('finds the declarations that move a union state, across files, deduped in source order', () => {
+    expect(resolver.memberUsages('src/checkout.ts', ORDER)).toEqual([
+      'Checkout.state',
+      'Checkout.pay',
+      'Checkout.ship',
+      'classify',
+    ]);
+  });
+
+  it('excludes the declaration file and a member word in non-value context', () => {
+    // the type alias holds the literals but in no value context → no usages here
+    expect(resolver.memberUsages('src/order.ts', ORDER)).toEqual([]);
+    // `console.log('cart')` is a bare call arg, not an assign/compare/case → excluded
+    expect(resolver.memberUsages('src/checkout.ts', ORDER)).not.toContain('noise');
+  });
+
+  it('finds an Enum.Member access (namespaced, no context gate needed)', () => {
+    expect(resolver.memberUsages('src/notify.ts', CHANNEL)).toEqual(['send']);
+  });
+
+  it('returns [] for a non-JS/TS or missing file (never throws)', () => {
+    expect(resolver.memberUsages('src/data.json', ORDER)).toEqual([]);
+    expect(resolver.memberUsages('src/missing.ts', ORDER)).toEqual([]);
+  });
+
+  it('every usage ref resolves as a pin target', () => {
+    for (const q of resolver.memberUsages('src/checkout.ts', ORDER)) {
+      expect(resolver.resolve(`src/checkout.ts#${q}`)).not.toBeNull();
+    }
   });
 });
 

@@ -284,6 +284,104 @@ function collectEnumLikes(root: Parser.SyntaxNode): EnumLike[] {
   return out;
 }
 
+const COMPARISON_OPS = new Set(['===', '!==', '==', '!=']);
+
+/**
+ * Is this string-literal node a state *value* - assigned, compared, `case`d,
+ * initialized, or returned - rather than incidental prose? The gate that keeps a
+ * union member that happens to be a common word (`'active'`, `'open'`) from
+ * pulling in unrelated code. Precision over recall.
+ */
+function isStateLiteralContext(lit: Parser.SyntaxNode): boolean {
+  const p = lit.parent;
+  if (!p) return false;
+  // A string literal can never be an assignment target, a declarator/field name,
+  // or a case selector's own operator, so a literal sitting *directly* under any
+  // of these is the value - no need to match by node identity (web-tree-sitter
+  // hands back a fresh wrapper on each access, so `=== lit` never holds anyway).
+  switch (p.type) {
+    case 'binary_expression': {
+      const op = p.childForFieldName('operator')?.text;
+      return op !== undefined && COMPARISON_OPS.has(op);
+    }
+    case 'assignment_expression':
+    case 'public_field_definition':
+    case 'variable_declarator':
+    case 'switch_case':
+    case 'return_statement':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * The qualified name (`fn` / `Class.method`) of the top-level declaration that
+ * encloses `node`, mirroring exactly what {@link findSymbol} can resolve, or
+ * `null` when the usage sits somewhere unpinnable (a bare top-level statement, a
+ * nested closure whose name does not resolve). So every returned ref is a valid pin.
+ */
+function enclosingQualifiedName(node: Parser.SyntaxNode): string | null {
+  let top = node;
+  while (top.parent && top.parent.type !== 'program') top = top.parent;
+  const decl = unwrapExport(top);
+  if (!decl) return null;
+
+  if (CLASS_TYPES.has(decl.type)) {
+    const className = nameOf(decl);
+    if (!className) return null;
+    for (let cur: Parser.SyntaxNode | null = node; cur && cur !== decl; cur = cur.parent) {
+      if (MEMBER_TYPES.has(cur.type)) {
+        const member = nameOf(cur);
+        return member ? `${className}.${member}` : className;
+      }
+    }
+    return className; // inside the class body but not a resolvable member (rare)
+  }
+  if (NAMED_DECLARATIONS.has(decl.type)) return nameOf(decl) ?? null;
+  if (decl.type === 'lexical_declaration' || decl.type === 'variable_declaration') {
+    for (let cur: Parser.SyntaxNode | null = node; cur && cur !== decl; cur = cur.parent) {
+      if (cur.type === 'variable_declarator') return nameOf(cur) ?? null;
+    }
+  }
+  return null;
+}
+
+/**
+ * The declarations in a file that use a state (21b-2). For a union, a member
+ * appears as a string literal in a value context (assign/compare/case/init/
+ * return); for an enum, an `Enum.Member` access. Each is rolled up to its
+ * enclosing resolvable declaration, deduped, in source order. The declaration's
+ * own body is excluded by construction - its literals sit in `literal_type`, not
+ * a value context.
+ */
+function collectMemberUsages(root: Parser.SyntaxNode, state: EnumLike): string[] {
+  const members = new Set(state.members);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (node: Parser.SyntaxNode): void => {
+    const ref = enclosingQualifiedName(node);
+    if (ref && !seen.has(ref)) {
+      seen.add(ref);
+      out.push(ref);
+    }
+  };
+  const visit = (node: Parser.SyntaxNode): void => {
+    if (state.kind === 'union' && node.type === 'string') {
+      const s = literalString(node);
+      if (s !== null && members.has(s) && isStateLiteralContext(node)) add(node);
+    } else if (state.kind === 'enum' && node.type === 'member_expression') {
+      const prop = node.childForFieldName('property');
+      if (node.childForFieldName('object')?.text === state.name && prop && members.has(prop.text)) {
+        add(node);
+      }
+    }
+    for (const child of node.namedChildren) visit(child);
+  };
+  visit(root);
+  return out;
+}
+
 /**
  * The literal value of a static string specifier (`'./x'`, `` `./x` ``), or
  * `null` for a computed one (a template with `${…}` substitutions can't be
@@ -447,5 +545,12 @@ export async function createTreeSitterResolver(repoRoot: string): Promise<Symbol
     return parsed ? collectEnumLikes(parsed.root) : [];
   }
 
-  return { resolve, hash, list, enumLikes, imports };
+  function memberUsages(relPath: string, state: EnumLike): string[] {
+    const lang = langForExt(extname(relPath));
+    if (lang === null) return [];
+    const parsed = parseFile(join(repoRoot, relPath), lang);
+    return parsed ? collectMemberUsages(parsed.root, state) : [];
+  }
+
+  return { resolve, hash, list, enumLikes, imports, memberUsages };
 }

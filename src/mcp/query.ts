@@ -7,6 +7,7 @@ import {
   type InferredRow,
   type InferredStateRow,
   type InferredStepRow,
+  type InferredTransitionRow,
   type PinRow,
   type RefRow,
   type RelatedRow,
@@ -47,14 +48,21 @@ export interface ArthaIndex {
   readonly inferredStates: InferredStateRow[];
   /** Ordered fan-out steps for inferred flow skeletons (21a). */
   readonly inferredSteps: InferredStepRow[];
+  /** Grounded transitions for inferred state-machine candidates (21b-2). Empty
+   * until `artha infer` grounds them; reverts on drift. */
+  readonly inferredTransitions: InferredTransitionRow[];
   /** Fact id → embedding vector (T14). Empty for pre-T14 / no-embedding indexes. */
   readonly embeddings: Map<string, Float32Array>;
   /** The model that produced the vectors, for query-side model matching; null if none. */
   readonly embeddingModel: string | null;
   /** True when there is no index file or it holds no facts (cold start). */
   readonly empty: boolean;
-  /** FTS5 MATCH over heading+body → `fact id → bm25` (lower = better). Empty on blank/invalid query. */
+  /** FTS5 MATCH over human facts' heading+body → `fact id → bm25` (lower = better). Empty on blank/invalid query. */
   fts(query: string): Map<string, number>;
+  /** FTS5 MATCH over the inferred layer's heading+body (21b-3), a separate corpus
+   * from {@link fts} so the machine layer never perturbs human bm25. Empty on a
+   * blank/invalid query or a pre-21b-3 index (no table). */
+  inferredFts(query: string): Map<string, number>;
   close(): void;
 }
 
@@ -71,10 +79,12 @@ const EMPTY: ArthaIndex = {
   inferredPins: [],
   inferredStates: [],
   inferredSteps: [],
+  inferredTransitions: [],
   embeddings: new Map(),
   embeddingModel: null,
   empty: true,
   fts: () => new Map(),
+  inferredFts: () => new Map(),
   close: () => {},
 };
 
@@ -103,6 +113,7 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
     const inferredPins = selectAll<InferredPinRow>(db, 'artha_inferred_pins');
     const inferredStates = selectAll<InferredStateRow>(db, 'artha_inferred_states');
     const inferredSteps = selectAll<InferredStepRow>(db, 'artha_inferred_steps');
+    const inferredTransitions = selectAll<InferredTransitionRow>(db, 'artha_inferred_transitions');
     const { embeddings, embeddingModel } = loadEmbeddings(db);
     const handle = db;
     return {
@@ -118,10 +129,12 @@ export function openArthaIndex(dbPath: string): ArthaIndex {
       inferredPins,
       inferredStates,
       inferredSteps,
+      inferredTransitions,
       embeddings,
       embeddingModel,
       empty: facts.length === 0,
-      fts: (query) => runFts(handle, query),
+      fts: (query) => runFts(handle, query, 'artha_fts'),
+      inferredFts: (query) => runFts(handle, query, 'artha_inferred_fts'),
       close: () => {
         try {
           handle.close();
@@ -181,13 +194,16 @@ function loadEmbeddings(db: DatabaseSync): {
   return { embeddings, embeddingModel };
 }
 
-function runFts(db: DatabaseSync, raw: string): Map<string, number> {
+/** Run the sanitized FTS query against one FTS5 table (`table` is a fixed literal
+ * from the caller, never user input). A pre-21b-3 index lacks `artha_inferred_fts`;
+ * the catch turns that (and any malformed MATCH) into an empty result, never a crash. */
+function runFts(db: DatabaseSync, raw: string, table: string): Map<string, number> {
   const match = toFtsQuery(raw);
   if (match === '') return new Map();
   try {
     const rows = db
       .prepare(
-        'SELECT id, bm25(artha_fts) AS score FROM artha_fts WHERE artha_fts MATCH ? ORDER BY score',
+        `SELECT id, bm25(${table}) AS score FROM ${table} WHERE ${table} MATCH ? ORDER BY score`,
       )
       .all(match) as unknown as Array<{ id: string; score: number }>;
     return new Map(rows.map((row) => [row.id, row.score]));

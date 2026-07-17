@@ -12,31 +12,55 @@ import {
   type RankInput,
   type RankedItem,
   fileOf,
+  formatInferredItem,
   formatItem,
   normRef,
   rankFacts,
+  rankInferred,
+  selectInferredWithinBudget,
   selectWithinBudget,
   statusRank,
 } from './rank';
 
 /**
  * Build the ranked, token-budgeted context bundle for a task as agent-facing
- * text. Certified-only unless `includeProposed`; stale excluded. Empty/cold
- * index → a short, actionable message (never an error).
+ * text. Vouched (certified) facts fill the budget first; proposed drafts join
+ * only with `includeProposed`; the machine-described inferred layer (21b-3) is
+ * included by default, clearly labeled and seated strictly **below** every human
+ * fact, so it can only ever use budget the team's own context left over. Stale is
+ * always excluded. Empty/cold index → a short, actionable message (never an error).
  */
 export function contextBundle(
   index: ArthaIndex,
   input: RankInput,
   budget = DEFAULT_TOKEN_BUDGET,
 ): string {
-  const ranked = rankFacts(index, input);
-  if (ranked.length === 0) {
+  const human = selectWithinBudget(rankFacts(index, input), budget);
+
+  // Machine-described facts fill only the remainder; a repo with nothing vouched
+  // still gets a useful (labeled) bundle, so force the top one when human is empty.
+  const inferred =
+    input.includeInferred === false
+      ? { kept: [], dropped: 0, approxTokens: 0 }
+      : selectInferredWithinBudget(
+          rankInferred(index, input),
+          budget,
+          human.approxTokens,
+          human.kept.length === 0,
+        );
+
+  const blocks: string[] = [];
+  if (human.kept.length > 0) blocks.push(human.kept.map(formatItem).join('\n\n'));
+  if (inferred.kept.length > 0) blocks.push(inferred.kept.map(formatInferredItem).join('\n\n'));
+
+  if (blocks.length === 0) {
     return input.includeProposed
-      ? 'No matching product context found (certified or proposed).'
-      : 'No certified context found for this task. Retry with include_proposed: true to also see unreviewed drafts.';
+      ? 'No matching context found for this task.'
+      : 'No matching context found for this task. Retry with include_proposed: true to also see unreviewed drafts.';
   }
-  const { kept, dropped } = selectWithinBudget(ranked, budget);
-  const body = kept.map(formatItem).join('\n\n');
+
+  const body = blocks.join('\n\n');
+  const dropped = human.dropped + inferred.dropped;
   return dropped > 0
     ? `${body}\n\n(+${dropped} lower-ranked item(s) omitted to fit the ~${budget}-token budget.)`
     : body;
@@ -95,10 +119,11 @@ export function whyBundle(index: ArthaIndex, symbol: string): string {
 // Advertised to the client at initialize so an agent knows to consult Artha
 // *before* rediscovering the team's conventions by reading/grepping many files.
 const ARTHA_INSTRUCTIONS =
-  "Artha serves this team's certified product context — the decisions, conventions, and " +
-  'invariants behind this codebase. Before writing or changing code, call `context_for_task` ' +
-  'with a short description of what you are about to do (plus any symbols or files you will ' +
-  'touch) to load the relevant certified context, and `why` to learn why a specific symbol ' +
+  "Artha serves this codebase's product context — the decisions, conventions, and invariants " +
+  'the team has vouched, plus a machine-described layer read straight from the code (clearly ' +
+  'labeled, and always ranked below the vouched facts). Before writing or changing code, call ' +
+  '`context_for_task` with a short description of what you are about to do (plus any symbols or ' +
+  'files you will touch) to load the relevant context, and `why` to learn why a specific symbol ' +
   "exists. Prefer these over rediscovering the team's conventions by reading or grepping files.";
 
 export interface ServerOptions {
@@ -132,11 +157,13 @@ export function createArthaServer(options: ServerOptions = {}): McpServer {
   server.registerTool(
     'context_for_task',
     {
-      title: 'Certified context for a task',
+      title: 'Product context for a task',
       description:
         'Ranked, token-budgeted product decisions/conventions/invariants relevant to a task. ' +
-        'Certified-only by default; pass the symbols/files the task touches for structural ranking, ' +
-        'and include_proposed: true to also surface unreviewed drafts (clearly labeled).',
+        'Vouched (certified) facts first; pass the symbols/files the task touches for structural ' +
+        'ranking. A machine-described layer read from the code is included by default, clearly ' +
+        'labeled and ranked below vouched facts (set include_inferred: false for vouched-only). ' +
+        'include_proposed: true also surfaces unreviewed human drafts.',
       inputSchema: {
         task: z.string().describe('What you are about to do, in natural language.'),
         symbols: z
@@ -150,7 +177,13 @@ export function createArthaServer(options: ServerOptions = {}): McpServer {
         include_proposed: z
           .boolean()
           .optional()
-          .describe('Also return unreviewed proposed drafts (default false → certified only).'),
+          .describe('Also return unreviewed proposed human drafts (default false).'),
+        include_inferred: z
+          .boolean()
+          .optional()
+          .describe(
+            'Include the machine-described layer, labeled and below vouched facts (default true).',
+          ),
       },
     },
     async (args) => {
@@ -165,6 +198,7 @@ export function createArthaServer(options: ServerOptions = {}): McpServer {
             symbols: args.symbols,
             files: args.files,
             includeProposed: args.include_proposed ?? false,
+            includeInferred: args.include_inferred ?? true,
             queryEmbedding,
           },
           budget,

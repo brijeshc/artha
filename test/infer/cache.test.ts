@@ -25,26 +25,58 @@ function sample(): SynthCache {
   return new Map([
     [
       'inferred:module:src/billing',
-      { evidenceHash: 'aaa', name: 'Billing', summary: 'S1', confidence: 'inferred' },
+      {
+        evidenceHash: 'aaa',
+        name: 'Billing',
+        summary: 'S1',
+        steps: [],
+        transitions: [],
+        confidence: 'inferred',
+      },
     ],
     [
-      'inferred:concept:src/o.ts#X',
-      { evidenceHash: 'bbb', name: 'X', summary: 'S2', confidence: 'uncertain' },
+      'inferred:flow:src/checkout#placeOrder',
+      {
+        evidenceHash: 'bbb',
+        name: 'Place order',
+        summary: 'S2',
+        steps: [{ module: 'src/billing', text: 'charges the card' }],
+        transitions: [],
+        confidence: 'uncertain',
+      },
+    ],
+    [
+      'inferred:concept:src/billing/order.ts#OrderState',
+      {
+        evidenceHash: 'ccc',
+        name: 'Order lifecycle',
+        summary: 'S3',
+        steps: [],
+        transitions: [{ from: 'cart', to: 'paid', trigger: 'payment succeeds' }],
+        confidence: 'inferred',
+      },
     ],
   ]);
 }
 
 describe('synthesis cache round-trip', () => {
-  it('writes and reads back the same entries', () => {
+  it('writes and reads back the same entries, including flow step text + transitions', () => {
     writeSynthCache(arthaDir, sample());
     const back = readSynthCache(arthaDir);
     expect(back.get('inferred:module:src/billing')).toEqual({
       evidenceHash: 'aaa',
       name: 'Billing',
       summary: 'S1',
+      steps: [],
+      transitions: [],
       confidence: 'inferred',
     });
-    expect(back.get('inferred:concept:src/o.ts#X')?.confidence).toBe('uncertain');
+    expect(back.get('inferred:flow:src/checkout#placeOrder')?.steps).toEqual([
+      { module: 'src/billing', text: 'charges the card' },
+    ]);
+    expect(back.get('inferred:concept:src/billing/order.ts#OrderState')?.transitions).toEqual([
+      { from: 'cart', to: 'paid', trigger: 'payment succeeds' },
+    ]);
   });
 
   it('reads a missing file as an empty cache', () => {
@@ -56,8 +88,17 @@ describe('synthesis cache round-trip', () => {
     expect(readSynthCache(arthaDir).size).toBe(0);
   });
 
-  it('discards a cache written by a different version', () => {
-    writeFileSync(cachePath(), JSON.stringify({ version: 999, entries: { x: {} } }));
+  it('discards a cache written by a superseded schema version (forces re-infer)', () => {
+    // v2 (21b-2 step text, no transitions) is discarded by the v3 reader, not misread.
+    writeFileSync(
+      cachePath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          x: { evidenceHash: 'h', name: 'n', summary: 's', steps: [], confidence: 'inferred' },
+        },
+      }),
+    );
     expect(readSynthCache(arthaDir).size).toBe(0);
   });
 
@@ -65,7 +106,7 @@ describe('synthesis cache round-trip', () => {
     writeFileSync(
       cachePath(),
       JSON.stringify({
-        version: 1,
+        version: 3,
         entries: {
           good: { evidenceHash: 'h', name: 'n', summary: 's', confidence: 'inferred' },
           bad: { evidenceHash: 'h', name: 'n' }, // no summary/confidence
@@ -74,6 +115,8 @@ describe('synthesis cache round-trip', () => {
     );
     const cache = readSynthCache(arthaDir);
     expect([...cache.keys()]).toEqual(['good']);
+    // steps/transitions default to empty when absent - a forward-compatible read.
+    expect(cache.get('good')?.transitions).toEqual([]);
   });
 
   it('writes sorted, so re-saving the same map is byte-identical regardless of order', () => {

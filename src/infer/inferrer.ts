@@ -26,6 +26,14 @@ export interface EvidenceExcerpt {
   lines: string[];
 }
 
+/** One reached module a flow fans out to (21a), for the synthesizer to describe. */
+export interface SynthStep {
+  /** The reached module id (`src/billing`); the key the description is aligned to. */
+  module: string;
+  /** The deterministic label (`Billing`), for context in the prompt. */
+  label: string;
+}
+
 /** What the synthesizer sees for one 21a candidate. */
 export interface SynthInput {
   /** `module` · `concept` · `flow` · `convention` - shapes the prompt's ask. */
@@ -36,16 +44,48 @@ export interface SynthInput {
   body: string;
   /** The pinned code every claim must stay grounded in. May be empty (drifted). */
   evidence: EvidenceExcerpt[];
+  /** A flow's reached modules (21b-2), for a one-line description of each. Empty
+   * for non-flows. The *order* stays the human's delta (D8) - only what the flow
+   * does at each module is read from the entry's code. */
+  steps?: SynthStep[];
+  /** A concept's states read from code (21b-2), the only names a proposed
+   * transition may use. Empty for non-concepts. */
+  members?: string[];
+}
+
+/** A synthesized description of what a flow does at one reached module (21b-2). */
+export interface SynthStepText {
+  /** The reached module id this describes - aligns back to the 21a step. */
+  module: string;
+  /** One grounded line: what the flow does at this module. */
+  text: string;
+}
+
+/** A synthesized state-machine transition (21b-2): a directed edge the model read
+ * from the state's usage code. `from`/`to` must be real states (the verifier drops
+ * any that are not); `trigger` must be grounded (or the whole concept downgrades). */
+export interface SynthTransition {
+  from: string;
+  to: string;
+  trigger: string;
 }
 
 /**
  * The synthesizer's verdict for one candidate: either an enrichment (a better
- * name + a readable summary) or an honest refusal (`enriched: false`), which
- * leaves the 21a deterministic text in place. A refusal is not a failure - a
- * candidate the model cannot describe more clearly than the code already does
- * keeps its factual 21a card.
+ * name + a readable summary, plus per-step text for a flow and transitions for a
+ * concept) or an honest refusal (`enriched: false`), which leaves the 21a
+ * deterministic text in place. A refusal is not a failure - a candidate the model
+ * cannot describe more clearly than the code already does keeps its factual card.
  */
-export type SynthResult = { enriched: true; name: string; summary: string } | { enriched: false };
+export type SynthResult =
+  | {
+      enriched: true;
+      name: string;
+      summary: string;
+      steps: SynthStepText[];
+      transitions: SynthTransition[];
+    }
+  | { enriched: false };
 
 /**
  * Pluggable synthesizer. Mirrors {@link '../mine/miner'.Miner}: one method, two
@@ -81,8 +121,44 @@ export const SYNTH_OUTPUT_SCHEMA = {
       description:
         'Two to three plain-language sentences a non-author can read aloud, grounded only in the shown code. Empty string if not enriched.',
     },
+    steps: {
+      type: 'array',
+      description:
+        'For a flow only: one entry per reached module listed in the prompt, describing what the flow does there, grounded in the shown code. Empty array for any other kind, or when the code does not show what happens at a module.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          module: { type: 'string', description: 'The exact reached-module id from the prompt.' },
+          text: {
+            type: 'string',
+            description: 'One line: what the flow does at this module, read from the code.',
+          },
+        },
+        required: ['module', 'text'],
+      },
+    },
+    transitions: {
+      type: 'array',
+      description:
+        'For a concept/state-machine only: directed transitions the shown code makes evident. Each {from, to} must be two of the exact state names listed in the prompt, and `trigger` must be read from the code (the condition or event that moves it). Empty array for any other kind, or when the code does not show a transition.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          from: { type: 'string', description: 'The exact source state name from the prompt.' },
+          to: { type: 'string', description: 'The exact target state name from the prompt.' },
+          trigger: {
+            type: 'string',
+            description:
+              'What moves it from → to, read from the code (a condition, event, method).',
+          },
+        },
+        required: ['from', 'to', 'trigger'],
+      },
+    },
   },
-  required: ['enriched', 'name', 'summary'],
+  required: ['enriched', 'name', 'summary', 'steps', 'transitions'],
 } as const;
 
 export const SYNTH_SYSTEM_PROMPT = `You describe one unit of a codebase (a module, a concept/state-machine, a flow, or a naming convention) in plain product language, for a reader who did not write it.
@@ -90,28 +166,46 @@ export const SYNTH_SYSTEM_PROMPT = `You describe one unit of a codebase (a modul
 You are shown a deterministic draft (read mechanically from the code) and the exact source it was read from. Your job is to make it READABLE, not to add facts:
 - name: a short name a product manager would say out loud ("Subscription lifecycle", "Refund a purchase"), never a restated file path. Prefer the domain word over the code word.
 - summary: two to three sentences describing what this does, grounded ONLY in the shown source. A non-author should be able to read it aloud and understand the unit's role.
+- steps: ONLY when the prompt lists "Reaches" modules (a flow). For each reached module, write one line describing what the flow does there, read from the shown code (e.g. "charges the customer's card", "sends an order confirmation"). Do NOT describe the order the steps run in - that is unknown. Omit a module you cannot ground in the code. For any other kind, return an empty array.
+- transitions: ONLY when the prompt lists "States" (a concept/state-machine). Return the directed transitions the shown code makes evident - each {from, to} using ONLY the exact state names listed, and a trigger read from the code (the condition or event that moves it). Omit any transition the code does not show; do NOT complete the diagram by guessing. For any other kind, return an empty array.
 
 Hard rules:
 - Ground every claim in the shown code. Do NOT invent behaviour, rationale, or the "why" - the reasons behind the code are the human's to add, never yours.
 - Do not name libraries, services, or mechanisms that do not appear in the shown source.
+- For transitions: never invent an edge to make the machine look complete. A missing transition is correct; a guessed one is a lie.
 - If you cannot describe it more clearly than the deterministic draft already does, set enriched=false and return empty strings. A factual draft is better than a vague embellishment.
 
 Respond with ONLY a JSON object of this exact shape - no markdown fences, no commentary:
-{"enriched": boolean, "name": string, "summary": string}`;
+{"enriched": boolean, "name": string, "summary": string, "steps": [{"module": string, "text": string}], "transitions": [{"from": string, "to": string, "trigger": string}]}`;
 
 /** Render the per-candidate user prompt: the draft + its pinned evidence. */
 export function renderSynthPrompt(input: SynthInput): string {
   const evidence = renderEvidence(input.evidence);
-  return [
+  const lines = [
     `Unit kind: ${input.kind}`,
     `Deterministic name: ${input.heading}`,
     `Deterministic description: ${input.body}`,
+  ];
+  if (input.steps && input.steps.length > 0) {
+    lines.push(
+      `Reaches (describe what the flow does at each, using this exact module id): ${input.steps
+        .map((s) => `${s.module} (${s.label})`)
+        .join(', ')}`,
+    );
+  }
+  if (input.members && input.members.length > 0) {
+    lines.push(
+      `States (propose only transitions the code shows, using these exact names): ${input.members.join(', ')}`,
+    );
+  }
+  lines.push(
     '',
     'Source this was read from:',
     evidence === ''
       ? '(no resolvable source - describe from the draft alone, cautiously)'
       : evidence,
-  ].join('\n');
+  );
+  return lines.join('\n');
 }
 
 /** Concatenate the evidence excerpts, bounded by {@link MAX_EVIDENCE_CHARS}. */
@@ -148,7 +242,45 @@ export function parseSynthResponse(text: string): SynthResult {
   const name = str(obj.name);
   const summary = str(obj.summary);
   if (name === '' || summary === '') return { enriched: false };
-  return { enriched: true, name, summary };
+  return {
+    enriched: true,
+    name,
+    summary,
+    steps: parseSteps(obj.steps),
+    transitions: parseTransitions(obj.transitions),
+  };
+}
+
+/** Read the optional per-step text, keeping only entries with a real module +
+ * text. A malformed or absent `steps` is simply no step text (never a throw). */
+function parseSteps(value: unknown): SynthStepText[] {
+  if (!Array.isArray(value)) return [];
+  const steps: SynthStepText[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue;
+    const s = item as Record<string, unknown>;
+    const module = str(s.module);
+    const text = str(s.text);
+    if (module !== '' && text !== '') steps.push({ module, text });
+  }
+  return steps;
+}
+
+/** Read the optional transitions, keeping only entries with all three fields. A
+ * malformed or absent `transitions` is simply none (never a throw); the verifier
+ * later drops any whose from/to are not real states. */
+function parseTransitions(value: unknown): SynthTransition[] {
+  if (!Array.isArray(value)) return [];
+  const transitions: SynthTransition[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue;
+    const t = item as Record<string, unknown>;
+    const from = str(t.from);
+    const to = str(t.to);
+    const trigger = str(t.trigger);
+    if (from !== '' && to !== '' && trigger !== '') transitions.push({ from, to, trigger });
+  }
+  return transitions;
 }
 
 /** Slice out the first complete `{…}` object so fenced/prose-wrapped JSON still parses. */

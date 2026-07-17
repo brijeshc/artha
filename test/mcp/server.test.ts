@@ -6,7 +6,11 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type ArthaIndex, openArthaIndex } from '../../src/mcp/query';
 import { contextBundle, createArthaServer, whyBundle } from '../../src/mcp/server';
-import { writeFixtureIndex } from './fixture';
+import {
+  writeFixtureIndex,
+  writeFixtureIndexWithInferred,
+  writeInferredOnlyIndex,
+} from './fixture';
 
 let dir: string;
 let dbPath: string;
@@ -34,7 +38,7 @@ describe('contextBundle', () => {
   it('returns an actionable message on a cold/empty index (not an error)', () => {
     const index = openArthaIndex(dbPath); // never built
     const text = contextBundle(index, { task: 'money' });
-    expect(text).toMatch(/no certified context/i);
+    expect(text).toMatch(/no matching context/i);
     expect(text).toMatch(/include_proposed/);
     index.close();
   });
@@ -62,6 +66,53 @@ describe('contextBundle', () => {
       const text = contextBundle(index, { task: 'money cents' }, 3);
       expect(text).toMatch(/omitted to fit/);
     });
+  });
+});
+
+describe('contextBundle — the machine layer (21b-3)', () => {
+  function withInferred<T>(fn: (index: ArthaIndex) => T): T {
+    writeFixtureIndexWithInferred(dbPath);
+    const index = openArthaIndex(dbPath);
+    try {
+      return fn(index);
+    } finally {
+      index.close();
+    }
+  }
+
+  it('includes machine-described facts by default, labeled and below vouched facts', () => {
+    withInferred((index) => {
+      const text = contextBundle(index, { task: 'money cents' });
+      expect(text).toContain('[certified]');
+      expect(text).toContain('decision.money');
+      expect(text).toContain('[machine-described, unverified by team]');
+      expect(text).toContain('inferred:module:src/money');
+      // the vouched fact is served strictly above the machine-described one
+      expect(text.indexOf('decision.money')).toBeLessThan(
+        text.indexOf('inferred:module:src/money'),
+      );
+    });
+  });
+
+  it('omits the machine layer entirely when include_inferred is false', () => {
+    withInferred((index) => {
+      const text = contextBundle(index, { task: 'money cents', includeInferred: false });
+      expect(text).toContain('decision.money');
+      expect(text).not.toContain('machine-described');
+    });
+  });
+
+  it('still serves the machine layer when nothing is vouched (D1: value before ask)', () => {
+    writeInferredOnlyIndex(dbPath);
+    const index = openArthaIndex(dbPath);
+    try {
+      const text = contextBundle(index, { task: 'money' });
+      expect(text).toContain('[machine-described, unverified by team]');
+      expect(text).toContain('inferred:module:src/money');
+      expect(text).not.toContain('[certified]'); // there is nothing vouched to serve
+    } finally {
+      index.close();
+    }
   });
 });
 
@@ -137,6 +188,30 @@ describe('MCP protocol round-trip (in-memory transport)', () => {
         arguments: { symbol: 'src/money.ts#toCents' },
       });
       expect(textOf(why)).toContain('decision.money');
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('serves the machine layer over the wire, labeled, and honors include_inferred', async () => {
+    writeFixtureIndexWithInferred(dbPath);
+    const server = createArthaServer({ repoRoot: dir, tokenBudget: 1500 });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'test', version: '0.0.0' });
+    await client.connect(clientTransport);
+    try {
+      const on = await client.callTool({ name: 'context_for_task', arguments: { task: 'money' } });
+      const onText = textOf(on);
+      expect(onText).toContain('[machine-described, unverified by team]');
+      expect(onText).toContain('inferred:module:src/money');
+
+      const off = await client.callTool({
+        name: 'context_for_task',
+        arguments: { task: 'money', include_inferred: false },
+      });
+      expect(textOf(off)).not.toContain('machine-described');
     } finally {
       await client.close();
       await server.close();

@@ -16,6 +16,8 @@ import {
   type IndexData,
   type InferredPinRow,
   type InferredRow,
+  type InferredStepRow,
+  type InferredTransitionRow,
   type PinRow,
   type ProvenanceRow,
   type RelatedRow,
@@ -176,7 +178,14 @@ export async function buildIndex(
     // deterministic candidates, but only where the pinned code is unchanged: a
     // content-hash match keeps the description honest; drift silently falls back
     // to the 21a text (D12 — moonlight regenerates quietly, nothing to maintain).
-    report.enriched = overlaySynthesis(arthaDir, data.inferred, data.inferredPins);
+    const overlay = overlaySynthesis(
+      arthaDir,
+      data.inferred,
+      data.inferredPins,
+      data.inferredSteps,
+    );
+    report.enriched = overlay.enriched;
+    data.inferredTransitions = overlay.transitions;
   }
 
   // T14 — build-time embeddings (best-effort, offline-by-default). Read the
@@ -328,6 +337,7 @@ function toIndexData(
     inferredPins: [],
     inferredStates: [],
     inferredSteps: [],
+    inferredTransitions: [],
   };
 }
 
@@ -341,11 +351,18 @@ function toIndexData(
  * applies only when its `evidenceHash` still matches the fact's current pins -
  * so a description read from code that has since changed is dropped, not shown
  * (D12). Overwrites the name (`heading`), prose (`body`), and `confidence`
- * (`inferred`/`uncertain`) in place; returns how many facts were enriched.
+ * (`inferred`/`uncertain`) in place, fills flow-step notes, and **produces** the
+ * concept transitions (which 21a never emits). Returns the enriched count and the
+ * transition rows for the index.
  */
-function overlaySynthesis(arthaDir: string, facts: InferredRow[], pins: InferredPinRow[]): number {
+function overlaySynthesis(
+  arthaDir: string,
+  facts: InferredRow[],
+  pins: InferredPinRow[],
+  steps: InferredStepRow[],
+): { enriched: number; transitions: InferredTransitionRow[] } {
   const cache = readSynthCache(arthaDir);
-  if (cache.size === 0) return 0;
+  if (cache.size === 0) return { enriched: 0, transitions: [] };
 
   const pinsByFact = new Map<string, InferredPinRow[]>();
   for (const pin of pins) {
@@ -355,6 +372,7 @@ function overlaySynthesis(arthaDir: string, facts: InferredRow[], pins: Inferred
   }
 
   let enriched = 0;
+  const applied = new Set<string>(); // fact ids whose evidence still matches
   for (const fact of facts) {
     const entry = cache.get(fact.id);
     if (!entry) continue;
@@ -362,9 +380,37 @@ function overlaySynthesis(arthaDir: string, facts: InferredRow[], pins: Inferred
     fact.heading = entry.name;
     fact.body = entry.summary;
     fact.confidence = entry.confidence;
+    applied.add(fact.id);
     enriched++;
   }
-  return enriched;
+
+  // Flow-step text (21b-2): fill each reached step's `note` from the matching
+  // cached description. Only for facts whose evidence still matched above, so a
+  // drifted flow's steps revert to bare labels alongside its reverted prose.
+  for (const step of steps) {
+    if (!applied.has(step.inferred_id) || !step.to_module) continue;
+    const note = cache.get(step.inferred_id)?.steps.find((s) => s.module === step.to_module);
+    if (note) step.note = note.text;
+  }
+
+  // Concept transitions (21b-2): 21a emits none, so these are created here from
+  // the cache - and only for a concept whose evidence still matches, so a drifted
+  // state machine loses its transitions alongside its reverted prose (D12).
+  const transitions: InferredTransitionRow[] = [];
+  for (const [id, entry] of cache) {
+    if (!applied.has(id)) continue;
+    entry.transitions.forEach((t, ord) =>
+      transitions.push({
+        inferred_id: id,
+        from_state: t.from,
+        to_state: t.to,
+        trigger: t.trigger,
+        ord,
+      }),
+    );
+  }
+
+  return { enriched, transitions };
 }
 
 /** Every pin an entry carries: its base pins plus, for a flow, its entry pins

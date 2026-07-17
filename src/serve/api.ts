@@ -289,15 +289,29 @@ export interface InferredFactView {
   states: string[];
   /** Ordered fan-out steps read from imports (flow kind); empty otherwise. */
   steps: InferredStepView[];
+  /** Grounded transitions (concept kind, 21b-2); empty until `artha infer`
+   * grounds them, and reverts on drift. Machine ink, drawn in moonlight. */
+  transitions: InferredTransitionView[];
   /** Evidence pins - the code each claim was read from. */
   pins: PinView[];
 }
 
 /** One step of an inferred flow skeleton (21a): a downstream area, linking to its
- * module tile. The order/meaning of the step itself is the human delta. */
+ * module tile. The order of the steps is the human delta; `note` is the
+ * synthesized one-line description of what the flow does there (21b-2), null
+ * until `artha infer` fills it. */
 export interface InferredStepView {
   label: string;
   module: string | null;
+  note: string | null;
+}
+
+/** One grounded transition of an inferred state machine (21b-2): a directed edge
+ * between two real states, with a trigger read from the state's usage code. */
+export interface InferredTransitionView {
+  from: string;
+  to: string;
+  trigger: string;
 }
 
 /** An inferred fact by id (module card or state-machine candidate), or null. */
@@ -321,7 +335,11 @@ function inferredView(index: ArthaIndex, row: ArthaIndex['inferred'][number]): I
     steps: index.inferredSteps
       .filter((s) => s.inferred_id === row.id)
       .sort((a, b) => a.ord - b.ord)
-      .map((s) => ({ label: s.label, module: s.to_module })),
+      .map((s) => ({ label: s.label, module: s.to_module, note: s.note })),
+    transitions: index.inferredTransitions
+      .filter((t) => t.inferred_id === row.id)
+      .sort((a, b) => a.ord - b.ord)
+      .map((t) => ({ from: t.from_state, to: t.to_state, trigger: t.trigger })),
     // Moonlight regenerates on drift, so inferred pins are never "stale" (D12).
     pins: index.inferredPins
       .filter((p) => p.inferred_id === row.id)

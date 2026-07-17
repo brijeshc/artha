@@ -1,6 +1,6 @@
 # Artha v0.3 - task index (2026-07-05)
 
-**Status: re-centering locked; 21a + task 23 + task 24 shipped; 21b underway (21b-1 - the synthesis pipeline - done).**
+**Status: re-centering locked; 21a + task 23 + task 24 shipped; 21b underway (21b-1 synthesis pipeline, 21b-2 flow-step text + transitions, and 21b-3 MCP serving done - only 21b-4 the `uncertain` render remains).**
 Product.md §12 headlined v0.3 as "contradiction detection + trust".
 This re-centers v0.3 around **the inferred layer**: a machine-extracted, full-coverage description of code meaning that does the heavy lifting *before* any human is asked for anything.
 Rationale and evidence are in [21-inferred-layer.md](21-inferred-layer.md) §Why; the OQ locks are recorded there and in [../PROGRESS.md](../PROGRESS.md).
@@ -26,7 +26,10 @@ A box also wears the concept's own standing now, instead of drawing every lifecy
 Seats answer in order - your hand, then the team's, then the automatic layout - and the file is arrangement only, never meaning: it never reaches the index, an agent, or the numbers.
 **23e-4 is done (2026-07-16)** - more trace entry points: a flow's trace is offered wherever a flow is named (navigator rows, catalog cards), and a machine-read flow traces as what it **reaches**, never as a route. **Task 23 is complete.**
 **21b-1 is done (2026-07-16)** - the LLM synthesis pipeline: `artha infer` enriches the 21a candidates into product-language names + readable summaries via a pluggable engine (`api` / `claude-cli`, reusing the T06 pattern), opt-in and spend-capped, incremental by a content-hash cache (`.artha/.inferred.json`), with a deterministic **verifier gate** that downgrades any ungrounded claim to `uncertain`; `artha build` overlays the cache and silently reverts on drift.
-**The next work is the rest of 21b** (transitions + flow-step text, MCP serving the layer labeled, the `uncertain` render), then 22 (contradiction view), then T18.
+**21b-2's flow-step text is done (2026-07-17)** - each module a flow reaches gets one grounded, verifier-gated line saying what the flow does there (never the order - that stays the human delta, D8); a hallucinated step is dropped by module-id alignment before it can taint the tier; a new `note` column is overlaid at build and reverts on drift; the cache bumps to v2.
+**21b-2's state-machine transitions are done (2026-07-17)** - a machine concept now shows *how* it moves between states: a cross-file `memberUsages` state-usage index pins the code that moves each state (usually in another file), the model proposes {from,to,trigger}, a gate drops fabricated-state edges and grounds each trigger, and the concept lists them in moonlight. Vouching seeds the human transitions draft. **Task 21b-2 is complete.**
+**21b-3 MCP serving is done (2026-07-17)** - `context_for_task` serves the inferred layer labeled `[machine-described, unverified by team]`, ranked in its own `artha_inferred_fts` corpus (so human bm25 is untouched) and seated strictly below vouched facts in the budget; on by default (`include_inferred`), never certified, rationale never synthesized (`why` stays human-only).
+**The next work is 21b-4** (the `uncertain` dimmest-moonlight render), then 22 (contradiction view), then T18.
 
 | #   | Task | Depends on | One-line summary |
 |-----|------|------------|------------------|

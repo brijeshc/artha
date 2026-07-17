@@ -47,6 +47,9 @@ const EMPTY: InferredLayer = { facts: [], pins: [], states: [], steps: [] };
 const CARD_SYMBOL_CAP = 8;
 /** How many state names a state-machine body inlines before "…". */
 const STATE_INLINE_CAP = 4;
+/** How many cross-file usage sites a concept pins as transition evidence (21b-2).
+ * Bounds the widened evidence so a state used everywhere stays within budget. */
+const USAGE_PIN_CAP = 12;
 /** How many times a naming affix must repeat in a module to read as a convention
  * (2 is coincidence; 3 is a pattern). */
 const CONVENTION_MIN = 3;
@@ -171,6 +174,12 @@ export function inferLayer(
       });
       found.members.forEach((name, ord) => states.push({ inferred_id: id, name, ord }));
       pins.push(resolvePin(id, ref, 'evidence', 0));
+      // The cross-file state-usage index (21b-2): the declarations that actually
+      // move this state, pinned as evidence so 21b can ground transitions in code
+      // the declaration alone never shows. `usage` role, after the `evidence` pin.
+      usageRefs(found, sorted, resolver).forEach((uref, i) =>
+        pins.push(resolvePin(id, uref, 'usage', i + 1)),
+      );
     }
   }
 
@@ -200,7 +209,7 @@ export function inferLayer(
         origin: 'inferred',
       });
       fan.forEach((s, ord) =>
-        steps.push({ inferred_id: id, label: s.label, to_module: s.module, ord }),
+        steps.push({ inferred_id: id, label: s.label, to_module: s.module, note: null, ord }),
       );
       pins.push(resolvePin(id, ref, 'entry', 0));
     }
@@ -317,6 +326,25 @@ function moduleBody(
   const extra = surface.length - names.length;
   const more = extra > 0 ? ` and ${extra} more` : '';
   return `${role} Exposes ${formatList(names)}${more}.`;
+}
+
+/** The cross-file usage sites of a state, as evidence refs (21b-2): every source
+ * file scanned for where this state's members are assigned/compared/cased, each
+ * rolled to its enclosing declaration, deduped across files in sorted order,
+ * capped. Deterministic - the files are already sorted by the caller. */
+function usageRefs(state: EnumLike, sortedFiles: string[], resolver: SymbolResolver): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const file of sortedFiles) {
+    for (const qname of resolver.memberUsages(file, state)) {
+      const ref = `${file}#${qname}`;
+      if (seen.has(ref)) continue;
+      seen.add(ref);
+      out.push(ref);
+      if (out.length >= USAGE_PIN_CAP) return out;
+    }
+  }
+  return out;
 }
 
 /** A state-machine candidate's prose: the states, and an honest flag that the

@@ -114,9 +114,22 @@ CREATE TABLE artha_inferred_steps (
   inferred_id  TEXT NOT NULL,
   label        TEXT NOT NULL,
   to_module    TEXT,
+  note         TEXT,
+  ord          INTEGER NOT NULL
+);
+CREATE TABLE artha_inferred_transitions (
+  inferred_id  TEXT NOT NULL,
+  from_state   TEXT NOT NULL,
+  to_state     TEXT NOT NULL,
+  trigger      TEXT NOT NULL,
   ord          INTEGER NOT NULL
 );
 CREATE VIRTUAL TABLE artha_fts USING fts5(id UNINDEXED, heading, body);
+-- A parallel FTS over the inferred layer (21b-3). Kept separate from artha_fts so
+-- the machine layer's documents never enter the human corpus - adding them there
+-- would shift bm25's IDF and silently perturb human-fact ranking. MCP ranks the
+-- two corpora independently and serves inferred strictly below vouched.
+CREATE VIRTUAL TABLE artha_inferred_fts USING fts5(id UNINDEXED, heading, body);
 `;
 
 export interface FactRow {
@@ -260,6 +273,22 @@ export interface InferredStepRow {
   inferred_id: string;
   label: string;
   to_module: string | null;
+  /** Synthesized description of what the flow does at this module (21b-2);
+   * null until `artha infer` fills it, and reverts to null on drift. */
+  note: string | null;
+  ord: number;
+}
+
+/** One transition of an inferred state-machine candidate (21b-2): a directed edge
+ * the synthesizer proposed and the verifier grounded - `from_state`/`to_state`
+ * are always real members, `trigger` is grounded in the pinned usage code. Never
+ * emitted by 21a (which leaves transitions blank); filled only where `artha infer`
+ * grounded one, and reverts on drift. */
+export interface InferredTransitionRow {
+  inferred_id: string;
+  from_state: string;
+  to_state: string;
+  trigger: string;
   ord: number;
 }
 
@@ -279,6 +308,7 @@ export interface IndexData {
   inferredPins: InferredPinRow[];
   inferredStates: InferredStateRow[];
   inferredSteps: InferredStepRow[];
+  inferredTransitions: InferredTransitionRow[];
 }
 
 /** Emit a fresh `.artha/index.db` from scratch (idempotent: same input → same rows). */
@@ -374,8 +404,14 @@ export function writeIndex(dbPath: string, data: IndexData): void {
       `INSERT INTO artha_inferred (id, kind, module, heading, body, confidence, origin)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
+    const inferredFts = db.prepare(
+      'INSERT INTO artha_inferred_fts (id, heading, body) VALUES (?, ?, ?)',
+    );
     for (const r of data.inferred) {
       inferred.run(r.id, r.kind, r.module, r.heading, r.body, r.confidence, r.origin);
+      // Index the (possibly 21b-enriched) name + prose so MCP can rank the machine
+      // layer lexically, in its own corpus (21b-3).
+      inferredFts.run(r.id, r.heading, r.body ?? '');
     }
 
     const inferredPin = db.prepare(
@@ -392,10 +428,18 @@ export function writeIndex(dbPath: string, data: IndexData): void {
     for (const r of data.inferredStates) inferredState.run(r.inferred_id, r.name, r.ord);
 
     const inferredStep = db.prepare(
-      'INSERT INTO artha_inferred_steps (inferred_id, label, to_module, ord) VALUES (?, ?, ?, ?)',
+      'INSERT INTO artha_inferred_steps (inferred_id, label, to_module, note, ord) VALUES (?, ?, ?, ?, ?)',
     );
     for (const r of data.inferredSteps) {
-      inferredStep.run(r.inferred_id, r.label, r.to_module, r.ord);
+      inferredStep.run(r.inferred_id, r.label, r.to_module, r.note ?? null, r.ord);
+    }
+
+    const inferredTransition = db.prepare(
+      `INSERT INTO artha_inferred_transitions (inferred_id, from_state, to_state, trigger, ord)
+       VALUES (?, ?, ?, ?, ?)`,
+    );
+    for (const r of data.inferredTransitions) {
+      inferredTransition.run(r.inferred_id, r.from_state, r.to_state, r.trigger, r.ord);
     }
 
     db.exec('COMMIT');

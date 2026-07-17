@@ -73,4 +73,18 @@ export interface SymbolResolver {
    * yields `[]`. This is the raw material for the module reference graph (T17b).
    */
   imports(relPath: string): string[];
+  /**
+   * The named declarations in `relPath` that **use** one of `state`'s members -
+   * a union member as a string literal in an assignment, comparison, `case`, or
+   * initializer, or (for an enum) an `Enum.Member` access - each rolled up to its
+   * enclosing declaration and returned as a qualified name (`fn` / `Class.method`)
+   * resolvable via {@link resolve}, in source order, deduped.
+   *
+   * This is the cross-file **state-usage index** that grounds inferred transitions
+   * (21b-2): scanned across every source file, a concept's usage sites are the
+   * code that actually moves the state, which the declaration alone never shows.
+   * Precision over recall - only value-like contexts count, never incidental
+   * prose. Non-JS/TS or missing file yields `[]`.
+   */
+  memberUsages(relPath: string, state: EnumLike): string[];
 }

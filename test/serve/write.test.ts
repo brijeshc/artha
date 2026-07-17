@@ -60,6 +60,7 @@ function fakeResolver(known: string[]): SymbolResolver {
     list: () => [],
     enumLikes: () => [],
     imports: () => [],
+    memberUsages: () => [],
   };
 }
 

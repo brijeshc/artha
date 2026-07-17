@@ -2078,6 +2078,24 @@ describe('inferred layer (21a) - moonlight', () => {
     expect(html).toContain('What the code can’t say'); // the delta band (D6)
   });
 
+  it('lists grounded transitions in moonlight once inferred (21b-2)', () => {
+    const enriched = {
+      ...inferredConcept,
+      confidence: 'inferred',
+      transitions: [
+        { from: 'pending', to: 'shipped', trigger: 'the order ships' },
+        { from: 'shipped', to: 'delivered', trigger: 'it arrives' },
+      ],
+    };
+    const html = markup(<InferredPage detail={enriched} />);
+    expect(html).toContain('moon-transitions'); // a moonlight list, not the chalk diagram
+    expect(html).toContain('Transitions read from code'); // its own section
+    expect(html).toContain('the order ships'); // a grounded trigger
+    expect(html).toContain('it arrives');
+    // the states chain still renders above it
+    expect(html).toContain('pending');
+  });
+
   it('every evidence pin carries a reveal-the-code toggle (D5)', () => {
     const html = markup(<InferredPage detail={inferredConcept} />);
     // the pin now offers to show its backing source, one interaction away
@@ -2236,6 +2254,21 @@ describe('inferred layer (21a) - moonlight', () => {
     // the delta is flow-specific, not the state-machine wording
     expect(html).toContain('The order these steps run');
     expect(html).not.toContain('the meaning of each state');
+  });
+
+  it('renders a flow step’s synthesized description beside its module (21b-2)', () => {
+    const enriched: InferredFactView = {
+      ...inferredFlow,
+      confidence: 'inferred',
+      steps: [
+        { label: 'Billing', module: 'src/billing', note: 'charges the customer’s card' },
+        { label: 'Notifications', module: 'src/notifications', note: null },
+      ],
+    };
+    const html = markup(<InferredPage detail={enriched} />);
+    expect(html).toContain('moon-steps-noted'); // list layout, not a chip row
+    expect(html).toContain('charges the customer'); // the synthesized step text
+    expect(html).toContain('moon-step-note');
   });
 
   it('the inferred page renders a convention: the symbols that match + the convention delta', () => {
