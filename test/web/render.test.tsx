@@ -2238,6 +2238,21 @@ describe('inferred layer (21a) - moonlight', () => {
     expect(html).not.toContain('the meaning of each state');
   });
 
+  it('renders a flow step’s synthesized description beside its module (21b-2)', () => {
+    const enriched: InferredFactView = {
+      ...inferredFlow,
+      confidence: 'inferred',
+      steps: [
+        { label: 'Billing', module: 'src/billing', note: 'charges the customer’s card' },
+        { label: 'Notifications', module: 'src/notifications', note: null },
+      ],
+    };
+    const html = markup(<InferredPage detail={enriched} />);
+    expect(html).toContain('moon-steps-noted'); // list layout, not a chip row
+    expect(html).toContain('charges the customer'); // the synthesized step text
+    expect(html).toContain('moon-step-note');
+  });
+
   it('the inferred page renders a convention: the symbols that match + the convention delta', () => {
     const html = markup(<InferredPage detail={inferredConvention} />);
     expect(html).toContain('*Repo');

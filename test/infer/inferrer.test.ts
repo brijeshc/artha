@@ -10,9 +10,23 @@ import { isArthaError } from '../../src/util/error';
 describe('parseSynthResponse', () => {
   it('parses a clean enriched response', () => {
     const r = parseSynthResponse(
-      '{"enriched": true, "name": "Refund a purchase", "summary": "Reverses a charge."}',
+      '{"enriched": true, "name": "Refund a purchase", "summary": "Reverses a charge.", "steps": []}',
     );
-    expect(r).toEqual({ enriched: true, name: 'Refund a purchase', summary: 'Reverses a charge.' });
+    expect(r).toEqual({
+      enriched: true,
+      name: 'Refund a purchase',
+      summary: 'Reverses a charge.',
+      steps: [],
+    });
+  });
+
+  it('reads a flow’s per-step text, dropping malformed entries (21b-2)', () => {
+    const r = parseSynthResponse(
+      '{"enriched": true, "name": "Place order", "summary": "S", "steps": [' +
+        '{"module": "src/billing", "text": "charges the card"}, {"module": "src/x"}]}',
+    );
+    if (!('steps' in r)) throw new Error('expected enriched');
+    expect(r.steps).toEqual([{ module: 'src/billing', text: 'charges the card' }]);
   });
 
   it('reads enriched=false as an honest refusal', () => {
@@ -34,6 +48,7 @@ describe('parseSynthResponse', () => {
       enriched: true,
       name: 'Order lifecycle',
       summary: 'States.',
+      steps: [],
     });
   });
 
@@ -65,6 +80,16 @@ describe('renderSynthPrompt', () => {
 
   it('says so plainly when there is no resolvable source', () => {
     expect(renderSynthPrompt({ ...base, evidence: [] })).toContain('no resolvable source');
+  });
+
+  it('asks for per-module descriptions when a flow reaches modules (21b-2)', () => {
+    const prompt = renderSynthPrompt({
+      ...base,
+      kind: 'flow',
+      steps: [{ module: 'src/billing', label: 'Billing' }],
+    });
+    expect(prompt).toContain('Reaches');
+    expect(prompt).toContain('src/billing (Billing)');
   });
 
   it('truncates oversized evidence with a marker', () => {

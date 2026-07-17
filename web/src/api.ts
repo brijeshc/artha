@@ -142,10 +142,13 @@ export interface Catalog {
   inferredFlows?: InferredCatalogFlow[];
 }
 
-/** One step of an inferred flow skeleton (21a): a downstream area, linking to its module. */
+/** One step of an inferred flow skeleton (21a): a downstream area, linking to its
+ * module. `note` is the synthesized one-line description of what the flow does
+ * there (21b-2), null until `artha infer` fills it. */
 export interface InferredStepView {
   label: string;
   module: string | null;
+  note?: string | null;
 }
 
 /** One inferred fact (21a) as the dashboard reads it: a module card, a

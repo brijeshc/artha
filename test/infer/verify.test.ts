@@ -4,7 +4,7 @@ import { INFERRED, UNCERTAIN, verifySynthesis } from '../../src/infer/verify';
 
 /** An enriched synthesis result (the only shape the verifier grades). */
 function enriched(name: string, summary: string): Extract<SynthResult, { enriched: true }> {
-  return { enriched: true, name, summary };
+  return { enriched: true, name, summary, steps: [] };
 }
 
 const codeEvidence: EvidenceExcerpt[] = [
@@ -59,5 +59,25 @@ describe('verifySynthesis (the verification gate, 21b)', () => {
   it('cannot verify a claim with no evidence, so it downgrades', () => {
     const r = enriched('Some area', 'A perfectly plain summary with no code tokens at all.');
     expect(verifySynthesis(r, [], 'draft')).toBe(UNCERTAIN);
+  });
+
+  it('checks a flow step’s text too, downgrading an ungrounded one (21b-2)', () => {
+    const grounded = {
+      enriched: true as const,
+      name: 'X',
+      summary: 'Plain.',
+      steps: [{ module: 'src/billing', text: 'changes the `SubscriptionStatus`' }],
+    };
+    expect(verifySynthesis(grounded, codeEvidence, 'draft')).toBe(INFERRED);
+
+    const bad = {
+      enriched: true as const,
+      name: 'X',
+      summary: 'Plain.',
+      steps: [
+        { module: 'src/billing', text: 'writes to `KafkaTopic`' }, // absent from the code
+      ],
+    };
+    expect(verifySynthesis(bad, codeEvidence, 'draft')).toBe(UNCERTAIN);
   });
 });

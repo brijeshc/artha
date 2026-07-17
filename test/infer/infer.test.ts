@@ -7,7 +7,7 @@ import { openIndex } from '../../src/build/db';
 import { defaultConfig } from '../../src/config/config';
 import { readSynthCache } from '../../src/infer/cache';
 import { infer } from '../../src/infer/infer';
-import type { Inferrer, SynthInput, SynthResult } from '../../src/infer/inferrer';
+import type { Inferrer, SynthInput, SynthResult, SynthStepText } from '../../src/infer/inferrer';
 
 /**
  * Stub synthesizer: enriches every candidate with a plain, grounded summary by
@@ -24,7 +24,13 @@ class StubInferrer implements Inferrer {
       input.heading === this.opts.falseFor
         ? 'Stores everything in `DynamoDB` under the hood.' // ungrounded on purpose
         : 'A clear plain-language description of this unit.';
-    return { enriched: true, name: `${input.heading} (clarified)`, summary };
+    // Describe each reached module in plain (grounded) words - plus one entry
+    // keyed to a module the flow does NOT reach, to prove alignment drops it.
+    const steps: SynthStepText[] = [
+      ...(input.steps ?? []).map((s) => ({ module: s.module, text: `does work in ${s.label}` })),
+      { module: 'src/nowhere', text: 'a step for a module never reached' },
+    ];
+    return { enriched: true, name: `${input.heading} (clarified)`, summary, steps };
   }
 }
 
@@ -74,6 +80,19 @@ const inferred = (): Record<string, unknown>[] => {
 };
 const factById = (id: string): Record<string, unknown> | undefined =>
   inferred().find((r) => r.id === id);
+
+/** The synthesized note on one flow step (21b-2), read straight from the index. */
+const stepNote = (flowId: string, module: string): unknown => {
+  const db = openIndex(join(repo, '.artha', 'index.db'));
+  try {
+    const row = db
+      .prepare('SELECT note FROM artha_inferred_steps WHERE inferred_id = ? AND to_module = ?')
+      .get(flowId, module) as { note: unknown } | undefined;
+    return row?.note ?? null;
+  } finally {
+    db.close();
+  }
+};
 
 const BILLING_CARD = 'inferred:module:src/billing';
 const ORDER_CONCEPT = 'inferred:concept:src/billing/order.ts#OrderState';
@@ -145,6 +164,14 @@ describe('infer (21b synthesis pipeline)', () => {
     expect(report.declined).toBe(1);
     expect(readSynthCache(join(repo, '.artha')).has(PLACE_FLOW)).toBe(false);
   });
+
+  it('synthesizes a flow’s per-step text, dropping steps for modules it never reaches (21b-2)', async () => {
+    await infer(repo, config(), { inferrer: new StubInferrer() });
+    // the flow reaches src/billing only; the stub's stray src/nowhere step is dropped
+    expect(readSynthCache(join(repo, '.artha')).get(PLACE_FLOW)?.steps).toEqual([
+      { module: 'src/billing', text: 'does work in Billing' },
+    ]);
+  });
 });
 
 describe('build overlays synthesis (21b) and reverts on drift (D12)', () => {
@@ -187,5 +214,16 @@ describe('build overlays synthesis (21b) and reverts on drift (D12)', () => {
     // two facts pin the changed placeOrder - the flow and the checkout module
     // card - so both revert; the two billing facts stay enriched.
     expect(report.enriched).toBe(2);
+  });
+
+  it('overlays flow step text into the index and reverts it on drift (21b-2)', async () => {
+    await infer(repo, config(), { inferrer: new StubInferrer() });
+    await buildIndex(repo, config());
+    expect(stepNote(PLACE_FLOW, 'src/billing')).toBe('does work in Billing');
+
+    // the flow's pinned entry changes → its step note reverts to bare label
+    writeCheckout('  charge();\n  return true;\n');
+    await buildIndex(repo, config());
+    expect(stepNote(PLACE_FLOW, 'src/billing')).toBeNull();
   });
 });

@@ -294,10 +294,13 @@ export interface InferredFactView {
 }
 
 /** One step of an inferred flow skeleton (21a): a downstream area, linking to its
- * module tile. The order/meaning of the step itself is the human delta. */
+ * module tile. The order of the steps is the human delta; `note` is the
+ * synthesized one-line description of what the flow does there (21b-2), null
+ * until `artha infer` fills it. */
 export interface InferredStepView {
   label: string;
   module: string | null;
+  note: string | null;
 }
 
 /** An inferred fact by id (module card or state-machine candidate), or null. */
@@ -321,7 +324,7 @@ function inferredView(index: ArthaIndex, row: ArthaIndex['inferred'][number]): I
     steps: index.inferredSteps
       .filter((s) => s.inferred_id === row.id)
       .sort((a, b) => a.ord - b.ord)
-      .map((s) => ({ label: s.label, module: s.to_module })),
+      .map((s) => ({ label: s.label, module: s.to_module, note: s.note })),
     // Moonlight regenerates on drift, so inferred pins are never "stale" (D12).
     pins: index.inferredPins
       .filter((p) => p.inferred_id === row.id)

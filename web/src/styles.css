@@ -3651,6 +3651,31 @@ a.fact-line:hover {
 .moon-step a.pin-link:hover {
   color: var(--phosphor);
 }
+/* Once a flow's steps carry synthesized descriptions (21b-2), the fan-out reads
+   as a list, one module per line with what the flow does there - not a chip row. */
+.moon-steps-noted {
+  flex-direction: column;
+  gap: 6px;
+}
+.moon-steps-noted .moon-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.moon-steps-noted .moon-step a.pin-link {
+  flex: none;
+  min-width: 96px;
+  font-weight: 500;
+}
+.moon-step-note {
+  color: var(--moon);
+  opacity: 0.85;
+  font-size: 12px;
+}
 
 /* a convention card's preview: the exported symbols it repeats, in code voice */
 .member-preview {

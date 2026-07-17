@@ -114,6 +114,7 @@ CREATE TABLE artha_inferred_steps (
   inferred_id  TEXT NOT NULL,
   label        TEXT NOT NULL,
   to_module    TEXT,
+  note         TEXT,
   ord          INTEGER NOT NULL
 );
 CREATE VIRTUAL TABLE artha_fts USING fts5(id UNINDEXED, heading, body);
@@ -260,6 +261,9 @@ export interface InferredStepRow {
   inferred_id: string;
   label: string;
   to_module: string | null;
+  /** Synthesized description of what the flow does at this module (21b-2);
+   * null until `artha infer` fills it, and reverts to null on drift. */
+  note: string | null;
   ord: number;
 }
 
@@ -392,10 +396,10 @@ export function writeIndex(dbPath: string, data: IndexData): void {
     for (const r of data.inferredStates) inferredState.run(r.inferred_id, r.name, r.ord);
 
     const inferredStep = db.prepare(
-      'INSERT INTO artha_inferred_steps (inferred_id, label, to_module, ord) VALUES (?, ?, ?, ?)',
+      'INSERT INTO artha_inferred_steps (inferred_id, label, to_module, note, ord) VALUES (?, ?, ?, ?, ?)',
     );
     for (const r of data.inferredSteps) {
-      inferredStep.run(r.inferred_id, r.label, r.to_module, r.ord);
+      inferredStep.run(r.inferred_id, r.label, r.to_module, r.note ?? null, r.ord);
     }
 
     db.exec('COMMIT');

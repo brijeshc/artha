@@ -200,7 +200,7 @@ export function inferLayer(
         origin: 'inferred',
       });
       fan.forEach((s, ord) =>
-        steps.push({ inferred_id: id, label: s.label, to_module: s.module, ord }),
+        steps.push({ inferred_id: id, label: s.label, to_module: s.module, note: null, ord }),
       );
       pins.push(resolvePin(id, ref, 'entry', 0));
     }

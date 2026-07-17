@@ -16,6 +16,7 @@ import {
   type IndexData,
   type InferredPinRow,
   type InferredRow,
+  type InferredStepRow,
   type PinRow,
   type ProvenanceRow,
   type RelatedRow,
@@ -176,7 +177,12 @@ export async function buildIndex(
     // deterministic candidates, but only where the pinned code is unchanged: a
     // content-hash match keeps the description honest; drift silently falls back
     // to the 21a text (D12 — moonlight regenerates quietly, nothing to maintain).
-    report.enriched = overlaySynthesis(arthaDir, data.inferred, data.inferredPins);
+    report.enriched = overlaySynthesis(
+      arthaDir,
+      data.inferred,
+      data.inferredPins,
+      data.inferredSteps,
+    );
   }
 
   // T14 — build-time embeddings (best-effort, offline-by-default). Read the
@@ -343,7 +349,12 @@ function toIndexData(
  * (D12). Overwrites the name (`heading`), prose (`body`), and `confidence`
  * (`inferred`/`uncertain`) in place; returns how many facts were enriched.
  */
-function overlaySynthesis(arthaDir: string, facts: InferredRow[], pins: InferredPinRow[]): number {
+function overlaySynthesis(
+  arthaDir: string,
+  facts: InferredRow[],
+  pins: InferredPinRow[],
+  steps: InferredStepRow[],
+): number {
   const cache = readSynthCache(arthaDir);
   if (cache.size === 0) return 0;
 
@@ -355,6 +366,7 @@ function overlaySynthesis(arthaDir: string, facts: InferredRow[], pins: Inferred
   }
 
   let enriched = 0;
+  const applied = new Set<string>(); // fact ids whose evidence still matches
   for (const fact of facts) {
     const entry = cache.get(fact.id);
     if (!entry) continue;
@@ -362,8 +374,19 @@ function overlaySynthesis(arthaDir: string, facts: InferredRow[], pins: Inferred
     fact.heading = entry.name;
     fact.body = entry.summary;
     fact.confidence = entry.confidence;
+    applied.add(fact.id);
     enriched++;
   }
+
+  // Flow-step text (21b-2): fill each reached step's `note` from the matching
+  // cached description. Only for facts whose evidence still matched above, so a
+  // drifted flow's steps revert to bare labels alongside its reverted prose.
+  for (const step of steps) {
+    if (!applied.has(step.inferred_id) || !step.to_module) continue;
+    const note = cache.get(step.inferred_id)?.steps.find((s) => s.module === step.to_module);
+    if (note) step.note = note.text;
+  }
+
   return enriched;
 }
 

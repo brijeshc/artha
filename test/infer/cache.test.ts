@@ -25,26 +25,35 @@ function sample(): SynthCache {
   return new Map([
     [
       'inferred:module:src/billing',
-      { evidenceHash: 'aaa', name: 'Billing', summary: 'S1', confidence: 'inferred' },
+      { evidenceHash: 'aaa', name: 'Billing', summary: 'S1', steps: [], confidence: 'inferred' },
     ],
     [
-      'inferred:concept:src/o.ts#X',
-      { evidenceHash: 'bbb', name: 'X', summary: 'S2', confidence: 'uncertain' },
+      'inferred:flow:src/checkout#placeOrder',
+      {
+        evidenceHash: 'bbb',
+        name: 'Place order',
+        summary: 'S2',
+        steps: [{ module: 'src/billing', text: 'charges the card' }],
+        confidence: 'uncertain',
+      },
     ],
   ]);
 }
 
 describe('synthesis cache round-trip', () => {
-  it('writes and reads back the same entries', () => {
+  it('writes and reads back the same entries, including flow step text', () => {
     writeSynthCache(arthaDir, sample());
     const back = readSynthCache(arthaDir);
     expect(back.get('inferred:module:src/billing')).toEqual({
       evidenceHash: 'aaa',
       name: 'Billing',
       summary: 'S1',
+      steps: [],
       confidence: 'inferred',
     });
-    expect(back.get('inferred:concept:src/o.ts#X')?.confidence).toBe('uncertain');
+    expect(back.get('inferred:flow:src/checkout#placeOrder')?.steps).toEqual([
+      { module: 'src/billing', text: 'charges the card' },
+    ]);
   });
 
   it('reads a missing file as an empty cache', () => {
@@ -56,8 +65,15 @@ describe('synthesis cache round-trip', () => {
     expect(readSynthCache(arthaDir).size).toBe(0);
   });
 
-  it('discards a cache written by a different version', () => {
-    writeFileSync(cachePath(), JSON.stringify({ version: 999, entries: { x: {} } }));
+  it('discards a cache written by a superseded schema version (forces re-infer)', () => {
+    // v1 (21b-1, no step text) is discarded by the current reader, not misread.
+    writeFileSync(
+      cachePath(),
+      JSON.stringify({
+        version: 1,
+        entries: { x: { evidenceHash: 'h', name: 'n', summary: 's', confidence: 'inferred' } },
+      }),
+    );
     expect(readSynthCache(arthaDir).size).toBe(0);
   });
 
@@ -65,9 +81,9 @@ describe('synthesis cache round-trip', () => {
     writeFileSync(
       cachePath(),
       JSON.stringify({
-        version: 1,
+        version: 2,
         entries: {
-          good: { evidenceHash: 'h', name: 'n', summary: 's', confidence: 'inferred' },
+          good: { evidenceHash: 'h', name: 'n', summary: 's', steps: [], confidence: 'inferred' },
           bad: { evidenceHash: 'h', name: 'n' }, // no summary/confidence
         },
       }),

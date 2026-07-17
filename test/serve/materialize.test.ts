@@ -70,8 +70,14 @@ function seededIndex() {
     { inferred_id: CONCEPT_ID, name: 'fulfilled', ord: 2 },
   ];
   const inferredSteps: InferredStepRow[] = [
-    { inferred_id: FLOW_ID, label: 'Billing', to_module: 'src/billing', ord: 0 },
-    { inferred_id: FLOW_ID, label: 'Notifications', to_module: 'src/notifications', ord: 1 },
+    { inferred_id: FLOW_ID, label: 'Billing', to_module: 'src/billing', note: null, ord: 0 },
+    {
+      inferred_id: FLOW_ID,
+      label: 'Notifications',
+      to_module: 'src/notifications',
+      note: null,
+      ord: 1,
+    },
   ];
   const inferredPins: InferredPinRow[] = [
     {

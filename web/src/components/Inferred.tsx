@@ -142,7 +142,7 @@ export function InferredPage({
       {steps.length > 0 && (
         <section className="cap-section">
           <SectionHead n={next()} title={INFERRED.stepsHead} gloss={INFERRED.stepsGloss} />
-          <ul className="moon-steps">
+          <ul className={`moon-steps${steps.some((s) => s.note) ? ' moon-steps-noted' : ''}`}>
             {steps.map((s) => (
               <li key={s.module ?? s.label} className="moon-step">
                 {s.module ? (
@@ -151,6 +151,13 @@ export function InferredPage({
                   </a>
                 ) : (
                   s.label
+                )}
+                {/* what the flow does at this module, synthesized + verified
+                    against the entry's code (21b-2). The order stays unstated. */}
+                {s.note && (
+                  <span className="moon-step-note">
+                    <CodeProse text={s.note} />
+                  </span>
                 )}
               </li>
             ))}

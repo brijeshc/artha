@@ -44,8 +44,11 @@ export function verifySynthesis(
   if (evidence.length === 0) return UNCERTAIN;
 
   const vocabulary = groundedVocabulary(evidence, deterministic);
-  const asserted = codeAssertions(`${result.name}\n${result.summary}`);
-  for (const token of asserted) {
+  // Every synthesized sentence is checked together: the name, the summary, and
+  // each flow step's description (21b-2) - one ungrounded code claim anywhere
+  // downgrades the whole fact, since they share one confidence tier.
+  const claimed = [result.name, result.summary, ...result.steps.map((s) => s.text)].join('\n');
+  for (const token of codeAssertions(claimed)) {
     if (!isGrounded(token, vocabulary)) return UNCERTAIN;
   }
   return INFERRED;

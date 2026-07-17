@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { InferredPinRow } from '../build/db';
+import type { SynthStepText } from './inferrer';
 
 /**
  * The synthesis cache (`.artha/.inferred.json`): what `artha infer` produced,
@@ -29,6 +30,8 @@ export interface SynthCacheEntry {
   name: string;
   /** Synthesized 2-3 sentence summary (21b). */
   summary: string;
+  /** Per-step descriptions for a flow (21b-2); empty for other kinds. */
+  steps: SynthStepText[];
   /** Verified confidence tier: `inferred` or `uncertain` (verify.ts). */
   confidence: string;
 }
@@ -37,7 +40,9 @@ export interface SynthCacheEntry {
 export type SynthCache = Map<string, SynthCacheEntry>;
 
 const CACHE_FILE = '.inferred.json';
-const CACHE_VERSION = 1;
+// v2 (21b-2): entries gained per-step text. A schema change invalidates the
+// cache - old entries re-infer rather than serve a shape the reader expects more from.
+const CACHE_VERSION = 2;
 
 function cachePath(arthaDir: string): string {
   return join(arthaDir, CACHE_FILE);
@@ -79,11 +84,26 @@ function parseCache(raw: unknown): SynthCache {
         evidenceHash: e.evidenceHash,
         name: e.name,
         summary: e.summary,
+        steps: parseSteps(e.steps),
         confidence: e.confidence,
       });
     }
   }
   return cache;
+}
+
+/** Read cached per-step text defensively: keep only entries with a real module + text. */
+function parseSteps(value: unknown): SynthStepText[] {
+  if (!Array.isArray(value)) return [];
+  const steps: SynthStepText[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue;
+    const s = item as Record<string, unknown>;
+    if (typeof s.module === 'string' && typeof s.text === 'string') {
+      steps.push({ module: s.module, text: s.text });
+    }
+  }
+  return steps;
 }
 
 /**
